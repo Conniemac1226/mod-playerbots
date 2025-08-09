@@ -405,8 +405,8 @@ bool FleeSpiritAction::Execute(Event event)
     if (!closestSpirit)
         return false;
 
-    // Only flee if spirit is too close (within 15 yards)
-    if (closestDistance > 15.0f)
+    // Only flee if spirit is too close (within 8 yards - their actual aggro range)
+    if (closestDistance > 8.0f)
         return false;
 
     // SMART FLEE: Move towards cleared areas (where group members are) to avoid pulling new mobs
@@ -453,8 +453,8 @@ bool FleeSpiritAction::Execute(Event event)
         distance = 1.0f;
     }
     
-    // Move 20 yards away but prefer backwards/cleared direction
-    float moveDistance = 20.0f;
+    // Move 12 yards away (enough to be safe but not excessive)
+    float moveDistance = 12.0f;
     float safeX = botX + (dx / distance) * moveDistance;
     float safeY = botY + (dy / distance) * moveDistance;
     float safeZ = bot->GetPositionZ();
@@ -468,11 +468,11 @@ bool FleeSpiritAction::isUseful()
     if (!bot)
         return false;
 
-    // Check if any Sethekk Spirit is within dangerous range (20 yards)
+    // Check if any Sethekk Spirit is within dangerous range (10 yards)
     std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 20.0f);
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 10.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 20.0f);
+    Cell::VisitAllObjects(bot, searcher, 10.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
