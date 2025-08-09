@@ -1527,6 +1527,15 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 533:
             strategyName = "naxx";
             break;
+        case 556:
+            strategyName = "tbc-sh";  // Sethekk Halls
+            break;
+        case 558:
+            strategyName = "tbc-ac";  // Auchenai Crypts
+            break;
+        case 560:
+            strategyName = "tbc-efd";  // Escape from Durnholde
+            break;
         case 574:
             strategyName = "wotlk-uk";  // Utgarde Keep
             break;
