@@ -11,7 +11,10 @@ void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // Trash: Time-Lost Controller - Charming Totem Priority
     // Using high base priority instead of multipliers to match WotLK patterns
     triggers.push_back(new TriggerNode("charming totem spawned",
-             NextAction::array(0, new NextAction("attack charming totem", ACTION_EMERGENCY + 2), nullptr)));
+             NextAction::array(0, 
+                new NextAction("attack charming totem", ACTION_EMERGENCY + 2),
+                new NextAction("continue fight with charmed ally", ACTION_MOVE + 1),
+                nullptr)));
     
     triggers.push_back(new TriggerNode("time lost controller casting totem",
              NextAction::array(0, new NextAction("interrupt controller", ACTION_INTERRUPT + 1), nullptr)));

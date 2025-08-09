@@ -77,4 +77,12 @@ public:
     bool isUseful() override;
 };
 
+class ContinueFightWithCharmedAllyAction : public AttackAction
+{
+public:
+    ContinueFightWithCharmedAllyAction(PlayerbotAI* ai) : AttackAction(ai, "continue fight with charmed ally") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 #endif

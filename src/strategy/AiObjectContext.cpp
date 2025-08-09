@@ -38,6 +38,10 @@
 #include "dungeons/tbc/auchenaicrypts/AuchenaiCryptsTriggerContext.h"
 #include "dungeons/tbc/blackmorass/BlackMorassActionContext.h"
 #include "dungeons/tbc/blackmorass/BlackMorassTriggerContext.h"
+#include "dungeons/tbc/magistersterrace/MagistersTerraceActionContext.h"
+#include "dungeons/tbc/magistersterrace/MagistersTerraceTriggerContext.h"
+#include "dungeons/tbc/steamvault/SteamvaultActionContext.h"
+#include "dungeons/tbc/steamvault/SteamvaultTriggerContext.h"
 #include "raids/RaidStrategyContext.h"
 #include "raids/aq20/RaidAq20ActionContext.h"
 #include "raids/aq20/RaidAq20TriggerContext.h"
@@ -145,6 +149,8 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new TbcDungeonSHActionContext());
     actionContexts.Add(new TbcDungeonACActionContext());
     actionContexts.Add(new BlackMorassActionContext());
+    actionContexts.Add(new MagistersTerraceActionContext());
+    actionContexts.Add(new SteamvaultActionContext());
 }
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
@@ -182,6 +188,8 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new TbcDungeonSHTriggerContext());
     triggerContexts.Add(new TbcDungeonACTriggerContext());
     triggerContexts.Add(new BlackMorassTriggerContext());
+    triggerContexts.Add(new MagistersTerraceTriggerContext());
+    triggerContexts.Add(new SteamvaultTriggerContext());
 }
 
 void AiObjectContext::BuildSharedValueContexts(SharedNamedObjectContextList<UntypedValue>& valueContexts)

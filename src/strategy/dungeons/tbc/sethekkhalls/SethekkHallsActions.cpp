@@ -16,6 +16,10 @@ bool AttackCharmingTotemAction::Execute(Event event)
     if (!bot)
         return false;
 
+    // Don't try to attack if we're charmed ourselves
+    if (bot->IsCharmed())
+        return false;
+
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
@@ -23,6 +27,7 @@ bool AttackCharmingTotemAction::Execute(Event event)
 
     Unit* totem = nullptr;
     float closestDistance = 50.0f;
+    bool hasCharmedAlly = false;
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -30,7 +35,14 @@ bool AttackCharmingTotemAction::Execute(Event event)
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_CHARMING_TOTEM && AttackersValue::IsValidTarget(unit, bot))
+        // Check if any group member is charmed
+        if (unit->IsPlayer() && bot->IsInSameGroupWith(unit->ToPlayer()) && unit->IsCharmed())
+        {
+            hasCharmedAlly = true;
+        }
+
+        // Find the totem - don't use IsValidTarget as it might be confused by charmed allies
+        if (unit->GetEntry() == NPC_CHARMING_TOTEM)
         {
             float distance = bot->GetDistance(unit);
             if (distance < closestDistance)
@@ -43,8 +55,16 @@ bool AttackCharmingTotemAction::Execute(Event event)
 
     if (totem)
     {
-        // Simply attack the totem - let the base Attack() handle all positioning
+        // Force attack the totem even if other logic is confused
+        // This ensures we break the charm quickly
         return Attack(totem);
+    }
+    
+    // If an ally is charmed but we can't find the totem, keep looking
+    if (hasCharmedAlly)
+    {
+        // Return false so the bot doesn't get stuck, but the trigger will keep firing
+        return false;
     }
     
     return false;
@@ -56,10 +76,17 @@ bool AttackCharmingTotemAction::isUseful()
     if (!bot)
         return false;
 
+    // Don't try to attack if we're charmed ourselves
+    if (bot->IsCharmed())
+        return false;
+
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
     Cell::VisitAllObjects(bot, searcher, 50.0f);
+
+    bool hasTotem = false;
+    bool hasCharmedAlly = false;
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -67,12 +94,21 @@ bool AttackCharmingTotemAction::isUseful()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_CHARMING_TOTEM && AttackersValue::IsValidTarget(unit, bot))
+        // Check for totem directly without IsValidTarget check
+        if (unit->GetEntry() == NPC_CHARMING_TOTEM)
         {
-            return true;
+            hasTotem = true;
+        }
+
+        // Check if any group member is charmed
+        if (unit->IsPlayer() && bot->IsInSameGroupWith(unit->ToPlayer()) && unit->IsCharmed())
+        {
+            hasCharmedAlly = true;
         }
     }
-    return false;
+    
+    // Trigger if totem exists OR if an ally is charmed (totem might be out of range)
+    return hasTotem || hasCharmedAlly;
 }
 
 bool InterruptControllerAction::Execute(Event event)
@@ -378,12 +414,12 @@ bool FleeSpiritAction::Execute(Event event)
 
     // Find all Sethekk Spirits within range
     std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 40.0f);
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 20.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 40.0f);
+    Cell::VisitAllObjects(bot, searcher, 20.0f);
 
     Unit* closestSpirit = nullptr;
-    float closestDistance = 40.0f;
+    float closestDistance = 20.0f;
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -405,61 +441,9 @@ bool FleeSpiritAction::Execute(Event event)
     if (!closestSpirit)
         return false;
 
-    // Only flee if spirit is too close (within 8 yards - their actual aggro range)
-    if (closestDistance > 8.0f)
-        return false;
-
-    // SMART FLEE: Move towards cleared areas (where group members are) to avoid pulling new mobs
-    
-    // Option 1: Try to move towards tank/master (usually in cleared areas)
-    Unit* tank = AI_VALUE(Unit*, "tank target");
-    if (!tank)
-        tank = AI_VALUE(Unit*, "master target");
-    
-    if (tank && tank != bot && tank->GetDistance(bot) < 40.0f)
-    {
-        // Move towards tank/master position but maintain some distance
-        float angle = bot->GetAngle(tank);
-        float moveDistance = 10.0f;
-        float x = bot->GetPositionX() + cos(angle) * moveDistance;
-        float y = bot->GetPositionY() + sin(angle) * moveDistance;
-        float z = bot->GetPositionZ();
-        
-        // Only move if it takes us away from the spirit
-        Position movePos(x, y, z);
-        if (closestSpirit->GetDistance(movePos) > closestDistance)
-        {
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-        }
-    }
-    
-    // Option 2: Move backwards (towards entrance/cleared path)
-    // Calculate direction away from spirit but backwards in dungeon progression
-    float spiritX = closestSpirit->GetPositionX();
-    float spiritY = closestSpirit->GetPositionY();
-    float botX = bot->GetPositionX();
-    float botY = bot->GetPositionY();
-    
-    // Move away from spirit
-    float dx = botX - spiritX;
-    float dy = botY - spiritY;
-    float distance = sqrt(dx * dx + dy * dy);
-    
-    if (distance < 0.1f)
-    {
-        // If too close, move towards group center or backwards
-        dx = -1.0f;  // Default backwards in Sethekk Halls layout
-        dy = 0.0f;
-        distance = 1.0f;
-    }
-    
-    // Move 12 yards away (enough to be safe but not excessive)
-    float moveDistance = 12.0f;
-    float safeX = botX + (dx / distance) * moveDistance;
-    float safeY = botY + (dy / distance) * moveDistance;
-    float safeZ = bot->GetPositionZ();
-    
-    return MoveTo(bot->GetMapId(), safeX, safeY, safeZ, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+    // Flee immediately using proven FleePosition pattern from ForgeOfSouls
+    // Spirits are dangerous and bots should maintain 20 yard distance
+    return FleePosition(closestSpirit->GetPosition(), 20.0f, 500U);
 }
 
 bool FleeSpiritAction::isUseful()
@@ -468,11 +452,11 @@ bool FleeSpiritAction::isUseful()
     if (!bot)
         return false;
 
-    // Check if any Sethekk Spirit is within dangerous range (10 yards)
+    // Check if any Sethekk Spirit is within dangerous range (20 yards)
     std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 10.0f);
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 20.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 10.0f);
+    Cell::VisitAllObjects(bot, searcher, 20.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -552,5 +536,95 @@ bool AttackBroodOfAnzuAction::isUseful()
         }
     }
     return false;
+}
+
+bool ContinueFightWithCharmedAllyAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Don't execute if we're charmed
+    if (bot->IsCharmed())
+        return false;
+
+    // Find the Time-Lost Controller to continue attacking
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitAllObjects(bot, searcher, 50.0f);
+
+    Unit* controller = nullptr;
+    float closestDistance = 50.0f;
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        // Focus on the controller that summoned the totem
+        if (unit->GetEntry() == NPC_TIME_LOST_CONTROLLER && unit->IsInCombat() && 
+            !unit->IsCharmed() && AttackersValue::IsValidTarget(unit, bot))
+        {
+            float distance = bot->GetDistance(unit);
+            if (distance < closestDistance)
+            {
+                controller = unit;
+                closestDistance = distance;
+            }
+        }
+    }
+
+    if (controller)
+    {
+        // Attack the controller directly
+        return Attack(controller);
+    }
+
+    // If no controller, ensure we continue with current valid target
+    Unit* target = AI_VALUE(Unit*, "current target");
+    if (target && !target->IsCharmed() && AttackersValue::IsValidTarget(target, bot))
+    {
+        return Attack(target);
+    }
+
+    return false;
+}
+
+bool ContinueFightWithCharmedAllyAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || bot->IsCharmed())
+        return false;
+
+    // Check if there's a charmed ally but we're not already attacking the totem
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitAllObjects(bot, searcher, 50.0f);
+
+    bool hasCharmedAlly = false;
+    bool hasTotem = false;
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->IsPlayer() && bot->IsInSameGroupWith(unit->ToPlayer()) && unit->IsCharmed())
+        {
+            hasCharmedAlly = true;
+        }
+
+        if (unit->GetEntry() == NPC_CHARMING_TOTEM)
+        {
+            hasTotem = true;
+        }
+    }
+
+    // Only useful if there's a charmed ally but no totem visible (or totem is being handled)
+    return hasCharmedAlly && !hasTotem;
 }
 
