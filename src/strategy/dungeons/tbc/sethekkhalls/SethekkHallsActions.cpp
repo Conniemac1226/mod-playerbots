@@ -43,6 +43,7 @@ bool AttackCharmingTotemAction::Execute(Event event)
 
     if (totem)
     {
+        // Simply attack the totem - let the base Attack() handle all positioning
         return Attack(totem);
     }
     
@@ -408,9 +409,57 @@ bool FleeSpiritAction::Execute(Event event)
     if (closestDistance > 15.0f)
         return false;
 
-    // Use the FleePosition method from MovementAction base class
-    // Flee at least 20 yards away from the spirit with 500ms minimum interval
-    return FleePosition(closestSpirit->GetPosition(), 20.0f, 500U);
+    // SMART FLEE: Move towards cleared areas (where group members are) to avoid pulling new mobs
+    
+    // Option 1: Try to move towards tank/master (usually in cleared areas)
+    Unit* tank = AI_VALUE(Unit*, "tank target");
+    if (!tank)
+        tank = AI_VALUE(Unit*, "master target");
+    
+    if (tank && tank != bot && tank->GetDistance(bot) < 40.0f)
+    {
+        // Move towards tank/master position but maintain some distance
+        float angle = bot->GetAngle(tank);
+        float moveDistance = 10.0f;
+        float x = bot->GetPositionX() + cos(angle) * moveDistance;
+        float y = bot->GetPositionY() + sin(angle) * moveDistance;
+        float z = bot->GetPositionZ();
+        
+        // Only move if it takes us away from the spirit
+        Position movePos(x, y, z);
+        if (closestSpirit->GetDistance(movePos) > closestDistance)
+        {
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        }
+    }
+    
+    // Option 2: Move backwards (towards entrance/cleared path)
+    // Calculate direction away from spirit but backwards in dungeon progression
+    float spiritX = closestSpirit->GetPositionX();
+    float spiritY = closestSpirit->GetPositionY();
+    float botX = bot->GetPositionX();
+    float botY = bot->GetPositionY();
+    
+    // Move away from spirit
+    float dx = botX - spiritX;
+    float dy = botY - spiritY;
+    float distance = sqrt(dx * dx + dy * dy);
+    
+    if (distance < 0.1f)
+    {
+        // If too close, move towards group center or backwards
+        dx = -1.0f;  // Default backwards in Sethekk Halls layout
+        dy = 0.0f;
+        distance = 1.0f;
+    }
+    
+    // Move 20 yards away but prefer backwards/cleared direction
+    float moveDistance = 20.0f;
+    float safeX = botX + (dx / distance) * moveDistance;
+    float safeY = botY + (dy / distance) * moveDistance;
+    float safeZ = bot->GetPositionZ();
+    
+    return MoveTo(bot->GetMapId(), safeX, safeY, safeZ, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
 }
 
 bool FleeSpiritAction::isUseful()
