@@ -11,7 +11,19 @@ bool ShirrakFocusFireSpawnedTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check for Focus Fire creature
+    // FIRST: Check if Shirrak is CASTING Focus Fire (spell 32300)
+    // This gives us earlier warning before the Focus Fire creature spawns
+    Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
+    if (boss && boss->IsAlive())
+    {
+        // Check if boss is casting Focus Cast (the spell that summons Focus Fire)
+        if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_FOCUS_CAST))
+        {
+            return true; // Start moving immediately when cast begins
+        }
+    }
+
+    // SECOND: Check for Focus Fire creature (fallback if we missed the cast)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);

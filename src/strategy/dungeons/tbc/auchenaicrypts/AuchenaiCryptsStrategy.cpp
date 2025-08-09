@@ -7,8 +7,9 @@ void TbcDungeonACStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // Boss: Shirrak the Dead Watcher - Focus Fire avoidance (critical mechanic)
     // RESEARCHED: From boss_shirrak_the_dead_watcher.cpp lines 120-149
     // Boss summons Focus Fire creature, then casts Fiery Blast 3 times over 3-4 seconds
+    // INCREASED PRIORITY: ACTION_EMERGENCY + 2 for immediate response to prevent damage
     triggers.push_back(new TriggerNode("shirrak focus fire spawned",
-             NextAction::array(0, new NextAction("shirrak focus fire avoid", ACTION_MOVE + 5), nullptr)));
+             NextAction::array(0, new NextAction("shirrak focus fire avoid", ACTION_EMERGENCY + 2), nullptr)));
     
     // When Focus Fire phase ends, return to optimal combat positioning
     triggers.push_back(new TriggerNode("shirrak focus fire ended",
