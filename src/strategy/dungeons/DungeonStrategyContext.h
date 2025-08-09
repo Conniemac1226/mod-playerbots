@@ -17,6 +17,9 @@
 #include "wotlk/forgeofsouls/ForgeOfSoulsStrategy.h"
 #include "wotlk/pitofsaron/PitOfSaronStrategy.h"
 #include "wotlk/trialofthechampion/TrialOfTheChampionStrategy.h"
+#include "tbc/sethekkhalls/SethekkHallsStrategy.h"
+#include "tbc/auchenaicrypts/AuchenaiCryptsStrategy.h"
+#include "tbc/escapefromdurnholde/EscapeFromDurnholdeStrategy.h"
 
 /*
 Full list/TODO:
@@ -46,7 +49,9 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             // ...
 
             // Burning Crusade
-            // ...
+            creators["tbc-sh"] = &DungeonStrategyContext::tbc_sh;       // Sethekk Halls
+            creators["tbc-ac"] = &DungeonStrategyContext::tbc_ac;       // Auchenai Crypts
+            creators["tbc-efd"] = &DungeonStrategyContext::tbc_efd;     // Escape from Durnholde
             
             // Wrath of the Lich King
             creators["wotlk-uk"] = &DungeonStrategyContext::wotlk_uk;       // Utgarde Keep
@@ -67,6 +72,10 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             creators["wotlk-fos"] = &DungeonStrategyContext::wotlk_fos;     // The Forge of Souls
         }
     private:
+        static Strategy* tbc_sh(PlayerbotAI* botAI) { return new TbcDungeonSHStrategy(botAI); }
+        static Strategy* tbc_ac(PlayerbotAI* botAI) { return new TbcDungeonACStrategy(botAI); }
+        static Strategy* tbc_efd(PlayerbotAI* botAI) { return new EscapeFromDurnholdeStrategy(botAI); }
+        
         static Strategy* wotlk_uk(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
         static Strategy* wotlk_nex(PlayerbotAI* botAI) { return new WotlkDungeonNexStrategy(botAI); }
         static Strategy* wotlk_an(PlayerbotAI* botAI) { return new WotlkDungeonANStrategy(botAI); }
