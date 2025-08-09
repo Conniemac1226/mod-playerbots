@@ -6,5 +6,7 @@
 #include "blackmorass/BlackMorassTriggerContext.h"
 #include "escapefromdurnholde/EscapeFromDurnholdeTriggerContext.h"
 #include "magistersterrace/MagistersTerraceTriggerContext.h"
+#include "steamvault/SteamvaultTriggerContext.h"
+#include "hellfireramparts/HellfireRampartsTriggerContext.h"
 
 #endif

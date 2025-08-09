@@ -42,7 +42,7 @@ bool ThespiaWaterElementalActiveTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -106,7 +106,7 @@ bool SteamriggerMechanicActiveTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -160,7 +160,7 @@ bool KalithreshNagaDistillerActiveTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -184,7 +184,7 @@ bool KalithreshChannelingRageTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {

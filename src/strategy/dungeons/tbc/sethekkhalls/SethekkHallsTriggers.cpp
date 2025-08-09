@@ -18,7 +18,7 @@ bool CharmingTotemSpawnedTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     bool hasTotem = false;
     bool hasCharmedAlly = false;
@@ -55,7 +55,7 @@ bool TimeLostControllerCastingTotemTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 30.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 30.0f);
+    Cell::VisitObjects(bot, searcher, 30.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -189,7 +189,7 @@ bool SethekkSpiritNearbyTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 20.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 20.0f);
+    Cell::VisitObjects(bot, searcher, 20.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -215,7 +215,7 @@ bool BroodOfAnzuNearbyTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {

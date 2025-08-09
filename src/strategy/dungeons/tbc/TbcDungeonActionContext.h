@@ -6,5 +6,7 @@
 #include "blackmorass/BlackMorassActionContext.h"
 #include "escapefromdurnholde/EscapeFromDurnholdeActionContext.h"
 #include "magistersterrace/MagistersTerraceActionContext.h"
+#include "steamvault/SteamvaultActionContext.h"
+#include "hellfireramparts/HellfireRampartsActionContext.h"
 
 #endif

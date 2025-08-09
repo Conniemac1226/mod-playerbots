@@ -22,7 +22,7 @@ bool AeonusCleaveNearbyTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -51,7 +51,7 @@ bool AeonusEngagedTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -76,7 +76,7 @@ bool ChronoLordDejaEngagedTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -101,7 +101,7 @@ bool TemporusEngagedTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -126,7 +126,7 @@ bool TimeLapseNearbyTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -155,7 +155,7 @@ bool ArcaneDischargeNearbyTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -184,7 +184,7 @@ bool WingBuffetNearbyTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {

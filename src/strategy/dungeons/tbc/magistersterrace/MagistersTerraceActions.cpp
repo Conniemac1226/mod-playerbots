@@ -103,7 +103,7 @@ bool FleeArcaneSphereAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 15.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 15.0f);
+    Cell::VisitObjects(bot, searcher, 15.0f);
 
     Unit* closestSphere = nullptr;
     float closestDistance = 15.0f;
@@ -149,7 +149,7 @@ bool AttackPureEnergyAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     Unit* pureEnergy = nullptr;
     float closestDistance = 50.0f;
@@ -228,7 +228,7 @@ bool AttackFelCrystalAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     Unit* crystal = nullptr;
     float closestDistance = 50.0f;
@@ -282,7 +282,7 @@ bool AttackDelrissaAddAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     Unit* priorityTarget = nullptr;
     float closestDistance = 50.0f;

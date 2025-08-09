@@ -15,7 +15,7 @@ bool ShirrakFocusFireSpawnedTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 60.0f);
+    Cell::VisitObjects(bot, searcher, 60.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -82,7 +82,7 @@ bool ShirrakFocusFireEndedTrigger::IsActive()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 60.0f);
+    Cell::VisitObjects(bot, searcher, 60.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
