@@ -50,9 +50,9 @@ bool ShirrakFocusFireAvoidAction::Execute(Event event)
         float safeX = botX + (dx / distance) * moveDistance;
         float safeY = botY + (dy / distance) * moveDistance;
         
-        // Use MOVEMENT_URGENT for fastest response
+        // Use MOVEMENT_FORCED for fastest response
         bool result = MoveTo(bot->GetMapId(), safeX, safeY, botZ, 
-                            false, false, false, true, MovementPriority::MOVEMENT_URGENT);
+                            false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         
         if (result) {
             g_shirrak_inSafePosition[botGuid] = true;
@@ -108,9 +108,9 @@ bool ShirrakFocusFireAvoidAction::Execute(Event event)
     float safeX = focusX + (dx / distance) * moveDistance;
     float safeY = focusY + (dy / distance) * moveDistance;
     
-    // Use MOVEMENT_URGENT for fastest response
+    // Use MOVEMENT_FORCED for fastest response
     bool result = MoveTo(bot->GetMapId(), safeX, safeY, botZ, 
-                        false, false, false, true, MovementPriority::MOVEMENT_URGENT);
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     
     if (!result) {
         // Try alternative position
@@ -118,7 +118,7 @@ bool ShirrakFocusFireAvoidAction::Execute(Event event)
         float altY = focusY - (dy / distance) * moveDistance;
         
         bool altResult = MoveTo(bot->GetMapId(), altX, altY, botZ, 
-                               false, false, false, true, MovementPriority::MOVEMENT_URGENT);
+                               false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         
         if (altResult) {
             g_shirrak_inSafePosition[botGuid] = true;
