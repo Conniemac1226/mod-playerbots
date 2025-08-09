@@ -30,6 +30,12 @@
 #include "dungeons/DungeonStrategyContext.h"
 #include "dungeons/wotlk/WotlkDungeonActionContext.h"
 #include "dungeons/wotlk/WotlkDungeonTriggerContext.h"
+#include "dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeActionContext.h"
+#include "dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeTriggerContext.h"
+#include "dungeons/tbc/sethekkhalls/SethekkHallsActionContext.h"
+#include "dungeons/tbc/sethekkhalls/SethekkHallsTriggerContext.h"
+#include "dungeons/tbc/auchenaicrypts/AuchenaiCryptsActionContext.h"
+#include "dungeons/tbc/auchenaicrypts/AuchenaiCryptsTriggerContext.h"
 #include "raids/RaidStrategyContext.h"
 #include "raids/aq20/RaidAq20ActionContext.h"
 #include "raids/aq20/RaidAq20TriggerContext.h"
@@ -130,6 +136,9 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new WotlkDungeonFoSActionContext());
     actionContexts.Add(new WotlkDungeonPoSActionContext());
     actionContexts.Add(new WotlkDungeonToCActionContext());
+    actionContexts.Add(new EscapeFromDurnholdeActionContext());
+    actionContexts.Add(new TbcDungeonSHActionContext());
+    actionContexts.Add(new TbcDungeonACActionContext());
 }
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
@@ -162,6 +171,9 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new WotlkDungeonFoSTriggerContext());
     triggerContexts.Add(new WotlkDungeonPoSTriggerContext());
     triggerContexts.Add(new WotlkDungeonToCTriggerContext());
+    triggerContexts.Add(new EscapeFromDurnholdeTriggerContext());
+    triggerContexts.Add(new TbcDungeonSHTriggerContext());
+    triggerContexts.Add(new TbcDungeonACTriggerContext());
 }
 
 void AiObjectContext::BuildSharedValueContexts(SharedNamedObjectContextList<UntypedValue>& valueContexts)
