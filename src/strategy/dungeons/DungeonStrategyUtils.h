@@ -17,4 +17,20 @@ const T& DUNGEON_MODE(Player* bot, const T& normal5, const T& heroic10)
     return heroic10;
 }
 
+template<class T> inline
+const T& TBC_MODE(Player* bot, const T& normal5, const T& heroic5)
+{
+    switch (bot->GetMap()->GetDifficulty())
+    {
+        case DUNGEON_DIFFICULTY_NORMAL:
+            return normal5;
+        case DUNGEON_DIFFICULTY_HEROIC:
+            return heroic5;
+        default:
+            break;
+    }
+
+    return heroic5;
+}
+
 #endif
