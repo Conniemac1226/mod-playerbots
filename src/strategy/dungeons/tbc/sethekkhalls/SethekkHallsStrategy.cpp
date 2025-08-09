@@ -24,6 +24,15 @@ void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // When boss loses Arcane Bubble, return to combat
     triggers.push_back(new TriggerNode("ikiss arcane explosion ended",
              NextAction::array(0, new NextAction("ikiss return position", ACTION_MOVE + 3), nullptr)));
+
+    // Boss: Anzu - Priority add targeting (banish phases at 66% and 33%)
+    // High priority to kill broods and remove banish
+    triggers.push_back(new TriggerNode("brood of anzu nearby",
+             NextAction::array(0, new NextAction("attack brood of anzu", ACTION_EMERGENCY + 4), nullptr)));
+    
+    // NOTE: Anzu spell bomb and cyclone mechanics cannot be implemented without guessing
+    // No proven patterns exist for detecting spell bomb targets or cyclone range mechanics
+    // Only implementing what can be proven: Brood of Anzu targeting (proven from totem pattern)
 }
 
 void TbcDungeonSHStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)

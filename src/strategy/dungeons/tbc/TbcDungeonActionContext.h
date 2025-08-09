@@ -3,5 +3,6 @@
 
 #include "sethekkhalls/SethekkHallsActionContext.h"
 #include "auchenaicrypts/AuchenaiCryptsActionContext.h"
+#include "blackmorass/BlackMorassActionContext.h"
 
 #endif

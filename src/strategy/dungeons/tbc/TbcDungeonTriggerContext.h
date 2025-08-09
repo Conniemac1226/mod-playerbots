@@ -3,5 +3,6 @@
 
 #include "sethekkhalls/SethekkHallsTriggerContext.h"
 #include "auchenaicrypts/AuchenaiCryptsTriggerContext.h"
+#include "blackmorass/BlackMorassTriggerContext.h"
 
 #endif
