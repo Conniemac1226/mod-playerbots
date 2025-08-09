@@ -10,7 +10,7 @@ bool AttackHellfireWatcherAction::Execute(Event event)
         return false;
 
     // Find Hellfire Watchers - simplified approach
-    Unit* watcher = bot->FindNearestCreature(NPC_HELLFIRE_WATCHER, 100.0f);
+    Unit* watcher = AI_VALUE2(Unit*, "find target", "hellfire watcher");
     if (watcher && watcher->IsAlive() && watcher->IsInCombat())
     {
         return Attack(watcher);
@@ -26,7 +26,7 @@ bool AttackHellfireWatcherAction::isUseful()
         return false;
 
     // Check if Gargolmar is below 50% health and watchers exist
-    Unit* boss = bot->FindNearestCreature(NPC_WATCHKEEPER_GARGOLMAR, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "watchkeeper gargolmar");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -34,7 +34,7 @@ bool AttackHellfireWatcherAction::isUseful()
     if (boss->GetHealthPct() > 50.0f)
         return false;
 
-    Unit* watcher = bot->FindNearestCreature(NPC_HELLFIRE_WATCHER, 100.0f);
+    Unit* watcher = AI_VALUE2(Unit*, "find target", "hellfire watcher");
     if (watcher && watcher->IsAlive() && watcher->IsInCombat())
         return true;
 
@@ -48,7 +48,7 @@ bool GargolmarRetaliationAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = bot->FindNearestCreature(NPC_WATCHKEEPER_GARGOLMAR, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "watchkeeper gargolmar");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -82,7 +82,7 @@ bool GargolmarRetaliationAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* boss = bot->FindNearestCreature(NPC_WATCHKEEPER_GARGOLMAR, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "watchkeeper gargolmar");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -98,7 +98,7 @@ bool AttackFiendishHoundAction::Execute(Event event)
         return false;
 
     // Find Fiendish Hounds - simplified approach
-    Unit* hound = bot->FindNearestCreature(NPC_FIENDISH_HOUND, 50.0f);
+    Unit* hound = AI_VALUE2(Unit*, "find target", "fiendish hound");
     if (hound && hound->IsAlive() && hound->IsInCombat())
     {
         return Attack(hound);
@@ -113,7 +113,7 @@ bool AttackFiendishHoundAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* hound = bot->FindNearestCreature(NPC_FIENDISH_HOUND, 50.0f);
+    Unit* hound = AI_VALUE2(Unit*, "find target", "fiendish hound");
     if (hound && hound->IsAlive() && hound->IsInCombat())
         return true;
 
@@ -127,7 +127,7 @@ bool OmorShadowBoltInterruptAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -155,7 +155,7 @@ bool OmorShadowBoltInterruptAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -204,7 +204,7 @@ bool NazanLiquidFireAction::Execute(Event event)
         return false;
 
     // Find Liquid Fire patches
-    Unit* fire = bot->FindNearestCreature(NPC_LIQUID_FIRE, 10.0f);
+    Unit* fire = AI_VALUE2(Unit*, "find target", "liquid fire");
     if (fire && bot->GetDistance(fire) < 8.0f)
     {
         // Move away from fire
@@ -224,7 +224,7 @@ bool NazanLiquidFireAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* fire = bot->FindNearestCreature(NPC_LIQUID_FIRE, 10.0f);
+    Unit* fire = AI_VALUE2(Unit*, "find target", "liquid fire");
     return fire && fire->IsAlive();
 
     return false;
@@ -237,7 +237,7 @@ bool NazanConeOfFireAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* nazan = bot->FindNearestCreature(NPC_NAZAN, 100.0f);
+    Unit* nazan = AI_VALUE2(Unit*, "find target", "nazan");
     if (!nazan || !nazan->IsAlive() || !nazan->IsInCombat())
         return false;
 
@@ -262,7 +262,7 @@ bool NazanConeOfFireAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* nazan = bot->FindNearestCreature(NPC_NAZAN, 100.0f);
+    Unit* nazan = AI_VALUE2(Unit*, "find target", "nazan");
     if (!nazan || !nazan->IsAlive() || !nazan->IsInCombat())
         return false;
 
@@ -283,7 +283,7 @@ bool AttackNazanFirstAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* nazan = bot->FindNearestCreature(NPC_NAZAN, 100.0f);
+    Unit* nazan = AI_VALUE2(Unit*, "find target", "nazan");
     if (!nazan || !nazan->IsAlive() || !nazan->IsInCombat())
         return false;
 
@@ -302,8 +302,8 @@ bool AttackNazanFirstAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* nazan = bot->FindNearestCreature(NPC_NAZAN, 100.0f);
-    Unit* vazruden = bot->FindNearestCreature(NPC_VAZRUDEN, 100.0f);
+    Unit* nazan = AI_VALUE2(Unit*, "find target", "nazan");
+    Unit* vazruden = AI_VALUE2(Unit*, "find target", "vazruden");
 
     // Both must be alive and Nazan must have landed
     if (nazan && nazan->IsAlive() && !nazan->IsLevitating() &&
@@ -324,7 +324,7 @@ bool AttackVazrudenAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* vazruden = bot->FindNearestCreature(NPC_VAZRUDEN, 100.0f);
+    Unit* vazruden = AI_VALUE2(Unit*, "find target", "vazruden");
     if (!vazruden || !vazruden->IsAlive() || !vazruden->IsInCombat())
         return false;
 
@@ -337,8 +337,8 @@ bool AttackVazrudenAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* nazan = bot->FindNearestCreature(NPC_NAZAN, 100.0f);
-    Unit* vazruden = bot->FindNearestCreature(NPC_VAZRUDEN, 100.0f);
+    Unit* nazan = AI_VALUE2(Unit*, "find target", "nazan");
+    Unit* vazruden = AI_VALUE2(Unit*, "find target", "vazruden");
 
     // Attack Vazruden only after Nazan is dead
     return (!nazan || !nazan->IsAlive()) && vazruden && vazruden->IsAlive();

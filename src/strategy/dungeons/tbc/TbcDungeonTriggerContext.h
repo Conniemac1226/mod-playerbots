@@ -8,5 +8,9 @@
 #include "magistersterrace/MagistersTerraceTriggerContext.h"
 #include "steamvault/SteamvaultTriggerContext.h"
 #include "hellfireramparts/HellfireRampartsTriggerContext.h"
+#include "bloodfurnace/BloodFurnaceTriggerContext.h"
+#include "slavepens/SlavePensTriggerContext.h"
+#include "underbog/UnderbogTriggerContext.h"
+#include "manatombs/ManaTombsTriggerContext.h"
 
 #endif
