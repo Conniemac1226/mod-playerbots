@@ -1527,14 +1527,26 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 533:
             strategyName = "naxx";
             break;
+        case 542:
+            strategyName = "tbc-bf";  // The Blood Furnace
+            break;
         case 543:
             strategyName = "tbc-hr";  // Hellfire Ramparts
             break;
         case 545:
             strategyName = "tbc-sv";  // The Steamvault
             break;
+        case 546:
+            strategyName = "tbc-ub";  // The Underbog
+            break;
+        case 547:
+            strategyName = "tbc-sp";  // The Slave Pens
+            break;
         case 556:
             strategyName = "tbc-sh";  // Sethekk Halls
+            break;
+        case 557:
+            strategyName = "tbc-mt";  // Mana-Tombs
             break;
         case 558:
             strategyName = "tbc-ac";  // Auchenai Crypts

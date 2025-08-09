@@ -52,3 +52,27 @@ public:
     WingBuffetNearbyTrigger(PlayerbotAI* botAI) : Trigger(botAI, "wing buffet nearby") {}
     bool IsActive() override;
 };
+
+// RESEARCHED: boss_temporus.cpp:54 - HASTEN buff needs dispel
+class TemporusHastenActiveTrigger : public Trigger
+{
+public:
+    TemporusHastenActiveTrigger(PlayerbotAI* botAI) : Trigger(botAI, "temporus hasten active") {}
+    bool IsActive() override;
+};
+
+// RESEARCHED: boss_chrono_lord_deja.cpp:58 - ARCANE_BLAST needs interrupt
+class DejaArcaneBlastCastingTrigger : public Trigger
+{
+public:
+    DejaArcaneBlastCastingTrigger(PlayerbotAI* botAI) : Trigger(botAI, "deja arcane blast casting") {}
+    bool IsActive() override;
+};
+
+// RESEARCHED: boss_aeonus.cpp:86 - ENRAGE increases damage
+class AeonusEnragedTrigger : public Trigger
+{
+public:
+    AeonusEnragedTrigger(PlayerbotAI* botAI) : Trigger(botAI, "aeonus enraged") {}
+    bool IsActive() override;
+};

@@ -2,9 +2,6 @@
 #include "SteamvaultTriggers.h"
 #include "SpellInfo.h"
 #include "Unit.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "AttackersValue.h"
 #include "Playerbots.h"
 
@@ -22,7 +19,7 @@ bool AvoidLightningCloudAction::Execute(Event event)
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
 
-    Unit* boss = bot->FindNearestCreature(NPC_HYDROMANCER_THESPIA, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "hydromancer thespia");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -92,18 +89,14 @@ bool AttackWaterElementalAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find water elementals
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
-
+    // Find water elementals using proven pattern
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* elemental = nullptr;
     float closestDistance = 50.0f;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
@@ -165,7 +158,7 @@ bool AvoidSawBladeAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = bot->FindNearestCreature(NPC_MEKGINEER_STEAMRIGGER, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "mekgineer steamrigger");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -219,18 +212,14 @@ bool AttackSteamriggerMechanicAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find mechanics
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
-
+    // Find mechanics using proven pattern
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* mechanic = nullptr;
     float closestDistance = 50.0f;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
@@ -265,7 +254,7 @@ bool StopCastingSpellReflectionAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = bot->FindNearestCreature(NPC_WARLORD_KALITHRESH, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "warlord kalithresh");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -345,18 +334,14 @@ bool AttackNagaDistillerAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find active Naga Distillers
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
+    // Find active Naga Distillers using proven pattern
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* distiller = nullptr;
     float closestDistance = 100.0f;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
@@ -391,15 +376,12 @@ bool InterruptDistillerChannelAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find distiller channeling on Kalithresh
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
+    // Find distiller channeling on Kalithresh using proven pattern
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 

@@ -8,5 +8,9 @@
 #include "magistersterrace/MagistersTerraceActionContext.h"
 #include "steamvault/SteamvaultActionContext.h"
 #include "hellfireramparts/HellfireRampartsActionContext.h"
+#include "bloodfurnace/BloodFurnaceActionContext.h"
+#include "slavepens/SlavePensActionContext.h"
+#include "underbog/UnderbogActionContext.h"
+#include "manatombs/ManaTombsActionContext.h"
 
 #endif

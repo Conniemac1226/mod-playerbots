@@ -203,3 +203,110 @@ bool WingBuffetNearbyTrigger::IsActive()
     
     return false;
 }
+
+// RESEARCHED: boss_temporus.cpp:54 - HASTEN buff needs dispel
+bool TemporusHastenActiveTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Only trigger for classes that can dispel
+    if (bot->getClass() != CLASS_PRIEST && 
+        bot->getClass() != CLASS_SHAMAN &&
+        bot->getClass() != CLASS_WARLOCK)
+        return false;
+
+    // Check if Temporus has Hasten buff
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitObjects(bot, searcher, 100.0f);
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_TEMPORUS && unit->IsInCombat())
+        {
+            if (unit->HasAura(SPELL_HASTEN))
+                return true;
+        }
+    }
+    
+    return false;
+}
+
+// RESEARCHED: boss_chrono_lord_deja.cpp:58 - ARCANE_BLAST needs interrupt  
+bool DejaArcaneBlastCastingTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Only trigger for classes with interrupts
+    switch(bot->getClass())
+    {
+        case CLASS_WARRIOR:
+        case CLASS_ROGUE:
+        case CLASS_SHAMAN:
+        case CLASS_MAGE:
+        case CLASS_PRIEST:
+            break;
+        default:
+            return false;
+    }
+
+    // Check if Chrono Lord Deja is casting Arcane Blast
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 30.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitObjects(bot, searcher, 30.0f);
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_CHRONO_LORD_DEJA && unit->IsInCombat())
+        {
+            if (unit->HasUnitState(UNIT_STATE_CASTING) && 
+                unit->FindCurrentSpellBySpellId(SPELL_ARCANE_BLAST))
+                return true;
+        }
+    }
+    
+    return false;
+}
+
+// RESEARCHED: boss_aeonus.cpp:86 - ENRAGE increases damage
+bool AeonusEnragedTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if Aeonus has Enrage buff
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitObjects(bot, searcher, 100.0f);
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_AEONUS && unit->IsInCombat())
+        {
+            if (unit->HasAura(SPELL_ENRAGE))
+                return true;
+        }
+    }
+    
+    return false;
+}

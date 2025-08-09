@@ -10,27 +10,70 @@ BlackMorassStrategy::BlackMorassStrategy(PlayerbotAI* botAI) : Strategy(botAI)
 
 void BlackMorassStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
-    // Aeonus cleave avoidance (high priority)
+    // ===== PORTAL/ADD MANAGEMENT (HIGHEST PRIORITY) =====
     triggers.push_back(new TriggerNode(
-        "aeonus cleave nearby",
-        NextAction::array(0, new NextAction("aeonus avoid cleave", ACTION_MOVE + 2), nullptr)));
-
-    // Aeonus positioning for tanks
-    triggers.push_back(new TriggerNode(
-        "aeonus engaged",
-        NextAction::array(0, new NextAction("aeonus position", ACTION_MOVE + 1), nullptr)));
-
-    // Chrono Lord Deja AoE avoidance
-    triggers.push_back(new TriggerNode(
-        "time lapse nearby", 
-        NextAction::array(0, new NextAction("avoid time lapse", ACTION_MOVE + 1), nullptr)));
+        "portal add active",
+        NextAction::array(0, new NextAction("attack portal add", ACTION_EMERGENCY), nullptr)));
         
     triggers.push_back(new TriggerNode(
-        "arcane discharge nearby",
-        NextAction::array(0, new NextAction("avoid arcane discharge", ACTION_MOVE + 1), nullptr)));
+        "medivh needs protection",
+        NextAction::array(0, new NextAction("protect medivh", ACTION_MOVE + 3), nullptr)));
 
-    // Temporus positioning
+    // ===== AEONUS TRIGGERS =====
     triggers.push_back(new TriggerNode(
-        "wing buffet nearby",
-        NextAction::array(0, new NextAction("avoid wing buffet", ACTION_MOVE + 1), nullptr)));
+        "aeonus cleave danger",
+        NextAction::array(0, new NextAction("aeonus avoid cleave", ACTION_MOVE + 3), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "aeonus engaged",
+        NextAction::array(0, new NextAction("aeonus position", ACTION_MOVE + 2), nullptr)));
+        
+    triggers.push_back(new TriggerNode(
+        "sand breath danger",
+        NextAction::array(0, new NextAction("avoid sand breath", ACTION_MOVE + 4), nullptr)));
+        
+    triggers.push_back(new TriggerNode(
+        "time stop active",
+        NextAction::array(0, new NextAction("handle time stop", ACTION_EMERGENCY + 1), nullptr)));
+
+    // ===== CHRONO LORD DEJA TRIGGERS =====
+    triggers.push_back(new TriggerNode(
+        "time lapse danger", 
+        NextAction::array(0, new NextAction("avoid time lapse", ACTION_MOVE + 2), nullptr)));
+        
+    triggers.push_back(new TriggerNode(
+        "arcane discharge danger",
+        NextAction::array(0, new NextAction("avoid arcane discharge", ACTION_MOVE + 3), nullptr)));
+        
+    triggers.push_back(new TriggerNode(
+        "attraction active",
+        NextAction::array(0, new NextAction("handle attraction", ACTION_MOVE + 2), nullptr)));
+
+    // ===== TEMPORUS TRIGGERS =====
+    triggers.push_back(new TriggerNode(
+        "wing buffet danger",
+        NextAction::array(0, new NextAction("avoid wing buffet", ACTION_MOVE + 2), nullptr)));
+        
+    triggers.push_back(new TriggerNode(
+        "mortal wound active",
+        NextAction::array(0, new NextAction("heal mortal wound", ACTION_CRITICAL_HEAL + 2), nullptr)));
+        
+    triggers.push_back(new TriggerNode(
+        "temporus reflect active",
+        NextAction::array(0, new NextAction("stop casting reflect", ACTION_INTERRUPT + 1), nullptr)));
+        
+    // RESEARCHED: boss_temporus.cpp:54 - HASTEN buff needs dispel
+    triggers.push_back(new TriggerNode(
+        "temporus hasten active",
+        NextAction::array(0, new NextAction("dispel hasten", ACTION_INTERRUPT), nullptr)));
+        
+    // RESEARCHED: boss_chrono_lord_deja.cpp:58 - ARCANE_BLAST needs interrupt
+    triggers.push_back(new TriggerNode(
+        "deja arcane blast casting",
+        NextAction::array(0, new NextAction("interrupt arcane blast", ACTION_INTERRUPT + 2), nullptr)));
+        
+    // RESEARCHED: boss_aeonus.cpp:86 - ENRAGE increases damage
+    triggers.push_back(new TriggerNode(
+        "aeonus enraged",
+        NextAction::array(0, new NextAction("handle aeonus enrage", ACTION_CRITICAL_HEAL + 1), nullptr)));
 }

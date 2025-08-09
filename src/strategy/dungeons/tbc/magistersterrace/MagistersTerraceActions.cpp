@@ -2,9 +2,6 @@
 #include "MagistersTerraceTriggers.h"
 #include "SpellInfo.h"
 #include "Unit.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "AttackersValue.h"
 #include "Playerbots.h"
 
@@ -19,7 +16,7 @@ bool InterruptKaelthasPyroblastAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "kael'thas sunstrider");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -54,7 +51,7 @@ bool AvoidGravityLapseAction::Execute(Event event)
     uint32 currentTime = getMSTime();
 
     // Check if boss is casting gravity lapse
-    Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "kael'thas sunstrider");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -99,18 +96,14 @@ bool FleeArcaneSphereAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find nearest arcane sphere
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 15.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 15.0f);
-
+    // Find nearest arcane sphere using proven pattern
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* closestSphere = nullptr;
     float closestDistance = 15.0f;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
@@ -145,18 +138,14 @@ bool AttackPureEnergyAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find Pure Energy adds
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
-
+    // Find Pure Energy adds using proven pattern
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* pureEnergy = nullptr;
     float closestDistance = 50.0f;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
@@ -191,7 +180,7 @@ bool AvoidFelExplosionAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = bot->FindNearestCreature(NPC_SELIN_FIREHEART, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "selin fireheart");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -217,25 +206,21 @@ bool AttackFelCrystalAction::Execute(Event event)
         return false;
 
     // Check if Selin is channeling
-    Unit* boss = bot->FindNearestCreature(NPC_SELIN_FIREHEART, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "selin fireheart");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
     if (!(boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_MANA_RAGE)))
         return false;
 
-    // Find the crystal being channeled
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
-
+    // Find the crystal being channeled using proven pattern
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* crystal = nullptr;
     float closestDistance = 50.0f;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
@@ -272,24 +257,21 @@ bool AttackDelrissaAddAction::Execute(Event event)
         return false;
 
     // Check if Delrissa is in combat
-    Unit* boss = bot->FindNearestCreature(NPC_DELRISSA, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "priestess delrissa");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
     // List of possible add IDs
     const uint32 delrissaAdds[] = {24557, 24558, 24554, 24561, 24559, 24555, 24553, 24556};
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
-
+    // Find adds using proven pattern
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* priorityTarget = nullptr;
     float closestDistance = 50.0f;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
