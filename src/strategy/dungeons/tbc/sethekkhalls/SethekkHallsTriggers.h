@@ -68,4 +68,11 @@ public:
     bool IsActive() override;
 };
 
+class SethekkSpiritNearbyTrigger : public Trigger
+{
+public:
+    SethekkSpiritNearbyTrigger(PlayerbotAI* ai) : Trigger(ai, "sethekk spirit nearby") {}
+    bool IsActive() override;
+};
+
 #endif

@@ -15,6 +15,7 @@ class TbcDungeonSHTriggerContext : public NamedObjectContext<Trigger>
             creators["ikiss blink cast"] = &TbcDungeonSHTriggerContext::ikiss_blink_cast;
             creators["ikiss arcane explosion cast"] = &TbcDungeonSHTriggerContext::ikiss_arcane_explosion_cast;
             creators["ikiss arcane explosion ended"] = &TbcDungeonSHTriggerContext::ikiss_arcane_explosion_ended;
+            creators["sethekk spirit nearby"] = &TbcDungeonSHTriggerContext::sethekk_spirit_nearby;
         }
     private:
         static Trigger* charming_totem_spawned(PlayerbotAI* ai) { return new CharmingTotemSpawnedTrigger(ai); }
@@ -22,6 +23,7 @@ class TbcDungeonSHTriggerContext : public NamedObjectContext<Trigger>
         static Trigger* ikiss_blink_cast(PlayerbotAI* ai) { return new IkissBlinkCastTrigger(ai); }
         static Trigger* ikiss_arcane_explosion_cast(PlayerbotAI* ai) { return new IkissArcaneExplosionCastTrigger(ai); }
         static Trigger* ikiss_arcane_explosion_ended(PlayerbotAI* ai) { return new IkissArcaneExplosionEndedTrigger(ai); }
+        static Trigger* sethekk_spirit_nearby(PlayerbotAI* ai) { return new SethekkSpiritNearbyTrigger(ai); }
 };
 
 #endif

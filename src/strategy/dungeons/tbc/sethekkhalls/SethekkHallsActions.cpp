@@ -368,3 +368,72 @@ bool IkissReturnPositionAction::isUseful()
     // Only useful when not in arcane bubble phase
     return !boss->HasAura(9438); // SPELL_ARCANE_BUBBLE
 }
+
+bool FleeSpiritAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Find all Sethekk Spirits within range
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 40.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitAllObjects(bot, searcher, 40.0f);
+
+    Unit* closestSpirit = nullptr;
+    float closestDistance = 40.0f;
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_SETHEKK_SPIRIT)
+        {
+            float distance = bot->GetDistance(unit);
+            if (distance < closestDistance)
+            {
+                closestSpirit = unit;
+                closestDistance = distance;
+            }
+        }
+    }
+
+    if (!closestSpirit)
+        return false;
+
+    // Only flee if spirit is too close (within 15 yards)
+    if (closestDistance > 15.0f)
+        return false;
+
+    // Use the FleePosition method from MovementAction base class
+    // Flee at least 20 yards away from the spirit with 500ms minimum interval
+    return FleePosition(closestSpirit->GetPosition(), 20.0f, 500U);
+}
+
+bool FleeSpiritAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if any Sethekk Spirit is within dangerous range (20 yards)
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 20.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitAllObjects(bot, searcher, 20.0f);
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_SETHEKK_SPIRIT)
+            return true;
+    }
+    
+    return false;
+}

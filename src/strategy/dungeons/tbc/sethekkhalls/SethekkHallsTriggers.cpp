@@ -162,3 +162,29 @@ bool IkissArcaneExplosionEndedTrigger::IsActive()
     hadBubbleMap[botGuid] = hasBubble;
     return false;
 }
+
+bool SethekkSpiritNearbyTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Find any Sethekk Spirit within dangerous range (20 yards)
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 20.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitAllObjects(bot, searcher, 20.0f);
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        // NPC ID 18703 is Sethekk Spirit (ghost that spawns from dead Sethekk Prophets)
+        if (unit->GetEntry() == 18703)
+            return true;
+    }
+    
+    return false;
+}

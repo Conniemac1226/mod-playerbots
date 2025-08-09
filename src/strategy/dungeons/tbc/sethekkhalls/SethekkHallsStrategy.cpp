@@ -3,6 +3,11 @@
 
 void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    // Trash: Sethekk Spirit - Flee from ghost spawned when Sethekk Prophets die
+    // High priority to ensure bots immediately flee from these dangerous ghosts
+    triggers.push_back(new TriggerNode("sethekk spirit nearby",
+             NextAction::array(0, new NextAction("flee sethekk spirit", ACTION_EMERGENCY + 3), nullptr)));
+    
     // Trash: Time-Lost Controller - Charming Totem Priority
     // Using high base priority instead of multipliers to match WotLK patterns
     triggers.push_back(new TriggerNode("charming totem spawned",
