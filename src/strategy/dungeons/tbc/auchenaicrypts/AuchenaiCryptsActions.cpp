@@ -18,8 +18,49 @@ bool ShirrakFocusFireAvoidAction::Execute(Event event)
 
     ObjectGuid botGuid = bot->GetGUID();
 
-    // Focus Fire is summoned at player position
-    // Find Focus Fire creature location
+    // Already in safe position for this phase
+    if (g_shirrak_inSafePosition[botGuid])
+        return true;
+
+    // IMMEDIATE RESPONSE: When boss is casting, predict Focus Fire at bot's current position
+    Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
+    if (boss && boss->IsAlive() && boss->HasUnitState(UNIT_STATE_CASTING) && 
+        boss->FindCurrentSpellBySpellId(SPELL_FOCUS_CAST))
+    {
+        // Focus Fire will spawn at bot's current position - MOVE IMMEDIATELY
+        float botX = bot->GetPositionX();
+        float botY = bot->GetPositionY();
+        float botZ = bot->GetPositionZ();
+        
+        // Quick calculation for fastest escape direction (away from boss)
+        float dx = botX - boss->GetPositionX();
+        float dy = botY - boss->GetPositionY();
+        float distance = sqrt(dx * dx + dy * dy);
+        
+        if (distance < 0.1f) {
+            // If too close to boss, pick random direction
+            float angle = frand(0, 2 * M_PI);
+            dx = cos(angle);
+            dy = sin(angle);
+            distance = 1.0f;
+        }
+        
+        // Move 20 yards away FAST (increased from 15 for safety margin)
+        float moveDistance = 20.0f;
+        float safeX = botX + (dx / distance) * moveDistance;
+        float safeY = botY + (dy / distance) * moveDistance;
+        
+        // Use MOVEMENT_URGENT for fastest response
+        bool result = MoveTo(bot->GetMapId(), safeX, safeY, botZ, 
+                            false, false, false, true, MovementPriority::MOVEMENT_URGENT);
+        
+        if (result) {
+            g_shirrak_inSafePosition[botGuid] = true;
+            return true;
+        }
+    }
+
+    // FALLBACK: Check for existing Focus Fire creature
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
@@ -42,10 +83,6 @@ bool ShirrakFocusFireAvoidAction::Execute(Event event)
     if (!focusFire)
         return false;
 
-    // Already in safe position for this phase
-    if (g_shirrak_inSafePosition[botGuid])
-        return true;
-
     float focusX = focusFire->GetPositionX();
     float focusY = focusFire->GetPositionY();
     float focusZ = focusFire->GetPositionZ();
@@ -66,23 +103,22 @@ bool ShirrakFocusFireAvoidAction::Execute(Event event)
         distance = sqrt(dx * dx + dy * dy);
     }
     
-    // Move 15 yards away
-    float moveDistance = 15.0f;
+    // Move 20 yards away (increased for safety)
+    float moveDistance = 20.0f;
     float safeX = focusX + (dx / distance) * moveDistance;
     float safeY = focusY + (dy / distance) * moveDistance;
-    float safeZ = botZ;
     
-    // Move to safe position
-    bool result = MoveTo(bot->GetMapId(), safeX, safeY, safeZ, 
-                        false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+    // Use MOVEMENT_URGENT for fastest response
+    bool result = MoveTo(bot->GetMapId(), safeX, safeY, botZ, 
+                        false, false, false, true, MovementPriority::MOVEMENT_URGENT);
     
     if (!result) {
         // Try alternative position
         float altX = focusX - (dx / distance) * moveDistance;
         float altY = focusY - (dy / distance) * moveDistance;
         
-        bool altResult = MoveTo(bot->GetMapId(), altX, altY, safeZ, 
-                               false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        bool altResult = MoveTo(bot->GetMapId(), altX, altY, botZ, 
+                               false, false, false, true, MovementPriority::MOVEMENT_URGENT);
         
         if (altResult) {
             g_shirrak_inSafePosition[botGuid] = true;
@@ -102,7 +138,17 @@ bool ShirrakFocusFireAvoidAction::isUseful()
     if (!bot)
         return false;
 
-    // Check if Focus Fire exists
+    // IMMEDIATE CHECK: Boss is casting Focus Fire
+    Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
+    if (boss && boss->IsAlive() && boss->HasUnitState(UNIT_STATE_CASTING) && 
+        boss->FindCurrentSpellBySpellId(SPELL_FOCUS_CAST))
+    {
+        // Already safe?
+        ObjectGuid botGuid = bot->GetGUID();
+        return !g_shirrak_inSafePosition[botGuid];
+    }
+
+    // FALLBACK: Check if Focus Fire exists
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
@@ -115,7 +161,11 @@ bool ShirrakFocusFireAvoidAction::isUseful()
             continue;
 
         if (unit->GetEntry() == NPC_FOCUS_FIRE)
-            return true;
+        {
+            // Already safe?
+            ObjectGuid botGuid = bot->GetGUID();
+            return !g_shirrak_inSafePosition[botGuid];
+        }
     }
     
     return false;
