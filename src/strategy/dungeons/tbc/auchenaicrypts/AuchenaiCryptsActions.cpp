@@ -22,51 +22,15 @@ bool ShirrakFocusFireAvoidAction::Execute(Event event)
     if (g_shirrak_inSafePosition[botGuid])
         return true;
 
-    // IMMEDIATE RESPONSE: When boss is casting, predict Focus Fire at bot's current position
-    Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
-    if (boss && boss->IsAlive() && boss->HasUnitState(UNIT_STATE_CASTING) && 
-        boss->FindCurrentSpellBySpellId(SPELL_FOCUS_CAST))
-    {
-        // Focus Fire will spawn at bot's current position - MOVE IMMEDIATELY
-        float botX = bot->GetPositionX();
-        float botY = bot->GetPositionY();
-        float botZ = bot->GetPositionZ();
-        
-        // Quick calculation for fastest escape direction (away from boss)
-        float dx = botX - boss->GetPositionX();
-        float dy = botY - boss->GetPositionY();
-        float distance = sqrt(dx * dx + dy * dy);
-        
-        if (distance < 0.1f) {
-            // If too close to boss, pick random direction
-            float angle = frand(0, 2 * M_PI);
-            dx = cos(angle);
-            dy = sin(angle);
-            distance = 1.0f;
-        }
-        
-        // Move 20 yards away FAST (increased from 15 for safety margin)
-        float moveDistance = 20.0f;
-        float safeX = botX + (dx / distance) * moveDistance;
-        float safeY = botY + (dy / distance) * moveDistance;
-        
-        // Use MOVEMENT_FORCED for fastest response
-        bool result = MoveTo(bot->GetMapId(), safeX, safeY, botZ, 
-                            false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-        
-        if (result) {
-            g_shirrak_inSafePosition[botGuid] = true;
-            return true;
-        }
-    }
-
-    // FALLBACK: Check for existing Focus Fire creature
+    // PRIORITY 1: Check for Focus Fire creature near us (spawns 3 seconds before damage)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
     Cell::VisitAllObjects(bot, searcher, 60.0f);
 
-    Unit* focusFire = nullptr;
+    Unit* nearestFocusFire = nullptr;
+    float nearestDistance = 60.0f;
+    
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
         Unit* unit = *i;
@@ -75,61 +39,71 @@ bool ShirrakFocusFireAvoidAction::Execute(Event event)
 
         if (unit->GetEntry() == NPC_FOCUS_FIRE)
         {
-            focusFire = unit;
-            break;
+            float dist = bot->GetDistance(unit);
+            if (dist < nearestDistance)
+            {
+                nearestDistance = dist;
+                nearestFocusFire = unit;
+            }
         }
     }
 
-    if (!focusFire)
-        return false;
-
-    float focusX = focusFire->GetPositionX();
-    float focusY = focusFire->GetPositionY();
-    float focusZ = focusFire->GetPositionZ();
-
-    // Calculate safe position away from Focus Fire
-    float botX = bot->GetPositionX();
-    float botY = bot->GetPositionY();
-    float botZ = bot->GetPositionZ();
-    
-    // Calculate movement direction
-    float dx = botX - focusX;
-    float dy = botY - focusY;
-    float distance = sqrt(dx * dx + dy * dy);
-    
-    if (distance < 0.1f) {
-        dx = frand(-1.0f, 1.0f);
-        dy = frand(-1.0f, 1.0f);
-        distance = sqrt(dx * dx + dy * dy);
-    }
-    
-    // Move 20 yards away (increased for safety)
-    float moveDistance = 20.0f;
-    float safeX = focusX + (dx / distance) * moveDistance;
-    float safeY = focusY + (dy / distance) * moveDistance;
-    
-    // Use MOVEMENT_FORCED for fastest response
-    bool result = MoveTo(bot->GetMapId(), safeX, safeY, botZ, 
-                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-    
-    if (!result) {
-        // Try alternative position
-        float altX = focusX - (dx / distance) * moveDistance;
-        float altY = focusY - (dy / distance) * moveDistance;
+    // If Focus Fire exists and is near us, MOVE IMMEDIATELY
+    if (nearestFocusFire && nearestDistance < 15.0f)  // Within danger zone
+    {
+        float focusX = nearestFocusFire->GetPositionX();
+        float focusY = nearestFocusFire->GetPositionY();
+        float botX = bot->GetPositionX();
+        float botY = bot->GetPositionY();
+        float botZ = bot->GetPositionZ();
         
-        bool altResult = MoveTo(bot->GetMapId(), altX, altY, botZ, 
-                               false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        // Calculate escape direction
+        float dx = botX - focusX;
+        float dy = botY - focusY;
+        float distance = sqrt(dx * dx + dy * dy);
         
-        if (altResult) {
+        // If we're at the exact spawn point, move in any direction
+        if (distance < 1.0f) {
+            // Move away from boss as default
+            Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
+            if (boss) {
+                dx = botX - boss->GetPositionX();
+                dy = botY - boss->GetPositionY();
+                distance = sqrt(dx * dx + dy * dy);
+            } else {
+                // Random direction if no boss
+                float angle = frand(0, 2 * M_PI);
+                dx = cos(angle);
+                dy = sin(angle);
+                distance = 1.0f;
+            }
+        }
+        
+        // Move 20 yards away from Focus Fire
+        float moveDistance = 20.0f;
+        float safeX = focusX + (dx / distance) * moveDistance;
+        float safeY = focusY + (dy / distance) * moveDistance;
+        
+        // Use MOVEMENT_FORCED for immediate response
+        bool result = MoveTo(bot->GetMapId(), safeX, safeY, botZ, 
+                            false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        
+        if (!result) {
+            // Try perpendicular direction if direct path failed
+            float perpX = focusX - (dy / distance) * moveDistance;
+            float perpY = focusY + (dx / distance) * moveDistance;
+            
+            result = MoveTo(bot->GetMapId(), perpX, perpY, botZ, 
+                           false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        }
+        
+        if (result) {
             g_shirrak_inSafePosition[botGuid] = true;
-            return true;
         }
-        g_shirrak_inSafePosition[botGuid] = false;
-        return false;
+        return result;
     }
     
-    g_shirrak_inSafePosition[botGuid] = true;
-    return result;
+    return false;
 }
 
 bool ShirrakFocusFireAvoidAction::isUseful()
@@ -138,17 +112,12 @@ bool ShirrakFocusFireAvoidAction::isUseful()
     if (!bot)
         return false;
 
-    // IMMEDIATE CHECK: Boss is casting Focus Fire
-    Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
-    if (boss && boss->IsAlive() && boss->HasUnitState(UNIT_STATE_CASTING) && 
-        boss->FindCurrentSpellBySpellId(SPELL_FOCUS_CAST))
-    {
-        // Already safe?
-        ObjectGuid botGuid = bot->GetGUID();
-        return !g_shirrak_inSafePosition[botGuid];
-    }
+    // Already safe?
+    ObjectGuid botGuid = bot->GetGUID();
+    if (g_shirrak_inSafePosition[botGuid])
+        return false;
 
-    // FALLBACK: Check if Focus Fire exists
+    // Check if Focus Fire exists near us
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
@@ -162,9 +131,9 @@ bool ShirrakFocusFireAvoidAction::isUseful()
 
         if (unit->GetEntry() == NPC_FOCUS_FIRE)
         {
-            // Already safe?
-            ObjectGuid botGuid = bot->GetGUID();
-            return !g_shirrak_inSafePosition[botGuid];
+            // Focus Fire exists and we're within danger zone
+            float distance = bot->GetDistance(unit);
+            return distance < 15.0f;
         }
     }
     
