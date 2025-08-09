@@ -8,6 +8,12 @@
 #include "Playerbots.h"
 #include "SethekkHallsTriggers.h"
 
+// NPC IDs
+#define NPC_CHARMING_TOTEM       20343
+#define NPC_TIME_LOST_CONTROLLER 20691
+#define NPC_TALON_KING_IKISS     18473
+#define NPC_SETHEKK_SPIRIT       18703
+
 // TESTED: LoS safe positions behind pillars - coordinates confirmed to break LoS from boss
 const Position IKISS_LOS_SAFE_POSITIONS[4] =
 {
@@ -49,6 +55,14 @@ class IkissReturnPositionAction : public MovementAction
 {
 public:
     IkissReturnPositionAction(PlayerbotAI* ai) : MovementAction(ai, "ikiss return position") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class FleeSpiritAction : public MovementAction
+{
+public:
+    FleeSpiritAction(PlayerbotAI* ai) : MovementAction(ai, "flee sethekk spirit") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

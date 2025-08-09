@@ -157,8 +157,15 @@ bool EfdAvoidWhirlwindAction::Execute(Event event)
     uint32 currentTime = getMSTime();
     ObjectGuid botGuid = bot->GetGUID();
     
+    // Check if Drake is casting or has whirlwind active
+    bool isWhirlwinding = false;
+    if (drake->HasUnitState(UNIT_STATE_CASTING) && drake->FindCurrentSpellBySpellId(SPELL_DRAKE_WHIRLWIND))
+        isWhirlwinding = true;
+    if (drake->HasAura(SPELL_DRAKE_WHIRLWIND))
+        isWhirlwinding = true;
+    
     // Check if we're already in a safe position during this whirlwind
-    if (g_drake_inSafePosition[botGuid] && drake->HasAura(SPELL_DRAKE_WHIRLWIND))
+    if (g_drake_inSafePosition[botGuid] && isWhirlwinding)
     {
         // Check if this is a new whirlwind phase (10+ seconds since last move)
         if ((currentTime - g_drake_lastMoveTime[botGuid]) > 10000)
@@ -173,7 +180,7 @@ bool EfdAvoidWhirlwindAction::Execute(Event event)
     }
     
     // Reset state if whirlwind ended
-    if (!drake->HasAura(SPELL_DRAKE_WHIRLWIND))
+    if (!isWhirlwinding)
     {
         g_drake_inSafePosition[botGuid] = false;
         g_drake_lastMoveTime[botGuid] = 0;
@@ -208,7 +215,18 @@ bool EfdAvoidWhirlwindAction::isUseful()
     if (!drake || !drake->IsAlive())
         return false;
     
-    if (!drake->HasAura(SPELL_DRAKE_WHIRLWIND))
+    // Check if Drake is CASTING whirlwind or has the aura
+    bool isWhirlwinding = false;
+    
+    // Check for active cast
+    if (drake->HasUnitState(UNIT_STATE_CASTING) && drake->FindCurrentSpellBySpellId(SPELL_DRAKE_WHIRLWIND))
+        isWhirlwinding = true;
+    
+    // Check for aura    
+    if (drake->HasAura(SPELL_DRAKE_WHIRLWIND))
+        isWhirlwinding = true;
+        
+    if (!isWhirlwinding)
         return false;
     
     // Check if we're already safe
@@ -216,7 +234,8 @@ bool EfdAvoidWhirlwindAction::isUseful()
     if (g_drake_inSafePosition[botGuid])
         return false;
     
-    return bot->GetDistance(drake) < 12.0f;
+    // Need to move if within whirlwind range (8 yards is typical warrior whirlwind range)
+    return bot->GetDistance(drake) < 10.0f;
 }
 
 bool DispelHammerOfJusticeAction::Execute(Event event)

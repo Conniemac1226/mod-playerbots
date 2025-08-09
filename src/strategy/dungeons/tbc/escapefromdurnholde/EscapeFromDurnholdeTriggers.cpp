@@ -46,7 +46,39 @@ bool LieutenantDrakeWhirlwindTrigger::IsActive()
     if (!drake || !drake->IsAlive())
         return false;
     
-    return drake->HasAura(SPELL_DRAKE_WHIRLWIND);
+    // Check if Drake is CASTING whirlwind (not just has aura)
+    // Whirlwind is a channeled spell that lasts 4 seconds
+    if (drake->HasUnitState(UNIT_STATE_CASTING) && drake->FindCurrentSpellBySpellId(SPELL_DRAKE_WHIRLWIND))
+        return true;
+        
+    // Also check for the aura in case it leaves one
+    if (drake->HasAura(SPELL_DRAKE_WHIRLWIND))
+        return true;
+    
+    // Check if bot is too close during any melee swing that could be whirlwind
+    // This is a fallback detection in case the above methods fail
+    if (drake->HasUnitState(UNIT_STATE_MELEE_ATTACKING) && bot->GetDistance(drake) < 8.0f)
+    {
+        // Check if drake recently cast whirlwind (within 6 seconds)
+        // This helps maintain avoidance even if we can't detect the spell directly
+        static std::map<ObjectGuid, uint32> lastWhirlwindTime;
+        uint32 currentTime = getMSTime();
+        
+        if (drake->HasUnitState(UNIT_STATE_CASTING))
+        {
+            lastWhirlwindTime[drake->GetGUID()] = currentTime;
+            return true;
+        }
+        
+        // If we saw a cast recently, stay away for 6 seconds
+        if (lastWhirlwindTime[drake->GetGUID()] > 0 && 
+            (currentTime - lastWhirlwindTime[drake->GetGUID()]) < 6000)
+        {
+            return true;
+        }
+    }
+    
+    return false;
 }
 
 bool CaptainSkarlocHammerOfJusticeTrigger::IsActive()
