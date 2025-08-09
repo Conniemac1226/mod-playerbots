@@ -486,3 +486,71 @@ bool FleeSpiritAction::isUseful()
     
     return false;
 }
+
+bool AttackBroodOfAnzuAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // PROVEN PATTERN: Exact copy from AttackCharmingTotemAction (lines 19-51)
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitAllObjects(bot, searcher, 50.0f);
+
+    Unit* brood = nullptr;
+    float closestDistance = 50.0f;
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_BROOD_OF_ANZU && AttackersValue::IsValidTarget(unit, bot))
+        {
+            float distance = bot->GetDistance(unit);
+            if (distance < closestDistance)
+            {
+                brood = unit;
+                closestDistance = distance;
+            }
+        }
+    }
+
+    if (brood)
+    {
+        // PROVEN PATTERN: Exact copy from AttackCharmingTotemAction
+        return Attack(brood);
+    }
+    
+    return false;
+}
+
+bool AttackBroodOfAnzuAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // PROVEN PATTERN: Exact copy from AttackCharmingTotemAction (lines 59-76)
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitAllObjects(bot, searcher, 50.0f);
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_BROOD_OF_ANZU && AttackersValue::IsValidTarget(unit, bot))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+

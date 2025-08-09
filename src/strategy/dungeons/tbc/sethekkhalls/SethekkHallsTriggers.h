@@ -12,6 +12,8 @@ enum SethekkHallsIDs
     NPC_TIME_LOST_CONTROLLER        = 18327,  // from creature_template.sql
     NPC_CHARMING_TOTEM             = 20343,  // from creature_template.sql  
     NPC_TALON_KING_IKISS          = 18473,  // confirmed from creature_template.sql - researched from AzerothCore database
+    NPC_ANZU                        = 23035,  // from boss_anzu.cpp
+    NPC_BROOD_OF_ANZU              = 23132,  // from boss_anzu.cpp
     
     // Spells - researched from boss_talon_king_ikiss.cpp
     SPELL_SUMMON_CHARMING_TOTEM_N  = 32764,
@@ -72,6 +74,13 @@ class SethekkSpiritNearbyTrigger : public Trigger
 {
 public:
     SethekkSpiritNearbyTrigger(PlayerbotAI* ai) : Trigger(ai, "sethekk spirit nearby") {}
+    bool IsActive() override;
+};
+
+class BroodOfAnzuNearbyTrigger : public Trigger
+{
+public:
+    BroodOfAnzuNearbyTrigger(PlayerbotAI* ai) : Trigger(ai, "brood of anzu nearby") {}
     bool IsActive() override;
 };
 

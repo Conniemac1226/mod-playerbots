@@ -188,3 +188,29 @@ bool SethekkSpiritNearbyTrigger::IsActive()
     
     return false;
 }
+
+bool BroodOfAnzuNearbyTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // PROVEN PATTERN: Exact copy from CharmingTotemSpawnedTrigger
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitAllObjects(bot, searcher, 50.0f);
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_BROOD_OF_ANZU)
+            return true;
+    }
+    
+    return false;
+}
+

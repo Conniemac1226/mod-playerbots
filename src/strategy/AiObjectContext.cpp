@@ -36,6 +36,8 @@
 #include "dungeons/tbc/sethekkhalls/SethekkHallsTriggerContext.h"
 #include "dungeons/tbc/auchenaicrypts/AuchenaiCryptsActionContext.h"
 #include "dungeons/tbc/auchenaicrypts/AuchenaiCryptsTriggerContext.h"
+#include "dungeons/tbc/blackmorass/BlackMorassActionContext.h"
+#include "dungeons/tbc/blackmorass/BlackMorassTriggerContext.h"
 #include "raids/RaidStrategyContext.h"
 #include "raids/aq20/RaidAq20ActionContext.h"
 #include "raids/aq20/RaidAq20TriggerContext.h"
@@ -45,6 +47,8 @@
 #include "raids/eyeofeternity/RaidEoETriggerContext.h"
 #include "raids/icecrown/RaidIccActionContext.h"
 #include "raids/icecrown/RaidIccTriggerContext.h"
+#include "raids/karazhan/KarazhanActionContext.h"
+#include "raids/karazhan/KarazhanTriggerContext.h"
 #include "raids/moltencore/RaidMcActionContext.h"
 #include "raids/moltencore/RaidMcTriggerContext.h"
 #include "raids/naxxramas/RaidNaxxActionContext.h"
@@ -121,6 +125,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidVoAActionContext());
     actionContexts.Add(new RaidUlduarActionContext());
     actionContexts.Add(new RaidIccActionContext());
+    actionContexts.Add(new KarazhanActionContext());
     actionContexts.Add(new WotlkDungeonUKActionContext());
     actionContexts.Add(new WotlkDungeonNexActionContext());
     actionContexts.Add(new WotlkDungeonANActionContext());
@@ -139,6 +144,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new EscapeFromDurnholdeActionContext());
     actionContexts.Add(new TbcDungeonSHActionContext());
     actionContexts.Add(new TbcDungeonACActionContext());
+    actionContexts.Add(new BlackMorassActionContext());
 }
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
@@ -156,6 +162,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidVoATriggerContext());
     triggerContexts.Add(new RaidUlduarTriggerContext());
     triggerContexts.Add(new RaidIccTriggerContext());
+    triggerContexts.Add(new KarazhanTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());
@@ -174,6 +181,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new EscapeFromDurnholdeTriggerContext());
     triggerContexts.Add(new TbcDungeonSHTriggerContext());
     triggerContexts.Add(new TbcDungeonACTriggerContext());
+    triggerContexts.Add(new BlackMorassTriggerContext());
 }
 
 void AiObjectContext::BuildSharedValueContexts(SharedNamedObjectContextList<UntypedValue>& valueContexts)
