@@ -23,7 +23,7 @@ bool AttackCharmingTotemAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     Unit* totem = nullptr;
     float closestDistance = 50.0f;
@@ -83,7 +83,7 @@ bool AttackCharmingTotemAction::isUseful()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     bool hasTotem = false;
     bool hasCharmedAlly = false;
@@ -120,7 +120,7 @@ bool InterruptControllerAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 30.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 30.0f);
+    Cell::VisitObjects(bot, searcher, 30.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -156,7 +156,7 @@ bool InterruptControllerAction::isUseful()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 30.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 30.0f);
+    Cell::VisitObjects(bot, searcher, 30.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -416,7 +416,7 @@ bool FleeSpiritAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 20.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 20.0f);
+    Cell::VisitObjects(bot, searcher, 20.0f);
 
     Unit* closestSpirit = nullptr;
     float closestDistance = 20.0f;
@@ -456,7 +456,7 @@ bool FleeSpiritAction::isUseful()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 20.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 20.0f);
+    Cell::VisitObjects(bot, searcher, 20.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -481,7 +481,7 @@ bool AttackBroodOfAnzuAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     Unit* brood = nullptr;
     float closestDistance = 50.0f;
@@ -522,7 +522,7 @@ bool AttackBroodOfAnzuAction::isUseful()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -552,7 +552,7 @@ bool ContinueFightWithCharmedAllyAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     Unit* controller = nullptr;
     float closestDistance = 50.0f;
@@ -602,7 +602,7 @@ bool ContinueFightWithCharmedAllyAction::isUseful()
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     bool hasCharmedAlly = false;
     bool hasTotem = false;

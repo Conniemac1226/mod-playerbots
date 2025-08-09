@@ -1527,6 +1527,9 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 533:
             strategyName = "naxx";
             break;
+        case 543:
+            strategyName = "tbc-hr";  // Hellfire Ramparts
+            break;
         case 545:
             strategyName = "tbc-sv";  // The Steamvault
             break;

@@ -96,7 +96,7 @@ bool AttackWaterElementalAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     Unit* elemental = nullptr;
     float closestDistance = 50.0f;
@@ -223,7 +223,7 @@ bool AttackSteamriggerMechanicAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 50.0f);
 
     Unit* mechanic = nullptr;
     float closestDistance = 50.0f;
@@ -349,7 +349,7 @@ bool AttackNagaDistillerAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     Unit* distiller = nullptr;
     float closestDistance = 100.0f;
@@ -395,7 +395,7 @@ bool InterruptDistillerChannelAction::Execute(Event event)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, 100.0f);
+    Cell::VisitObjects(bot, searcher, 100.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {

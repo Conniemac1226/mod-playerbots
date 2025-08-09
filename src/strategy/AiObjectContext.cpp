@@ -42,6 +42,8 @@
 #include "dungeons/tbc/magistersterrace/MagistersTerraceTriggerContext.h"
 #include "dungeons/tbc/steamvault/SteamvaultActionContext.h"
 #include "dungeons/tbc/steamvault/SteamvaultTriggerContext.h"
+#include "dungeons/tbc/hellfireramparts/HellfireRampartsActionContext.h"
+#include "dungeons/tbc/hellfireramparts/HellfireRampartsTriggerContext.h"
 #include "raids/RaidStrategyContext.h"
 #include "raids/aq20/RaidAq20ActionContext.h"
 #include "raids/aq20/RaidAq20TriggerContext.h"
@@ -151,6 +153,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new BlackMorassActionContext());
     actionContexts.Add(new MagistersTerraceActionContext());
     actionContexts.Add(new SteamvaultActionContext());
+    actionContexts.Add(new HellfireRampartsActionContext());
 }
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
@@ -190,6 +193,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new BlackMorassTriggerContext());
     triggerContexts.Add(new MagistersTerraceTriggerContext());
     triggerContexts.Add(new SteamvaultTriggerContext());
+    triggerContexts.Add(new HellfireRampartsTriggerContext());
 }
 
 void AiObjectContext::BuildSharedValueContexts(SharedNamedObjectContextList<UntypedValue>& valueContexts)
