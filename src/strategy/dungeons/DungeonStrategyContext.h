@@ -21,6 +21,8 @@
 #include "tbc/auchenaicrypts/AuchenaiCryptsStrategy.h"
 #include "tbc/escapefromdurnholde/EscapeFromDurnholdeStrategy.h"
 #include "tbc/blackmorass/BlackMorassStrategy.h"
+#include "tbc/magistersterrace/MagistersTerraceStrategy.h"
+#include "tbc/steamvault/SteamvaultStrategy.h"
 
 /*
 Full list/TODO:
@@ -54,6 +56,8 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             creators["tbc-ac"] = &DungeonStrategyContext::tbc_ac;       // Auchenai Crypts
             creators["tbc-efd"] = &DungeonStrategyContext::tbc_efd;     // Escape from Durnholde
             creators["tbc-bm"] = &DungeonStrategyContext::tbc_bm;       // Black Morass
+            creators["tbc-mt"] = &DungeonStrategyContext::tbc_mt;       // Magisters' Terrace
+            creators["tbc-sv"] = &DungeonStrategyContext::tbc_sv;       // The Steamvault
             
             // Wrath of the Lich King
             creators["wotlk-uk"] = &DungeonStrategyContext::wotlk_uk;       // Utgarde Keep
@@ -78,6 +82,8 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         static Strategy* tbc_ac(PlayerbotAI* botAI) { return new TbcDungeonACStrategy(botAI); }
         static Strategy* tbc_efd(PlayerbotAI* botAI) { return new EscapeFromDurnholdeStrategy(botAI); }
         static Strategy* tbc_bm(PlayerbotAI* botAI) { return new BlackMorassStrategy(botAI); }
+        static Strategy* tbc_mt(PlayerbotAI* botAI) { return new MagistersTerraceStrategy(botAI); }
+        static Strategy* tbc_sv(PlayerbotAI* botAI) { return new SteamvaultStrategy(botAI); }
         
         static Strategy* wotlk_uk(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
         static Strategy* wotlk_nex(PlayerbotAI* botAI) { return new WotlkDungeonNexStrategy(botAI); }

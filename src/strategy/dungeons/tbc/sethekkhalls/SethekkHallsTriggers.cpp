@@ -11,10 +11,17 @@ bool CharmingTotemSpawnedTrigger::IsActive()
     if (!bot)
         return false;
 
+    // Don't trigger if we're charmed ourselves
+    if (bot->IsCharmed())
+        return false;
+
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
     Cell::VisitAllObjects(bot, searcher, 50.0f);
+
+    bool hasTotem = false;
+    bool hasCharmedAlly = false;
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -22,12 +29,21 @@ bool CharmingTotemSpawnedTrigger::IsActive()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_CHARMING_TOTEM && AttackersValue::IsValidTarget(unit, bot))
+        // Check for totem directly - don't use IsValidTarget as it might fail with charmed allies around
+        if (unit->GetEntry() == NPC_CHARMING_TOTEM)
         {
-            return true;
+            hasTotem = true;
+        }
+
+        // Also check if any group member is charmed (indicates totem is active)
+        if (unit->IsPlayer() && bot->IsInSameGroupWith(unit->ToPlayer()) && unit->IsCharmed())
+        {
+            hasCharmedAlly = true;
         }
     }
-    return false;
+    
+    // Trigger if totem exists OR if an ally is charmed (totem might be slightly out of range)
+    return hasTotem || hasCharmedAlly;
 }
 
 bool TimeLostControllerCastingTotemTrigger::IsActive()

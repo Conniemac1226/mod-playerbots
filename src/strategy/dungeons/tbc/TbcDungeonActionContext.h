@@ -4,5 +4,7 @@
 #include "sethekkhalls/SethekkHallsActionContext.h"
 #include "auchenaicrypts/AuchenaiCryptsActionContext.h"
 #include "blackmorass/BlackMorassActionContext.h"
+#include "escapefromdurnholde/EscapeFromDurnholdeActionContext.h"
+#include "magistersterrace/MagistersTerraceActionContext.h"
 
 #endif

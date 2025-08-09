@@ -1,0 +1,68 @@
+#pragma once
+
+#include "Action.h"
+#include "AttackAction.h"
+#include "MovementActions.h"
+#include "PlayerbotAI.h"
+#include "Playerbots.h"
+
+// Kael'thas Actions
+class InterruptKaelthasPyroblastAction : public Action
+{
+public:
+    InterruptKaelthasPyroblastAction(PlayerbotAI* ai) : Action(ai, "interrupt kaelthas pyroblast") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class AvoidGravityLapseAction : public MovementAction
+{
+public:
+    AvoidGravityLapseAction(PlayerbotAI* ai) : MovementAction(ai, "avoid gravity lapse") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class FleeArcaneSphereAction : public MovementAction
+{
+public:
+    FleeArcaneSphereAction(PlayerbotAI* ai) : MovementAction(ai, "flee arcane sphere") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+// Vexallus Actions
+class AttackPureEnergyAction : public AttackAction
+{
+public:
+    AttackPureEnergyAction(PlayerbotAI* ai) : AttackAction(ai, "attack pure energy") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+// Selin Fireheart Actions
+class AvoidFelExplosionAction : public MovementAction
+{
+public:
+    AvoidFelExplosionAction(PlayerbotAI* ai) : MovementAction(ai, "avoid fel explosion") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class AttackFelCrystalAction : public AttackAction
+{
+public:
+    AttackFelCrystalAction(PlayerbotAI* ai) : AttackAction(ai, "attack fel crystal") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+// Delrissa Actions
+class AttackDelrissaAddAction : public AttackAction
+{
+public:
+    AttackDelrissaAddAction(PlayerbotAI* ai) : AttackAction(ai, "attack delrissa add") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
