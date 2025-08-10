@@ -28,6 +28,10 @@
 #include "tbc/underbog/UnderbogStrategy.h"
 #include "tbc/manatombs/ManaTombsStrategy.h"
 #include "tbc/bloodfurnace/BloodFurnaceStrategy.h"
+#include "tbc/shatteredhalls/ShatteredHallsStrategy.h"
+#include "tbc/shadowlabyrinth/ShadowLabyrinthStrategy.h"
+#include "tbc/arcatraz/ArcatrazStrategy.h"
+#include "tbc/botanica/BotanicaStrategy.h"
 
 /*
 Full list/TODO:
@@ -68,6 +72,10 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             creators["tbc-sp"] = &DungeonStrategyContext::tbc_sp;       // The Slave Pens
             creators["tbc-ub"] = &DungeonStrategyContext::tbc_ub;       // The Underbog
             creators["tbc-mato"] = &DungeonStrategyContext::tbc_mt_tombs; // Mana-Tombs
+            creators["tbc-shh"] = &DungeonStrategyContext::tbc_shh;      // The Shattered Halls
+            creators["tbc-sl"] = &DungeonStrategyContext::tbc_sl;        // Shadow Labyrinth
+            creators["tbc-arc"] = &DungeonStrategyContext::tbc_arc;      // The Arcatraz
+            creators["tbc-bot"] = &DungeonStrategyContext::tbc_bot;      // The Botanica
             
             // Wrath of the Lich King
             creators["wotlk-uk"] = &DungeonStrategyContext::wotlk_uk;       // Utgarde Keep
@@ -99,6 +107,10 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         static Strategy* tbc_sp(PlayerbotAI* botAI) { return new SlavePensStrategy(botAI); }
         static Strategy* tbc_ub(PlayerbotAI* botAI) { return new UnderbogStrategy(botAI); }
         static Strategy* tbc_mt_tombs(PlayerbotAI* botAI) { return new ManaTombsStrategy(botAI); }
+        static Strategy* tbc_shh(PlayerbotAI* botAI) { return new ShatteredHallsStrategy(botAI); }
+        static Strategy* tbc_sl(PlayerbotAI* botAI) { return new ShadowLabyrinthStrategy(botAI); }
+        static Strategy* tbc_arc(PlayerbotAI* botAI) { return new ArcatrazStrategy(botAI); }
+        static Strategy* tbc_bot(PlayerbotAI* botAI) { return new BotanicaStrategy(botAI); }
         
         static Strategy* wotlk_uk(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
         static Strategy* wotlk_nex(PlayerbotAI* botAI) { return new WotlkDungeonNexStrategy(botAI); }

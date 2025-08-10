@@ -12,5 +12,9 @@
 #include "slavepens/SlavePensTriggerContext.h"
 #include "underbog/UnderbogTriggerContext.h"
 #include "manatombs/ManaTombsTriggerContext.h"
+#include "shatteredhalls/ShatteredHallsTriggerContext.h"
+#include "shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
+#include "arcatraz/ArcatrazTriggerContext.h"
+#include "botanica/BotanicaTriggerContext.h"
 
 #endif

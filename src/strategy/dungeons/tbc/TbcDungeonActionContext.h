@@ -12,5 +12,9 @@
 #include "slavepens/SlavePensActionContext.h"
 #include "underbog/UnderbogActionContext.h"
 #include "manatombs/ManaTombsActionContext.h"
+#include "shatteredhalls/ShatteredHallsActionContext.h"
+#include "shadowlabyrinth/ShadowLabyrinthActionContext.h"
+#include "arcatraz/ArcatrazActionContext.h"
+#include "botanica/BotanicaActionContext.h"
 
 #endif
