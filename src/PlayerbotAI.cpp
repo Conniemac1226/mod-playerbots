@@ -1533,6 +1533,9 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 543:
             strategyName = "tbc-hr";  // Hellfire Ramparts
             break;
+        case 540:
+            strategyName = "tbc-shh";  // The Shattered Halls
+            break;
         case 545:
             strategyName = "tbc-sv";  // The Steamvault
             break;
@@ -1542,11 +1545,23 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 547:
             strategyName = "tbc-sp";  // The Slave Pens
             break;
+        case 552:
+            strategyName = "tbc-arc";  // The Arcatraz
+            break;
+        case 553:
+            strategyName = "tbc-bot";  // The Botanica
+            break;
+        case 555:
+            strategyName = "tbc-sl";  // Shadow Labyrinth
+            break;
         case 556:
             strategyName = "tbc-sh";  // Sethekk Halls
             break;
         case 557:
-            strategyName = "tbc-mt";  // Mana-Tombs
+            strategyName = "tbc-mato";  // Mana-Tombs
+            break;
+        case 585:
+            strategyName = "tbc-mt";  // Magisters' Terrace
             break;
         case 558:
             strategyName = "tbc-ac";  // Auchenai Crypts
@@ -1598,6 +1613,12 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
             break;
         case 532:
             strategyName = "karazhan";  // Karazhan
+            break;
+        case 544:
+            strategyName = "magtheridon";  // Magtheridon's Lair
+            break;
+        case 565:
+            strategyName = "gruul";  // Gruul's Lair
             break;
         case 269:
             strategyName = "tbc-bm";  // Black Morass

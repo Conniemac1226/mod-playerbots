@@ -1,0 +1,184 @@
+#ifndef _PLAYERBOT_GRUULACTIONS_H
+#define _PLAYERBOT_GRUULACTIONS_H
+
+#include "Action.h"
+#include "MovementActions.h"
+#include "PlayerbotAI.h"
+#include "Playerbots.h"
+
+enum GruulNPCs
+{
+    // High King Maulgar and Council
+    NPC_HIGH_KING_MAULGAR      = 18831,
+    NPC_KROSH_FIREHAND          = 18832,
+    NPC_OLM_THE_SUMMONER        = 18834,
+    NPC_KIGGLER_THE_CRAZED      = 18835,
+    NPC_BLINDEYE_THE_SEER       = 18836,
+    NPC_WILD_FEL_STALKER        = 18847,
+    
+    // Gruul
+    NPC_GRUUL_THE_DRAGONKILLER  = 19044,
+    NPC_INVISIBLE_TRACTOR_BEAM  = 19224
+};
+
+enum GruulSpells
+{
+    // Gruul the Dragonkiller
+    SPELL_GROWTH                = 36300,
+    SPELL_CAVE_IN               = 36240,
+    SPELL_GROUND_SLAM           = 33525,
+    SPELL_REVERBERATION         = 36297,
+    SPELL_HURTFUL_STRIKE        = 33813,
+    SPELL_SHATTER               = 33654,
+    SPELL_SHATTER_EFFECT        = 33671,
+    SPELL_STONED                = 33652,
+    SPELL_LOOK_AROUND           = 33965,
+    SPELL_TRACTOR_BEAM_PULL     = 33497,
+    
+    // High King Maulgar
+    SPELL_ARCING_SMASH          = 39144,
+    SPELL_MIGHTY_BLOW           = 33230,
+    SPELL_WHIRLWIND             = 33238,
+    SPELL_BERSERKER_C           = 26561,
+    SPELL_ROAR                  = 16508,
+    SPELL_FLURRY                = 33232,
+    
+    // Olm the Summoner
+    SPELL_DARK_DECAY            = 33129,
+    SPELL_DEATH_COIL            = 33130,
+    SPELL_SUMMON_WFH            = 33131,
+    
+    // Kiggler the Crazed
+    SPELL_GREATER_POLYMORPH     = 33173,
+    SPELL_LIGHTNING_BOLT        = 36152,
+    SPELL_ARCANE_SHOCK          = 33175,
+    SPELL_ARCANE_EXPLOSION      = 33237,
+    
+    // Blindeye the Seer
+    SPELL_GREATER_PW_SHIELD     = 33147,
+    SPELL_HEAL                  = 33144,
+    SPELL_PRAYER_OH             = 33152,
+    
+    // Krosh Firehand
+    SPELL_GREATER_FIREBALL      = 33051,
+    SPELL_SPELLSHIELD           = 33054,
+    SPELL_BLAST_WAVE            = 33061
+};
+
+// Gruul the Dragonkiller Actions
+class GruulGroundSlamAction : public MovementAction
+{
+public:
+    GruulGroundSlamAction(PlayerbotAI* ai) : MovementAction(ai, "gruul ground slam") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class GruulShatterPositionAction : public MovementAction
+{
+public:
+    GruulShatterPositionAction(PlayerbotAI* ai) : MovementAction(ai, "gruul shatter position") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class GruulCaveInAction : public MovementAction
+{
+public:
+    GruulCaveInAction(PlayerbotAI* ai) : MovementAction(ai, "gruul cave in") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class GruulHurtfulStrikeAction : public MovementAction
+{
+public:
+    GruulHurtfulStrikeAction(PlayerbotAI* ai) : MovementAction(ai, "gruul hurtful strike") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+// High King Maulgar Actions
+class MaulgarFocusTargetAction : public Action
+{
+public:
+    MaulgarFocusTargetAction(PlayerbotAI* ai) : Action(ai, "maulgar focus target") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class MaulgarPositionAction : public MovementAction
+{
+public:
+    MaulgarPositionAction(PlayerbotAI* ai) : MovementAction(ai, "maulgar position") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class MaulgarWhirlwindAction : public MovementAction
+{
+public:
+    MaulgarWhirlwindAction(PlayerbotAI* ai) : MovementAction(ai, "maulgar whirlwind") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class MaulgarArcingSmashAction : public MovementAction
+{
+public:
+    MaulgarArcingSmashAction(PlayerbotAI* ai) : MovementAction(ai, "maulgar arcing smash") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+// Council Member Actions
+class KroshSpellstealAction : public Action
+{
+public:
+    KroshSpellstealAction(PlayerbotAI* ai) : Action(ai, "krosh spellsteal") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class KigglerPolymorphAction : public Action
+{
+public:
+    KigglerPolymorphAction(PlayerbotAI* ai) : Action(ai, "kiggler polymorph") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class OlmPetAction : public Action
+{
+public:
+    OlmPetAction(PlayerbotAI* ai) : Action(ai, "olm pet") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class BlindeyeInterruptAction : public Action
+{
+public:
+    BlindeyeInterruptAction(PlayerbotAI* ai) : Action(ai, "blindeye interrupt") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+// Utility Actions
+class GruulTankSwapAction : public Action
+{
+public:
+    GruulTankSwapAction(PlayerbotAI* ai) : Action(ai, "gruul tank swap") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class GruulDispelAction : public Action
+{
+public:
+    GruulDispelAction(PlayerbotAI* ai) : Action(ai, "gruul dispel") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+#endif
