@@ -259,7 +259,7 @@ bool TankPositionAddsTrigger::IsActive()
 
 bool HealerPositionNeededTrigger::IsActive()
 {
-    if (!botAI->IsHealer(bot))
+    if (!PlayerbotAI::IsHeal(bot))
         return false;
         
     Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");

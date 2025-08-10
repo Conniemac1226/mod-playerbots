@@ -2,6 +2,7 @@
 #define _PLAYERBOT_GRUULACTIONS_H
 
 #include "Action.h"
+#include "AttackAction.h"
 #include "MovementActions.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
@@ -99,10 +100,10 @@ public:
 };
 
 // High King Maulgar Actions
-class MaulgarFocusTargetAction : public Action
+class MaulgarFocusTargetAction : public AttackAction
 {
 public:
-    MaulgarFocusTargetAction(PlayerbotAI* ai) : Action(ai, "maulgar focus target") {}
+    MaulgarFocusTargetAction(PlayerbotAI* ai) : AttackAction(ai, "maulgar focus target") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
@@ -148,10 +149,10 @@ public:
     bool isUseful() override;
 };
 
-class OlmPetAction : public Action
+class OlmPetAction : public AttackAction
 {
 public:
-    OlmPetAction(PlayerbotAI* ai) : Action(ai, "olm pet") {}
+    OlmPetAction(PlayerbotAI* ai) : AttackAction(ai, "olm pet") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

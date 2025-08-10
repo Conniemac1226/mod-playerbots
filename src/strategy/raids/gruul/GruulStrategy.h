@@ -7,7 +7,7 @@ class GruulStrategy : public Strategy
 {
 public:
     GruulStrategy(PlayerbotAI* ai) : Strategy(ai) {}
-    std::string getName() override { return "gruul"; }
+    std::string const getName() override { return "gruul"; }
     
 private:
     void InitTriggers(std::vector<TriggerNode*> &triggers) override;

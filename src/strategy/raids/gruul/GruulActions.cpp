@@ -214,7 +214,7 @@ bool MaulgarFocusTargetAction::Execute(Event event)
     {
         if (Unit* target = bot->FindNearestCreature(npcId, 150.0f, true))
         {
-            if (botAI->Attack(target))
+            if (Attack(target))
                 return true;
         }
     }
@@ -311,7 +311,7 @@ bool MaulgarArcingSmashAction::isUseful()
 // Council Member Actions
 bool KroshSpellstealAction::Execute(Event event)
 {
-    if (!botAI->IsMage(bot))
+    if (bot->getClass() != CLASS_MAGE)
         return false;
         
     Unit* krosh = bot->FindNearestCreature(NPC_KROSH_FIREHAND, 150.0f);
@@ -333,7 +333,7 @@ bool KroshSpellstealAction::Execute(Event event)
 
 bool KroshSpellstealAction::isUseful()
 {
-    return bot && bot->IsAlive() && botAI->IsMage(bot);
+    return bot && bot->IsAlive() && bot->getClass() == CLASS_MAGE;
 }
 
 bool KigglerPolymorphAction::Execute(Event event)
@@ -358,7 +358,7 @@ bool OlmPetAction::Execute(Event event)
     // Focus Wild Fel Stalker pets
     if (Unit* pet = bot->FindNearestCreature(NPC_WILD_FEL_STALKER, 100.0f, true))
     {
-        if (botAI->Attack(pet))
+        if (Attack(pet))
             return true;
     }
     
@@ -456,7 +456,7 @@ bool GruulTankSwapAction::isUseful()
 
 bool GruulDispelAction::Execute(Event event)
 {
-    if (!botAI->IsHealer(bot))
+    if (!PlayerbotAI::IsHeal(bot))
         return false;
         
     // Dispel priority debuffs
@@ -486,5 +486,5 @@ bool GruulDispelAction::Execute(Event event)
 
 bool GruulDispelAction::isUseful()
 {
-    return bot && bot->IsAlive() && botAI->IsHealer(bot);
+    return bot && bot->IsAlive() && PlayerbotAI::IsHeal(bot);
 }

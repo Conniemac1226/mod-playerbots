@@ -222,7 +222,7 @@ bool NetheKursePeonPriorityAction::Execute(Event event)
 }
 bool AvoidFlameArrowFireAction::Execute(Event event)
 {
-    if (\!IsFireNearby())
+    if (!IsFireNearby())
     {
         return false;
     }
@@ -244,7 +244,7 @@ bool AvoidFlameArrowFireAction::IsFireNearby()
     std::list<GameObject*> gameObjects;
     bot->GetGameObjectListWithEntryInGrid(gameObjects, 182592, 10.0f); // Fire visual objects
     
-    if (\!gameObjects.empty())
+    if (!gameObjects.empty())
     {
         return true;
     }
@@ -254,7 +254,7 @@ bool AvoidFlameArrowFireAction::IsFireNearby()
     for (auto& guid : npcs)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (\!unit)
+        if (!unit)
             continue;
             
         // Check if this is a fire effect trigger or has fire aura
@@ -277,7 +277,7 @@ bool AvoidFlameArrowFireAction::IsFireNearby()
     for (auto& guid : hostiles)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (\!unit || unit->GetEntry() \!= NPC_SH_ARCHER)
+        if (!unit || unit->GetEntry() != NPC_SH_ARCHER)
             continue;
             
         if (unit->FindCurrentSpellBySpellId(SPELL_SHOOT_FLAME_ARROW))
@@ -316,7 +316,7 @@ Position AvoidFlameArrowFireAction::GetSafePosition()
         for (auto& guid : npcs)
         {
             Unit* unit = botAI->GetUnit(guid);
-            if (\!unit)
+            if (!unit)
                 continue;
                 
             if (unit->HasAura(SPELL_FLAME_ARROW_FIRE) || 
