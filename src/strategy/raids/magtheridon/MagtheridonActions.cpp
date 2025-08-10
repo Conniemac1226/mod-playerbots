@@ -32,7 +32,7 @@ bool HellfireChannelerTargetAction::Execute(Event event)
     
     if (bestChanneler && bestChanneler != currentTarget)
     {
-        return botAI->Attack(bestChanneler);
+        return Attack(bestChanneler);
     }
     
     return false;
@@ -62,8 +62,8 @@ bool InterruptDarkMendingAction::Execute(Event event)
         {
             if (unit->FindCurrentSpellBySpellId(SPELL_DARK_MENDING))
             {
-                if (botAI->InterruptSpell(unit))
-                    return true;
+                botAI->InterruptSpell();
+                return true;
             }
         }
     }
@@ -74,9 +74,9 @@ bool InterruptDarkMendingAction::Execute(Event event)
 bool InterruptDarkMendingAction::isUseful()
 {
     return bot->IsWithinMeleeRange(AI_VALUE(Unit*, "current target")) ||
-           botAI->HasSpell(2139) || // Counterspell
-           botAI->HasSpell(19647) || // Spell Lock
-           botAI->HasSpell(1766); // Kick
+           bot->HasSpell(2139) || // Counterspell
+           bot->HasSpell(19647) || // Spell Lock
+           bot->HasSpell(1766); // Kick
 }
 
 bool ClickManticronCubeAction::Execute(Event event)
@@ -101,7 +101,6 @@ bool ClickManticronCubeAction::Execute(Event event)
     packet << cube->GetGUID();
     bot->GetSession()->HandleGameObjectUseOpcode(packet);
     
-    botAI->SetActionDuration(12000); // Channel duration
     return true;
 }
 
@@ -426,7 +425,7 @@ Position AvoidBlazeAction::GetAwayFromBlaze()
                 
             if (unit->HasAura(SPELL_BLAZE_SUMMON) || unit->GetEntry() == 17653)
             {
-                float dist = testPos.GetDistance(unit->GetPosition());
+                float dist = testPos.GetExactDist2d(unit->GetPosition());
                 if (dist < minBlazeDist)
                     minBlazeDist = dist;
             }
@@ -513,7 +512,7 @@ bool HellfireWarderTargetAction::Execute(Event event)
             
         if (unit->GetEntry() == NPC_HELLFIRE_WARDER)
         {
-            return botAI->Attack(unit);
+            return Attack(unit);
         }
     }
     
@@ -585,7 +584,7 @@ bool HealerPositionMagtheridonAction::Execute(Event event)
 
 bool HealerPositionMagtheridonAction::isUseful()
 {
-    if (!botAI->IsHealer(bot))
+    if (!PlayerbotAI::IsHeal(bot))
         return false;
         
     // Check if too close to danger
@@ -700,7 +699,7 @@ Position AvoidInfernalAction::GetSafeFromInfernal()
                 
             if (unit->GetEntry() == 17454)
             {
-                float dist = testPos.GetDistance(unit->GetPosition());
+                float dist = testPos.GetExactDist2d(unit->GetPosition());
                 if (dist < minInfernalDist)
                     minInfernalDist = dist;
             }
@@ -724,7 +723,8 @@ bool CoordinateChannelerInterruptAction::Execute(Event event)
         
     if (ShouldIInterrupt(channeler))
     {
-        return botAI->InterruptSpell(channeler);
+        botAI->InterruptSpell();
+        return true;
     }
     
     return false;

@@ -112,7 +112,7 @@ float MagtheridonTankMultiplier::GetValue(Action* action)
 
 float MagtheridonHealerMultiplier::GetValue(Action* action)
 {
-    if (!botAI->IsHealer(bot))
+    if (!PlayerbotAI::IsHeal(bot))
         return 1.0f;
         
     // Healer positioning is important

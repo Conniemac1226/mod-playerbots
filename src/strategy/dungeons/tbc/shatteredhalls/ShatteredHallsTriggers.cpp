@@ -2,10 +2,6 @@
 #include "ShatteredHallsTriggers.h"
 #include "ShatteredHallsActions.h"
 
-// Include needed constants for gauntlet
-const uint32 NPC_SH_ARCHER = 17427;
-const uint32 SPELL_SHOOT_FLAME_ARROW = 30952;
-const uint32 SPELL_FLAME_ARROW_FIRE = 30953;
 
 bool NethekurseShadowFissureTrigger::IsActive()
 {
@@ -162,7 +158,7 @@ bool FlameArrowGauntletTrigger::IsActive()
     for (auto& guid : npcs)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (\!unit || \!unit->IsAlive())
+        if (!unit || !unit->IsAlive())
             continue;
             
         // Check for active archers shooting flame arrows
@@ -178,7 +174,7 @@ bool FlameArrowGauntletTrigger::IsActive()
     for (auto& guid : allNpcs)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (\!unit)
+        if (!unit)
             continue;
             
         // Check for fire effect units/triggers
@@ -199,7 +195,7 @@ bool FlameArrowGauntletTrigger::IsActive()
     // Check for fire game objects
     std::list<GameObject*> gameObjects;
     bot->GetGameObjectListWithEntryInGrid(gameObjects, 182592, 15.0f);
-    if (\!gameObjects.empty())
+    if (!gameObjects.empty())
         return true;
     
     return false;

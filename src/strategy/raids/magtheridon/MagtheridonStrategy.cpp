@@ -47,12 +47,12 @@ void MagtheridonStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 
 void MagtheridonStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
-    multipliers.push_back(new BlastNovaMultiplier(ai));
-    multipliers.push_back(new ChannelerInterruptMultiplier(ai));
-    multipliers.push_back(new MagtheridonMovementMultiplier(ai));
-    multipliers.push_back(new MagtheridonAddsMultiplier(ai));
-    multipliers.push_back(new MagtheridonTankMultiplier(ai));
-    multipliers.push_back(new MagtheridonHealerMultiplier(ai));
+    multipliers.push_back(new BlastNovaMultiplier(botAI));
+    multipliers.push_back(new ChannelerInterruptMultiplier(botAI));
+    multipliers.push_back(new MagtheridonMovementMultiplier(botAI));
+    multipliers.push_back(new MagtheridonAddsMultiplier(botAI));
+    multipliers.push_back(new MagtheridonTankMultiplier(botAI));
+    multipliers.push_back(new MagtheridonHealerMultiplier(botAI));
 }
 
 void MagtheridonChannelersStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
