@@ -13,6 +13,8 @@
 #include "RaidIccStrategy.h"
 #include "RaidVoAStrategy.h"
 #include "karazhan/KarazhanStrategy.h"
+#include "gruul/GruulStrategy.h"
+#include "magtheridon/MagtheridonStrategy.h"
 
 class RaidStrategyContext : public NamedObjectContext<Strategy>
 {
@@ -33,6 +35,8 @@ public:
         creators["icc"] = &RaidStrategyContext::icc;
         creators["onyxia"] = &RaidStrategyContext::onyxia;
         creators["karazhan"] = &RaidStrategyContext::karazhan;
+        creators["gruul"] = &RaidStrategyContext::gruul;
+        creators["magtheridon"] = &RaidStrategyContext::magtheridon;
     }
 
 private:
@@ -47,6 +51,8 @@ private:
     static Strategy* icc(PlayerbotAI* botAI) { return new RaidIccStrategy(botAI); }
     static Strategy* onyxia(PlayerbotAI* botAI) { return new RaidOnyxiaStrategy(botAI); }
     static Strategy* karazhan(PlayerbotAI* botAI) { return new KarazhanStrategy(botAI); }
+    static Strategy* gruul(PlayerbotAI* botAI) { return new GruulStrategy(botAI); }
+    static Strategy* magtheridon(PlayerbotAI* botAI) { return new MagtheridonStrategy(botAI); }
 };
 
 #endif
