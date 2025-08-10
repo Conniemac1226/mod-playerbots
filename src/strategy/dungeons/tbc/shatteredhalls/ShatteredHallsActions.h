@@ -23,6 +23,11 @@ const uint32 SPELL_BLADE_DANCE_DMG = 30739;
 const uint32 NPC_SHATTERED_ASSASSIN = 17695;
 const uint32 NPC_PEON = 17083;
 
+// Gauntlet fire arrow mechanics
+const uint32 NPC_SH_ARCHER = 17427;
+const uint32 SPELL_SHOOT_FLAME_ARROW = 30952;
+const uint32 SPELL_FLAME_ARROW_FIRE = 30953;
+
 class AvoidShadowFissureAction : public MovementAction
 {
 public:
@@ -72,6 +77,17 @@ public:
     NetheKursePeonPriorityAction(PlayerbotAI* botAI) : AttackAction(botAI, "nethekurse peon priority") {}
     bool isUseful() override;
     bool Execute(Event event) override;
+};
+
+class AvoidFlameArrowFireAction : public MovementAction
+{
+public:
+    AvoidFlameArrowFireAction(PlayerbotAI* botAI) : MovementAction(botAI, "avoid flame arrow fire") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+private:
+    bool IsFireNearby();
+    Position GetSafePosition();
 };
 
 #endif

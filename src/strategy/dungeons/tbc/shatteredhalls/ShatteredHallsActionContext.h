@@ -16,6 +16,7 @@ public:
         creators["avoid blade dance"] = &ShatteredHallsActionContext::avoid_blade_dance;
         creators["kill shattered assassins"] = &ShatteredHallsActionContext::kill_shattered_assassins;
         creators["nethekurse peon priority"] = &ShatteredHallsActionContext::nethekurse_peon_priority;
+        creators["avoid flame arrow fire"] = &ShatteredHallsActionContext::avoid_flame_arrow_fire;
     }
 
 private:
@@ -26,6 +27,7 @@ private:
     static Action* avoid_blade_dance(PlayerbotAI* botAI) { return new AvoidBladeDanceAction(botAI); }
     static Action* kill_shattered_assassins(PlayerbotAI* botAI) { return new KillShatteredAssassinsAction(botAI); }
     static Action* nethekurse_peon_priority(PlayerbotAI* botAI) { return new NetheKursePeonPriorityAction(botAI); }
+    static Action* avoid_flame_arrow_fire(PlayerbotAI* botAI) { return new AvoidFlameArrowFireAction(botAI); }
 };
 
 #endif

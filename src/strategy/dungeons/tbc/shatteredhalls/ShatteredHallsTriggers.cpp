@@ -2,6 +2,11 @@
 #include "ShatteredHallsTriggers.h"
 #include "ShatteredHallsActions.h"
 
+// Include needed constants for gauntlet
+const uint32 NPC_SH_ARCHER = 17427;
+const uint32 SPELL_SHOOT_FLAME_ARROW = 30952;
+const uint32 SPELL_FLAME_ARROW_FIRE = 30953;
+
 bool NethekurseShadowFissureTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "grand warlock nethekurse");
@@ -146,6 +151,56 @@ bool KargathAssassinsTrigger::IsActive()
             return true;
         }
     }
+    
+    return false;
+}
+
+bool FlameArrowGauntletTrigger::IsActive()
+{
+    // Check if we are in the gauntlet area with active archers
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& guid : npcs)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (\!unit || \!unit->IsAlive())
+            continue;
+            
+        // Check for active archers shooting flame arrows
+        if (unit->GetEntry() == NPC_SH_ARCHER)
+        {
+            if (unit->FindCurrentSpellBySpellId(SPELL_SHOOT_FLAME_ARROW))
+                return true;
+        }
+    }
+    
+    // Also check if there are fire patches on the ground nearby
+    GuidVector allNpcs = AI_VALUE(GuidVector, "nearest npcs");
+    for (auto& guid : allNpcs)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (\!unit)
+            continue;
+            
+        // Check for fire effect units/triggers
+        if (unit->HasAura(SPELL_FLAME_ARROW_FIRE))
+        {
+            if (bot->GetDistance(unit) < 15.0f)
+                return true;
+        }
+        
+        // Common fire trigger NPCs
+        if (unit->GetEntry() == 17662 || unit->GetEntry() == 18370)
+        {
+            if (bot->GetDistance(unit) < 15.0f)
+                return true;
+        }
+    }
+    
+    // Check for fire game objects
+    std::list<GameObject*> gameObjects;
+    bot->GetGameObjectListWithEntryInGrid(gameObjects, 182592, 15.0f);
+    if (\!gameObjects.empty())
+        return true;
     
     return false;
 }

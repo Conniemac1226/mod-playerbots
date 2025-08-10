@@ -54,4 +54,11 @@ public:
     bool IsActive() override;
 };
 
+class FlameArrowGauntletTrigger : public Trigger
+{
+public:
+    FlameArrowGauntletTrigger(PlayerbotAI* botAI) : Trigger(botAI, "flame arrow gauntlet") {}
+    bool IsActive() override;
+};
+
 #endif

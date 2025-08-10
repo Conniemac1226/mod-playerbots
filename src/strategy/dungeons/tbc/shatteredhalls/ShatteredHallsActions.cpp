@@ -220,3 +220,149 @@ bool NetheKursePeonPriorityAction::Execute(Event event)
     
     return false;
 }
+bool AvoidFlameArrowFireAction::Execute(Event event)
+{
+    if (\!IsFireNearby())
+    {
+        return false;
+    }
+    
+    Position safePos = GetSafePosition();
+    return MoveTo(bot->GetMapId(), safePos.GetPositionX(), safePos.GetPositionY(), 
+                  safePos.GetPositionZ(), false, false, false, true, 
+                  MovementPriority::MOVEMENT_COMBAT);
+}
+
+bool AvoidFlameArrowFireAction::isUseful()
+{
+    return IsFireNearby();
+}
+
+bool AvoidFlameArrowFireAction::IsFireNearby()
+{
+    // Check for fire effects or triggers in the area
+    std::list<GameObject*> gameObjects;
+    bot->GetGameObjectListWithEntryInGrid(gameObjects, 182592, 10.0f); // Fire visual objects
+    
+    if (\!gameObjects.empty())
+    {
+        return true;
+    }
+    
+    // Check for units with fire aura or casting fire
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest npcs");
+    for (auto& guid : npcs)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (\!unit)
+            continue;
+            
+        // Check if this is a fire effect trigger or has fire aura
+        if (unit->HasAura(SPELL_FLAME_ARROW_FIRE))
+        {
+            if (bot->GetDistance(unit) < 8.0f)
+                return true;
+        }
+        
+        // Check for invisible triggers that represent fire patches
+        if (unit->GetEntry() == 17662 || unit->GetEntry() == 18370) // Common fire trigger IDs
+        {
+            if (bot->GetDistance(unit) < 8.0f)
+                return true;
+        }
+    }
+    
+    // Check if archers are actively shooting at our position
+    GuidVector hostiles = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& guid : hostiles)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (\!unit || unit->GetEntry() \!= NPC_SH_ARCHER)
+            continue;
+            
+        if (unit->FindCurrentSpellBySpellId(SPELL_SHOOT_FLAME_ARROW))
+        {
+            if (unit->GetVictim() == bot)
+                return true; // Arrow incoming to our position
+        }
+    }
+    
+    return false;
+}
+
+Position AvoidFlameArrowFireAction::GetSafePosition()
+{
+    float bestX = bot->GetPositionX();
+    float bestY = bot->GetPositionY();
+    float bestZ = bot->GetPositionZ();
+    float maxSafeDist = 0;
+    
+    // Try to find a safe spot by checking multiple directions
+    for (float angle = 0; angle < 2 * M_PI; angle += M_PI / 4)
+    {
+        float dist = 10.0f;
+        float newX = bot->GetPositionX() + cos(angle) * dist;
+        float newY = bot->GetPositionY() + sin(angle) * dist;
+        float newZ = bot->GetPositionZ();
+        
+        bot->UpdateGroundPositionZ(newX, newY, newZ);
+        
+        // Check if this position is safe from fire
+        bool isSafe = true;
+        float minFireDist = 999.0f;
+        
+        // Check distance from fire sources
+        GuidVector npcs = AI_VALUE(GuidVector, "nearest npcs");
+        for (auto& guid : npcs)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (\!unit)
+                continue;
+                
+            if (unit->HasAura(SPELL_FLAME_ARROW_FIRE) || 
+                unit->GetEntry() == 17662 || unit->GetEntry() == 18370)
+            {
+                float fireDist = unit->GetDistance2d(newX, newY);
+                if (fireDist < 8.0f)
+                {
+                    isSafe = false;
+                    break;
+                }
+                if (fireDist < minFireDist)
+                    minFireDist = fireDist;
+            }
+        }
+        
+        // Also check for game objects
+        std::list<GameObject*> gameObjects;
+        bot->GetGameObjectListWithEntryInGrid(gameObjects, 182592, 20.0f);
+        for (auto* obj : gameObjects)
+        {
+            float fireDist = obj->GetDistance2d(newX, newY);
+            if (fireDist < 8.0f)
+            {
+                isSafe = false;
+                break;
+            }
+            if (fireDist < minFireDist)
+                minFireDist = fireDist;
+        }
+        
+        if (isSafe && minFireDist > maxSafeDist)
+        {
+            maxSafeDist = minFireDist;
+            bestX = newX;
+            bestY = newY;
+            bestZ = newZ;
+        }
+    }
+    
+    // If we are in the gauntlet, prefer moving forward rather than backward
+    if (bot->GetPositionX() > -50.0f && bot->GetPositionX() < 50.0f) // Gauntlet corridor range
+    {
+        // Bias toward moving forward (positive X direction in Shattered Halls)
+        bestX += 3.0f;
+    }
+    
+    return Position(bestX, bestY, bestZ, bot->GetOrientation());
+}
