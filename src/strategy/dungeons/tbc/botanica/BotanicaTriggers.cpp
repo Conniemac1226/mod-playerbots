@@ -119,6 +119,36 @@ bool LajTeleportTrigger::IsActive()
     return boss->FindCurrentSpellBySpellId(SPELL_TELEPORT_SELF);
 }
 
+bool LajAddsTrigger::IsActive()
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "laj");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    {
+        return false;
+    }
+    
+    // Check for Laj's adds
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+            
+        uint32 entry = unit->GetEntry();
+        if (entry == NPC_THORN_LASHER || entry == NPC_THORN_FLAYER)
+        {
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < 40.0f)
+            {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
 bool ThorngrinSacrificeTrigger::IsActive()
 {
     return bot->HasAura(SPELL_SACRIFICE);
@@ -178,4 +208,33 @@ bool WarpSplinterArcaneVolleyTrigger::IsActive()
     }
     
     return boss->FindCurrentSpellBySpellId(SPELL_ARCANE_VOLLEY);
+}
+
+bool WarpSplinterSaplingsTrigger::IsActive()
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "warp splinter");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    {
+        return false;
+    }
+    
+    // Check for Saplings
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+            
+        if (unit->GetEntry() == NPC_SAPLING)
+        {
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < 40.0f)
+            {
+                return true;
+            }
+        }
+    }
+    
+    return false;
 }
