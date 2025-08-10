@@ -1,7 +1,0 @@
-# PERMANENT CLAUDE.MD ENFORCEMENT SETTINGS
-# This file is read by Claude Code at startup and between conversations
-
-ENFORCE_CLAUDE_MD=true
-HOOK_PATH="C:\Azerothcore\azerothcore-wotlk\BULLETPROOF_CLAUDE_MD_ENFORCEMENT.ps1"
-STRICT_MODE=true
-AUTO_RESEARCH_CHECK=true
