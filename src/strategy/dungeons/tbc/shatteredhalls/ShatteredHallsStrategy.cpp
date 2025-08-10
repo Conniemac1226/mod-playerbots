@@ -3,6 +3,10 @@
 
 void ShatteredHallsStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    // Gauntlet flame arrow avoidance - High priority
+    triggers.push_back(new TriggerNode("flame arrow gauntlet",
+        NextAction::array(0, new NextAction("avoid flame arrow fire", ACTION_EMERGENCY - 5), nullptr)));
+    
     // Grand Warlock Nethekurse
     triggers.push_back(new TriggerNode("nethekurse shadow fissure",
         NextAction::array(0, new NextAction("avoid shadow fissure", ACTION_MOVE + 5), nullptr)));

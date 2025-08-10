@@ -16,6 +16,7 @@ public:
         creators["omrogg burning maul"] = &ShatteredHallsTriggerContext::omrogg_burning_maul;
         creators["kargath blade dance"] = &ShatteredHallsTriggerContext::kargath_blade_dance;
         creators["kargath assassins"] = &ShatteredHallsTriggerContext::kargath_assassins;
+        creators["flame arrow gauntlet"] = &ShatteredHallsTriggerContext::flame_arrow_gauntlet;
     }
 
 private:
@@ -26,6 +27,7 @@ private:
     static Trigger* omrogg_burning_maul(PlayerbotAI* botAI) { return new OmroggBurningMaulTrigger(botAI); }
     static Trigger* kargath_blade_dance(PlayerbotAI* botAI) { return new KargathBladeDanceTrigger(botAI); }
     static Trigger* kargath_assassins(PlayerbotAI* botAI) { return new KargathAssassinsTrigger(botAI); }
+    static Trigger* flame_arrow_gauntlet(PlayerbotAI* botAI) { return new FlameArrowGauntletTrigger(botAI); }
 };
 
 #endif
