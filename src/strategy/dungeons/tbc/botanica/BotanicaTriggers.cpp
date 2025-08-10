@@ -1,6 +1,8 @@
 #include "Playerbots.h"
 #include "BotanicaTriggers.h"
 #include "BotanicaActions.h"
+#include "Spell.h"
+#include "SharedDefines.h"
 
 bool SarannisResonanceTrigger::IsActive()
 {
@@ -130,10 +132,21 @@ bool ThorngrinHellfireTrigger::IsActive()
         return false;
     }
     
+    // Check if boss is channeling Hellfire
+    if (Spell* channelledSpell = boss->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
+    {
+        if (channelledSpell->m_spellInfo->Id == SPELL_HELLFIRE)
+        {
+            float distance = bot->GetExactDist2d(boss);
+            return distance < 15.0f; // Increased range for safety
+        }
+    }
+    
+    // Also check regular cast and aura (in case spell mechanics vary)
     if (boss->HasAura(SPELL_HELLFIRE) || boss->FindCurrentSpellBySpellId(SPELL_HELLFIRE))
     {
         float distance = bot->GetExactDist2d(boss);
-        return distance < 10.0f;
+        return distance < 15.0f;
     }
     
     return false;
