@@ -3,6 +3,7 @@
 #include "SpellInfo.h"
 #include "Unit.h"
 #include "AttackersValue.h"
+#include "Value.h"
 #include "Playerbots.h"
 
 // Per-bot state maps for Kael'thas gravity lapse
@@ -22,14 +23,18 @@ bool InterruptKaelthasPyroblastAction::Execute(Event event)
 
     if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_PYROBLAST))
     {
-        // Use interrupt spell list
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        // Use interrupt spell list - SAFE PATTERN
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, boss, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, boss);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, boss, false))
+                {
+                    return botAI->CastSpell(spellId, boss);
+                }
             }
         }
     }

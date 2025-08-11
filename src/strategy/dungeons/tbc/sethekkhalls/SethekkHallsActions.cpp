@@ -3,6 +3,7 @@
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Group.h"
+#include "Value.h"
 #include "Playerbots.h"
 #include "AttackersValue.h"
 
@@ -132,13 +133,18 @@ bool InterruptControllerAction::Execute(Event event)
         {
             if (unit->HasUnitState(UNIT_STATE_CASTING) && unit->FindCurrentSpellBySpellId(32764))
             {
-                std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt")->Get();
-                for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+                // SAFE PATTERN for spell list access
+                Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+                if (spellIdsValue)
                 {
-                    uint32 spellId = *it;
-                    if (botAI->CanCastSpell(spellId, unit, false))
+                    std::list<uint32> spellIds = spellIdsValue->Get();
+                    for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
                     {
-                        return botAI->CastSpell(spellId, unit);
+                        uint32 spellId = *it;
+                        if (botAI->CanCastSpell(spellId, unit, false))
+                        {
+                            return botAI->CastSpell(spellId, unit);
+                        }
                     }
                 }
             }
@@ -248,7 +254,7 @@ bool IkissMoveAwayAction::Execute(Event event)
     
     // Move directly to tested safe position - MoveTo handles pathfinding automatically
     bool result = MoveTo(bot->GetMapId(), closestSafePos->GetPositionX(), closestSafePos->GetPositionY(), closestSafePos->GetPositionZ(), 
-                        false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     
     // If MoveTo fails, try alternative safe positions
     if (!result) {
@@ -256,7 +262,7 @@ bool IkissMoveAwayAction::Execute(Event event)
             if (&altPos == closestSafePos) continue; // Skip the one we just tried
             
             bool altResult = MoveTo(bot->GetMapId(), altPos.GetPositionX(), altPos.GetPositionY(), altPos.GetPositionZ(), 
-                                   false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                                   false, false, false, true, MovementPriority::MOVEMENT_FORCED);
             
             if (altResult) {
                 g_ikiss_lastMoveTime[botGuid] = currentTime;
@@ -273,12 +279,12 @@ bool IkissMoveAwayAction::Execute(Event event)
         if (boss) {
             Position centerPos = boss->GetPosition();
             bool centerResult = MoveTo(bot->GetMapId(), centerPos.GetPositionX(), centerPos.GetPositionY(), centerPos.GetPositionZ(),
-                                      false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                                      false, false, false, true, MovementPriority::MOVEMENT_FORCED);
             
             if (centerResult) {
                 // After reaching center, try closest safe position again
                 bool retryResult = MoveTo(bot->GetMapId(), closestSafePos->GetPositionX(), closestSafePos->GetPositionY(), closestSafePos->GetPositionZ(),
-                                         false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
                                          
                 if (retryResult) {
                     g_ikiss_lastMoveTime[botGuid] = currentTime;
@@ -356,7 +362,7 @@ bool IkissReturnPositionAction::Execute(Event event)
         float centerY = 287.0f; // Center of Ikiss room  
         float centerZ = z;
         
-        return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     }
     else {
         // Non-tanks: Position at appropriate range for class role
@@ -376,7 +382,7 @@ bool IkissReturnPositionAction::Execute(Event event)
         float newX = x + cos(angle) * range;
         float newY = y + sin(angle) * range;
         
-        return MoveTo(bot->GetMapId(), newX, newY, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), newX, newY, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     }
 }
 
@@ -441,9 +447,13 @@ bool FleeSpiritAction::Execute(Event event)
     if (!closestSpirit)
         return false;
 
-    // Flee immediately using proven FleePosition pattern from ForgeOfSouls
-    // Spirits are dangerous and bots should maintain 20 yard distance
-    return FleePosition(closestSpirit->GetPosition(), 20.0f, 500U);
+    // EMERGENCY: Move away from dangerous spirit
+    float angle = bot->GetAngle(closestSpirit) + M_PI;
+    float x = bot->GetPositionX() + cos(angle) * 20.0f;
+    float y = bot->GetPositionY() + sin(angle) * 20.0f;
+    float z = bot->GetPositionZ();
+    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                MovementPriority::MOVEMENT_FORCED);
 }
 
 bool FleeSpiritAction::isUseful()
@@ -626,5 +636,197 @@ bool ContinueFightWithCharmedAllyAction::isUseful()
 
     // Only useful if there's a charmed ally but no totem visible (or totem is being handled)
     return hasCharmedAlly && !hasTotem;
+}
+
+bool AttackSythElementalsAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // RESEARCHED: Darkweaver Syth summons 4 elementals at 90%, 50%, and 10% - boss_darkweaver_syth.cpp:56-61
+    // These elementals must be killed quickly
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitObjects(bot, searcher, 50.0f);
+
+    Unit* elemental = nullptr;
+    float closestDistance = 50.0f;
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        // Check for any of the 4 elemental types
+        if ((unit->GetEntry() == NPC_SYTH_FIRE_ELEMENTAL ||
+             unit->GetEntry() == NPC_SYTH_FROST_ELEMENTAL ||
+             unit->GetEntry() == NPC_SYTH_ARCANE_ELEMENTAL ||
+             unit->GetEntry() == NPC_SYTH_SHADOW_ELEMENTAL) &&
+            AttackersValue::IsValidTarget(unit, bot))
+        {
+            float distance = bot->GetDistance(unit);
+            if (distance < closestDistance)
+            {
+                elemental = unit;
+                closestDistance = distance;
+            }
+        }
+    }
+
+    if (elemental && currentTarget != elemental)
+    {
+        // Switch to elemental as priority target
+        return Attack(elemental);
+    }
+    
+    return false;
+}
+
+bool AttackSythElementalsAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Don't switch if we're a healer
+    if (botAI->IsHeal(bot))
+        return false;
+
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitObjects(bot, searcher, 50.0f);
+
+    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = *i;
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if ((unit->GetEntry() == NPC_SYTH_FIRE_ELEMENTAL ||
+             unit->GetEntry() == NPC_SYTH_FROST_ELEMENTAL ||
+             unit->GetEntry() == NPC_SYTH_ARCANE_ELEMENTAL ||
+             unit->GetEntry() == NPC_SYTH_SHADOW_ELEMENTAL) &&
+            AttackersValue::IsValidTarget(unit, bot))
+        {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+bool AnzuParalyzingScreechAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
+    Unit* boss = AI_VALUE2(Unit*, "find target", "anzu");
+    if (!boss)
+        return false;
+    
+    // RESEARCHED: Paralyzing Screech - boss_anzu.cpp:112-117
+    // AoE stun every 23 seconds - spread before cast to minimize group stun
+    if (boss->FindCurrentSpellBySpellId(SPELL_PARALYZING_SCREECH))
+    {
+        // Spread out to avoid everyone getting stunned together
+        GuidVector members = AI_VALUE(GuidVector, "group members");
+        for (auto& member : members)
+        {
+            if (member == bot->GetGUID())
+                continue;
+            
+            Unit* unit = botAI->GetUnit(member);
+            if (!unit || !unit->IsAlive())
+                continue;
+            
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < 8.0f) // Too close to allies
+            {
+                // Move away to spread
+                float angle = bot->GetAngle(unit) + M_PI;
+                float x = bot->GetPositionX() + cos(angle) * 10.0f;
+                float y = bot->GetPositionY() + sin(angle) * 10.0f;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
+            }
+        }
+    }
+    
+    return false;
+}
+
+bool AnzuCycloneSpreadAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
+    Unit* boss = AI_VALUE2(Unit*, "find target", "anzu");
+    if (!boss)
+        return false;
+    
+    // RESEARCHED: Cyclone - boss_anzu.cpp:125-133
+    // Cyclones random target every 22-27 seconds
+    // Check if anyone has cyclone and spread from them
+    GuidVector members = AI_VALUE(GuidVector, "group members");
+    for (auto& member : members)
+    {
+        Unit* unit = botAI->GetUnit(member);
+        if (!unit || !unit->IsAlive())
+            continue;
+        
+        if (unit->HasAura(SPELL_ANZU_CYCLONE))
+        {
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < 10.0f) // Too close to cycloned target
+            {
+                // Move away from cycloned ally
+                float angle = bot->GetAngle(unit) + M_PI;
+                float x = bot->GetPositionX() + cos(angle) * 12.0f;
+                float y = bot->GetPositionY() + sin(angle) * 12.0f;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
+            }
+        }
+    }
+    
+    // Also spread preemptively when cyclone is being cast
+    if (boss->FindCurrentSpellBySpellId(SPELL_ANZU_CYCLONE))
+    {
+        // General spread to avoid clustering
+        GuidVector members = AI_VALUE(GuidVector, "group members");
+        for (auto& member : members)
+        {
+            if (member == bot->GetGUID())
+                continue;
+            
+            Unit* unit = botAI->GetUnit(member);
+            if (!unit || !unit->IsAlive())
+                continue;
+            
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < 8.0f)
+            {
+                // Spread out
+                float angle = bot->GetAngle(unit) + M_PI;
+                float x = bot->GetPositionX() + cos(angle) * 10.0f;
+                float y = bot->GetPositionY() + sin(angle) * 10.0f;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
+            }
+        }
+    }
+    
+    return false;
 }
 

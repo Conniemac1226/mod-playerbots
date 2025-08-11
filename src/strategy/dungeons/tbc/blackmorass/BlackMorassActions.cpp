@@ -94,7 +94,7 @@ bool ProtectMedivhAction::Execute(Event event)
         float y = medivhPos.GetPositionY() + sin(angle) * moveDistance;
         
         return MoveTo(bot->GetMapId(), x, y, medivhPos.GetPositionZ(),
-                     false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                     false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     }
 
     return false;
@@ -128,7 +128,7 @@ bool AeonusAvoidCleaveAction::Execute(Event event)
         
         return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY, 
                      safePos.m_positionZ, false, false, false, true, 
-                     MovementPriority::MOVEMENT_COMBAT);
+                     MovementPriority::MOVEMENT_FORCED);
     }
 
     return false;
@@ -166,7 +166,7 @@ bool AeonusPositionAction::Execute(Event event)
             {
                 return MoveTo(bot->GetMapId(), tankPos.m_positionX, tankPos.m_positionY,
                              tankPos.m_positionZ, false, false, false, true,
-                             MovementPriority::MOVEMENT_COMBAT);
+                             MovementPriority::MOVEMENT_FORCED);
             }
         }
     }
@@ -194,7 +194,13 @@ bool AeonusSandBreathAction::Execute(Event event)
     {
         if (boss->HasInArc(M_PI / 4, bot)) // Narrower cone
         {
-            return FleePosition(boss->GetPosition(), 15.0f, 500U);
+            // Move away from Sand Breath cone
+            float angle = bot->GetAngle(boss) + M_PI;
+            float x = bot->GetPositionX() + cos(angle) * 15.0f;
+            float y = bot->GetPositionY() + sin(angle) * 15.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -320,7 +326,13 @@ bool AvoidTimeLapseAction::Execute(Event event)
                 float distance = bot->GetDistance(ally);
                 if (distance < 10.0f)
                 {
-                    return FleePosition(ally->GetPosition(), 15.0f, 500U);
+                    // Spread out from allies
+                    float angle = bot->GetAngle(ally) + M_PI;
+                    float x = bot->GetPositionX() + cos(angle) * 15.0f;
+                    float y = bot->GetPositionY() + sin(angle) * 15.0f;
+                    float z = bot->GetPositionZ();
+                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                                MovementPriority::MOVEMENT_FORCED);
                 }
             }
         }
@@ -350,7 +362,13 @@ bool AvoidArcaneDischargeAction::Execute(Event event)
         float distance = bot->GetDistance(boss);
         if (distance < 20.0f)
         {
-            return FleePosition(boss->GetPosition(), 25.0f, 500U);
+            // Move away from Arcane Discharge
+            float angle = bot->GetAngle(boss) + M_PI;
+            float x = bot->GetPositionX() + cos(angle) * 25.0f;
+            float y = bot->GetPositionY() + sin(angle) * 25.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -381,7 +399,13 @@ bool DejaAttractionAction::Execute(Event event)
                 float distance = bot->GetDistance(ally);
                 if (distance < 15.0f)
                 {
-                    return FleePosition(ally->GetPosition(), 20.0f, 500U);
+                    // Move away from raid when attracted
+                    float angle = bot->GetAngle(ally) + M_PI;
+                    float x = bot->GetPositionX() + cos(angle) * 20.0f;
+                    float y = bot->GetPositionY() + sin(angle) * 20.0f;
+                    float z = bot->GetPositionZ();
+                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                                MovementPriority::MOVEMENT_FORCED);
                 }
             }
         }
@@ -421,7 +445,7 @@ bool AvoidWingBuffetAction::Execute(Event event)
             
             return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
                          safePos.m_positionZ, false, false, false, true,
-                         MovementPriority::MOVEMENT_COMBAT);
+                         MovementPriority::MOVEMENT_FORCED);
         }
     }
 

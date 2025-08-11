@@ -18,8 +18,8 @@ bool ThespiaLightningCloudTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check if boss is casting Lightning Cloud
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_CLOUD);
+    // Check if boss is casting Lightning Cloud - immediate detection
+    return boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_CLOUD);
 }
 
 bool ThespiaLungBurstTrigger::IsActive()
@@ -77,8 +77,8 @@ bool SteamriggerSawBladeTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check if boss is casting Saw Blade
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_SAW_BLADE);
+    // Check if boss is casting Saw Blade - immediate detection
+    return boss->FindCurrentSpellBySpellId(SPELL_SAW_BLADE);
 }
 
 bool SteamriggerElectrifiedNetTrigger::IsActive()

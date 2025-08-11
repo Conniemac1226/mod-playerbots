@@ -174,13 +174,17 @@ bool OmorShadowBoltInterruptAction::Execute(Event event)
     if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_SHADOW_BOLT))
     {
         // RESEARCHED: Pattern from InterruptControllerAction in SethekkHallsActions.cpp:134-143
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, boss, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, boss);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, boss, false))
+                {
+                    return botAI->CastSpell(spellId, boss);
+                }
             }
         }
     }
@@ -212,13 +216,17 @@ bool OmorTreacherousAuraAction::Execute(Event event)
     if (bot->HasAura(SPELL_TREACHEROUS_AURA))
     {
         // Dispel if possible
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, bot, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, bot);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
             }
         }
     }
@@ -507,13 +515,17 @@ bool NazanBellowingRoarAction::Execute(Event event)
         }
         
         // Try to dispel fear
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, bot, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, bot);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
             }
         }
     }
@@ -532,4 +544,111 @@ bool NazanBellowingRoarAction::isUseful()
         return false;
 
     return bot->HasAura(SPELL_BELLOWING_ROAR);
+}
+
+bool OmorTreacherySpreadAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // CASE 1: Bot has the aura - needs to move away from others
+    if (bot->HasAura(SPELL_TREACHEROUS_AURA))
+    {
+        GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
+        for (const auto& guid : friendlyUnits)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (unit && bot != unit && bot->GetDistance(unit) < 15.0f) // 15 yards danger zone
+            {
+                return true; // Bot needs to move away from allies
+            }
+        }
+    }
+    
+    // CASE 2: Another player has the aura - bot needs to avoid them
+    GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
+    for (const auto& guid : friendlyUnits)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && bot != unit && unit->HasAura(SPELL_TREACHEROUS_AURA))
+        {
+            if (bot->GetDistance(unit) < 15.0f) // Too close to cursed ally
+            {
+                return true; // Bot needs to move away from cursed ally
+            }
+        }
+    }
+
+    return false;
+}
+
+bool OmorTreacherySpreadAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* dangerTarget = nullptr;
+    float minDistance = 15.0f; // 15 yard danger radius
+    bool botHasAura = bot->HasAura(SPELL_TREACHEROUS_AURA);
+
+    GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
+    
+    // CASE 1: Bot has aura - find closest ally to move away from
+    if (botHasAura)
+    {
+        for (const auto& guid : friendlyUnits)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (unit && bot != unit)
+            {
+                float distance = bot->GetDistance(unit);
+                if (distance < minDistance)
+                {
+                    minDistance = distance;
+                    dangerTarget = unit;
+                }
+            }
+        }
+    }
+    // CASE 2: Find any ally with aura that we're too close to
+    else
+    {
+        for (const auto& guid : friendlyUnits)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (unit && bot != unit && unit->HasAura(SPELL_TREACHEROUS_AURA))
+            {
+                float distance = bot->GetDistance(unit);
+                if (distance < 15.0f)
+                {
+                    dangerTarget = unit;
+                    minDistance = distance;
+                    break; // Found cursed ally nearby, evacuate!
+                }
+            }
+        }
+    }
+
+    if (dangerTarget)
+    {
+        // EMERGENCY: Move away from danger (cursed player or nearest ally)
+        float angle = bot->GetAngle(dangerTarget) + M_PI;
+        float moveDistance = 20.0f - minDistance; // Move to 20 yards away for safety
+        float newX = bot->GetPositionX() + cos(angle) * moveDistance;
+        float newY = bot->GetPositionY() + sin(angle) * moveDistance;
+        float newZ = bot->GetPositionZ();
+        
+        // Stop attacks if we have the aura to focus on positioning
+        if (botHasAura)
+        {
+            bot->AttackStop();
+        }
+        
+        return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, true, 
+                     MovementPriority::MOVEMENT_FORCED);
+    }
+
+    return false;
 }

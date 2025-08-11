@@ -83,17 +83,17 @@ public:
     bool Execute(Event event) override;
 };
 
-class SkyrissFearAction : public Action
+class SkyrissFearAction : public MovementAction
 {
 public:
-    SkyrissFearAction(PlayerbotAI* botAI) : Action(botAI, "skyriss fear") {}
+    SkyrissFearAction(PlayerbotAI* botAI) : MovementAction(botAI, "skyriss fear") {}
     bool Execute(Event event) override;
 };
 
-class SkyrissDominationAction : public Action
+class SkyrissDominationAction : public MovementAction
 {
 public:
-    SkyrissDominationAction(PlayerbotAI* botAI) : Action(botAI, "skyriss domination") {}
+    SkyrissDominationAction(PlayerbotAI* botAI) : MovementAction(botAI, "skyriss domination") {}
     bool Execute(Event event) override;
 };
 

@@ -26,7 +26,14 @@ bool AvoidShadowFissureAction::Execute(Event event)
             float currentDist = bot->GetExactDist2d(unit);
             if (currentDist < safeDistance)
             {
-                return MoveAway(unit, safeDistance - currentDist + 2.0f);
+                // EMERGENCY: Move away from Lesser Shadow Fissure
+                float angle = bot->GetAngle(unit) + M_PI;
+                float moveDistance = safeDistance - currentDist + 2.0f;
+                float x = bot->GetPositionX() + cos(angle) * moveDistance;
+                float y = bot->GetPositionY() + sin(angle) * moveDistance;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
             }
         }
     }
@@ -36,7 +43,14 @@ bool AvoidShadowFissureAction::Execute(Event event)
         float currentDist = bot->GetExactDist2d(boss);
         if (currentDist < safeDistance)
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            // EMERGENCY: Move away from Shadow Fissure on boss
+            float angle = bot->GetAngle(boss) + M_PI;
+            float moveDistance = safeDistance - currentDist + 2.0f;
+            float x = bot->GetPositionX() + cos(angle) * moveDistance;
+            float y = bot->GetPositionY() + sin(angle) * moveDistance;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
     
@@ -61,7 +75,14 @@ bool AvoidDarkSpinAction::Execute(Event event)
     
     if (currentDist < safeDistance)
     {
-        return MoveAway(boss, safeDistance - currentDist + 2.0f);
+        // EMERGENCY: Move away from Dark Spin
+        float angle = bot->GetAngle(boss) + M_PI;
+        float moveDistance = safeDistance - currentDist + 2.0f;
+        float x = bot->GetPositionX() + cos(angle) * moveDistance;
+        float y = bot->GetPositionY() + sin(angle) * moveDistance;
+        float z = bot->GetPositionZ();
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                    MovementPriority::MOVEMENT_FORCED);
     }
     
     return false;
@@ -85,7 +106,14 @@ bool MoveFromBlastWaveAction::Execute(Event event)
     
     if (currentDist < safeDistance)
     {
-        return MoveAway(boss, safeDistance - currentDist + 2.0f);
+        // EMERGENCY: Move away from Blast Wave
+        float angle = bot->GetAngle(boss) + M_PI;
+        float moveDistance = safeDistance - currentDist + 2.0f;
+        float x = bot->GetPositionX() + cos(angle) * moveDistance;
+        float y = bot->GetPositionY() + sin(angle) * moveDistance;
+        float z = bot->GetPositionZ();
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                    MovementPriority::MOVEMENT_FORCED);
     }
     
     return false;
@@ -113,12 +141,20 @@ bool AvoidBurningMaulAction::Execute(Event event)
         {
             if (currentDist > 5.0f)
             {
-                return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), boss->GetPositionZ());
+                return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), boss->GetPositionZ(),
+                            false, false, false, true, MovementPriority::MOVEMENT_FORCED);
             }
         }
         else if (currentDist < safeDistance)
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            // EMERGENCY: Move away from Burning Maul
+            float angle = bot->GetAngle(boss) + M_PI;
+            float moveDistance = safeDistance - currentDist + 2.0f;
+            float x = bot->GetPositionX() + cos(angle) * moveDistance;
+            float y = bot->GetPositionY() + sin(angle) * moveDistance;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
     
@@ -140,7 +176,14 @@ bool AvoidBladeDanceAction::Execute(Event event)
         
         if (currentDist < safeDistance)
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            // EMERGENCY: Move away from Blade Dance
+            float angle = bot->GetAngle(boss) + M_PI;
+            float moveDistance = safeDistance - currentDist + 2.0f;
+            float x = bot->GetPositionX() + cos(angle) * moveDistance;
+            float y = bot->GetPositionY() + sin(angle) * moveDistance;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
     
@@ -230,7 +273,7 @@ bool AvoidFlameArrowFireAction::Execute(Event event)
     Position safePos = GetSafePosition();
     return MoveTo(bot->GetMapId(), safePos.GetPositionX(), safePos.GetPositionY(), 
                   safePos.GetPositionZ(), false, false, false, true, 
-                  MovementPriority::MOVEMENT_COMBAT);
+                  MovementPriority::MOVEMENT_FORCED);
 }
 
 bool AvoidFlameArrowFireAction::isUseful()

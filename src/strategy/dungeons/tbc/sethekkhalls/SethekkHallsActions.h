@@ -16,6 +16,18 @@
 #define NPC_ANZU                 23035
 #define NPC_BROOD_OF_ANZU        23132
 
+// Darkweaver Syth elemental adds
+#define NPC_SYTH_FIRE_ELEMENTAL    19203
+#define NPC_SYTH_FROST_ELEMENTAL   19204  
+#define NPC_SYTH_ARCANE_ELEMENTAL  19205
+#define NPC_SYTH_SHADOW_ELEMENTAL  19206
+
+// Anzu spell IDs
+#define SPELL_PARALYZING_SCREECH   40184
+#define SPELL_SPELL_BOMB            40303
+#define SPELL_ANZU_CYCLONE          40321  // Renamed to avoid conflict with ICC
+#define SPELL_BANISH_SELF           42354
+
 // TESTED: LoS safe positions behind pillars - coordinates confirmed to break LoS from boss
 const Position IKISS_LOS_SAFE_POSITIONS[4] =
 {
@@ -83,6 +95,28 @@ public:
     ContinueFightWithCharmedAllyAction(PlayerbotAI* ai) : AttackAction(ai, "continue fight with charmed ally") {}
     bool Execute(Event event) override;
     bool isUseful() override;
+};
+
+class AttackSythElementalsAction : public AttackAction
+{
+public:
+    AttackSythElementalsAction(PlayerbotAI* ai) : AttackAction(ai, "attack syth elementals") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class AnzuParalyzingScreechAction : public MovementAction
+{
+public:
+    AnzuParalyzingScreechAction(PlayerbotAI* ai) : MovementAction(ai, "anzu paralyzing screech") {}
+    bool Execute(Event event) override;
+};
+
+class AnzuCycloneSpreadAction : public MovementAction
+{
+public:
+    AnzuCycloneSpreadAction(PlayerbotAI* ai) : MovementAction(ai, "anzu cyclone spread") {}
+    bool Execute(Event event) override;
 };
 
 #endif

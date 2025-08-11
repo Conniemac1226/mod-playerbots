@@ -36,17 +36,17 @@ public:
     bool Execute(Event event) override;
 };
 
-class HellmawFearReactAction : public Action
+class HellmawFearReactAction : public MovementAction
 {
 public:
-    HellmawFearReactAction(PlayerbotAI* botAI) : Action(botAI, "hellmaw fear react") {}
+    HellmawFearReactAction(PlayerbotAI* botAI) : MovementAction(botAI, "hellmaw fear react") {}
     bool Execute(Event event) override;
 };
 
-class InciteChaosReactAction : public Action
+class InciteChaosReactAction : public MovementAction
 {
 public:
-    InciteChaosReactAction(PlayerbotAI* botAI) : Action(botAI, "incite chaos react") {}
+    InciteChaosReactAction(PlayerbotAI* botAI) : MovementAction(botAI, "incite chaos react") {}
     bool Execute(Event event) override;
 };
 

@@ -22,7 +22,7 @@ void BlackMorassStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     // ===== AEONUS TRIGGERS =====
     triggers.push_back(new TriggerNode(
         "aeonus cleave danger",
-        NextAction::array(0, new NextAction("aeonus avoid cleave", ACTION_MOVE + 3), nullptr)));
+        NextAction::array(0, new NextAction("aeonus avoid cleave", ACTION_EMERGENCY - 1), nullptr)));
 
     triggers.push_back(new TriggerNode(
         "aeonus engaged",
@@ -30,7 +30,7 @@ void BlackMorassStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         
     triggers.push_back(new TriggerNode(
         "sand breath danger",
-        NextAction::array(0, new NextAction("avoid sand breath", ACTION_MOVE + 4), nullptr)));
+        NextAction::array(0, new NextAction("avoid sand breath", ACTION_EMERGENCY), nullptr)));
         
     triggers.push_back(new TriggerNode(
         "time stop active",
@@ -39,20 +39,20 @@ void BlackMorassStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     // ===== CHRONO LORD DEJA TRIGGERS =====
     triggers.push_back(new TriggerNode(
         "time lapse danger", 
-        NextAction::array(0, new NextAction("avoid time lapse", ACTION_MOVE + 2), nullptr)));
+        NextAction::array(0, new NextAction("avoid time lapse", ACTION_EMERGENCY - 2), nullptr)));
         
     triggers.push_back(new TriggerNode(
         "arcane discharge danger",
-        NextAction::array(0, new NextAction("avoid arcane discharge", ACTION_MOVE + 3), nullptr)));
+        NextAction::array(0, new NextAction("avoid arcane discharge", ACTION_EMERGENCY - 1), nullptr)));
         
     triggers.push_back(new TriggerNode(
         "attraction active",
-        NextAction::array(0, new NextAction("handle attraction", ACTION_MOVE + 2), nullptr)));
+        NextAction::array(0, new NextAction("handle attraction", ACTION_EMERGENCY - 2), nullptr)));
 
     // ===== TEMPORUS TRIGGERS =====
     triggers.push_back(new TriggerNode(
         "wing buffet danger",
-        NextAction::array(0, new NextAction("avoid wing buffet", ACTION_MOVE + 2), nullptr)));
+        NextAction::array(0, new NextAction("avoid wing buffet", ACTION_EMERGENCY - 1), nullptr)));
         
     triggers.push_back(new TriggerNode(
         "mortal wound active",

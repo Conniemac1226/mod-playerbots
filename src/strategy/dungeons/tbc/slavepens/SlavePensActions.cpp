@@ -1,5 +1,6 @@
 #include "SlavePensActions.h"
 #include "Playerbots.h"
+#include "Value.h"
 
 // Mennu the Betrayer - Attack totems with priority
 bool AttackMennuTotemAction::Execute(Event event)
@@ -8,15 +9,28 @@ bool AttackMennuTotemAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Priority order: Nova Totem > Healing Ward > Earthgrab > Stoneskin
+    // RESEARCHED: Totems spawn pattern - boss_mennu_the_betrayer.cpp:71-83
+    // Priority: Nova (explosion) > Healing (60% hp) > Earthgrab (root) > Stoneskin (armor)
     uint32 totemPriority[] = { NPC_NOVA_TOTEM, NPC_HEALING_WARD, NPC_EARTHGRAB_TOTEM, NPC_STONESKIN_TOTEM };
+    
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
     for (uint32 totemId : totemPriority)
     {
-        Unit* totem = bot->FindNearestCreature(totemId, 50.0f);
-        if (totem && totem->IsAlive())
+        std::list<Creature*> totemList;
+        bot->GetCreatureListWithEntryInGrid(totemList, totemId, 50.0f);
+        
+        for (Creature* totem : totemList)
         {
-            return Attack(totem);
+            if (totem && totem->IsAlive())
+            {
+                // Switch to totem immediately if not already targeting
+                if (currentTarget != totem)
+                {
+                    return Attack(totem);
+                }
+                return false; // Already attacking highest priority totem
+            }
         }
     }
 
@@ -53,17 +67,28 @@ bool MennuLightningBoltInterruptAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Lightning Bolt cast - boss_mennu_the_betrayer.cpp:69
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_BOLT))
+    // RESEARCHED: Lightning Bolt every 7-10s - boss_mennu_the_betrayer.cpp:67-70
+    if (boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_BOLT))
     {
-        // RESEARCHED: Pattern from HellfireRampartsActions.cpp:138-145
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        // Interrupt immediately to prevent damage
+        if (bot->IsWithinMeleeRange(boss))
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, boss, false))
+            botAI->InterruptSpell();
+            return true;
+        }
+        
+        // Ranged interrupts - SAFE PATTERN
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+        if (spellIdsValue)
+        {
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, boss);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, boss, false))
+                {
+                    return botAI->CastSpell(spellId, boss);
+                }
             }
         }
     }
@@ -91,18 +116,29 @@ bool MennuNovaTotemAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* totem = bot->FindNearestCreature(NPC_NOVA_TOTEM, 20.0f);
-    if (totem && totem->IsAlive())
+    // RESEARCHED: Nova Totem explodes after delay - boss_mennu_the_betrayer.cpp:73
+    // Move away IMMEDIATELY when totem spawns
+    std::list<Creature*> totemList;
+    bot->GetCreatureListWithEntryInGrid(totemList, NPC_NOVA_TOTEM, 25.0f);
+    
+    for (Creature* totem : totemList)
     {
-        float distance = bot->GetDistance(totem);
-        if (distance < 10.0f) // Nova Totem has ~10 yard explosion radius
+        if (totem && totem->IsAlive())
         {
-            // Move away from totem
-            float angle = bot->GetAngle(totem) + M_PI;
-            float x = bot->GetPositionX() + cos(angle) * 15.0f;
-            float y = bot->GetPositionY() + sin(angle) * 15.0f;
-            float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            float distance = bot->GetExactDist(totem);
+            float safeDistance = 15.0f; // Nova explosion ~10 yards + safety
+            
+            if (distance < safeDistance)
+            {
+                // Emergency movement away from Nova Totem
+                float angle = totem->GetAngle(bot) + M_PI;
+                float moveDistance = safeDistance - distance + 3.0f;
+                float x = totem->GetPositionX() + cos(angle) * (distance + moveDistance);
+                float y = totem->GetPositionY() + sin(angle) * (distance + moveDistance);
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, 
+                            MovementPriority::MOVEMENT_FORCED);
+            }
         }
     }
 
@@ -129,14 +165,18 @@ bool RokmarEnsnaringMossAction::Execute(Event event)
     // RESEARCHED: Ensnaring Moss - boss_rokmar_the_crackler.cpp:60
     if (bot->HasAura(SPELL_ENSNARING_MOSS))
     {
-        // Try to dispel the root effect
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        // Try to dispel the root effect - SAFE PATTERN from HellfireRampartsActions.cpp:219-231
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, bot, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, bot);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
             }
         }
     }
@@ -160,13 +200,52 @@ bool RokmarGrievousWoundAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: Grievous Wound requires healing above 90% - boss_rokmar_the_crackler.cpp:56
-    if (bot->HasAura(SPELL_GRIEVOUS_WOUND_N) || bot->HasAura(SPELL_GRIEVOUS_WOUND_H))
+    // RESEARCHED: Grievous Wound removed at 90%+ HP - boss_rokmar_the_crackler.cpp:54-57
+    // Check all group members for wound
+    Group* group = bot->GetGroup();
+    if (group && PlayerbotAI::IsHeal(bot))
     {
-        if (bot->GetHealthPct() < 90.0f)
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
         {
-            // Use healing abilities if available
-            std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "heal")->Get();
+            Player* member = ref->GetSource();
+            if (member && member->IsAlive())
+            {
+                if ((member->HasAura(SPELL_GRIEVOUS_WOUND_N) || member->HasAura(SPELL_GRIEVOUS_WOUND_H)) 
+                    && member->GetHealthPct() < 90.0f)
+                {
+                    // Priority heal wounded targets
+                    if (botAI->CanCastSpell(2061, member, false)) // Flash Heal example
+                    {
+                        return botAI->CastSpell(2061, member);
+                    }
+                    
+                    // Try any heal spell - SAFE PATTERN
+                    Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "heal");
+                    if (spellIdsValue)
+                    {
+                        std::list<uint32> spellIds = spellIdsValue->Get();
+                        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+                        {
+                            uint32 spellId = *it;
+                            if (botAI->CanCastSpell(spellId, member, false))
+                            {
+                                return botAI->CastSpell(spellId, member);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // Self heal if wounded
+    if ((bot->HasAura(SPELL_GRIEVOUS_WOUND_N) || bot->HasAura(SPELL_GRIEVOUS_WOUND_H)) 
+        && bot->GetHealthPct() < 90.0f)
+    {
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "heal");
+        if (spellIdsValue)
+        {
+            std::list<uint32> spellIds = spellIdsValue->Get();
             for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
                 uint32 spellId = *it;
@@ -201,15 +280,24 @@ bool RokmarWaterSpitAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Water Spit at 10% health - boss_rokmar_the_crackler.cpp:64
-    if (boss->GetHealthPct() < 10.0f && boss->HasUnitState(UNIT_STATE_CASTING))
+    // RESEARCHED: Water Spit AoE damage - boss_rokmar_the_crackler.cpp:62-65
+    // It's AoE centered on boss, spread out!
+    if (boss->FindCurrentSpellBySpellId(SPELL_WATER_SPIT))
     {
-        // Spread out to avoid chain damage
-        float angle = bot->GetAngle(boss) + (M_PI / 4);
-        float x = bot->GetPositionX() + cos(angle) * 10.0f;
-        float y = bot->GetPositionY() + sin(angle) * 10.0f;
-        float z = bot->GetPositionZ();
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        float safeDistance = 20.0f; // Water Spit has large AoE
+        float currentDist = bot->GetExactDist(boss);
+        
+        if (currentDist < safeDistance)
+        {
+            // Move away from boss quickly
+            float angle = boss->GetAngle(bot) + M_PI;
+            float moveDistance = safeDistance - currentDist + 3.0f;
+            float x = boss->GetPositionX() + cos(angle) * (currentDist + moveDistance);
+            float y = boss->GetPositionY() + sin(angle) * (currentDist + moveDistance);
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, 
+                        MovementPriority::MOVEMENT_FORCED);
+        }
     }
 
     return false;
@@ -225,7 +313,7 @@ bool RokmarWaterSpitAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->GetHealthPct() < 10.0f;
+    return boss->FindCurrentSpellBySpellId(SPELL_WATER_SPIT) && bot->GetExactDist(boss) < 20.0f;
 }
 
 // Quagmirran - Avoid Acid Spray cone
@@ -239,18 +327,21 @@ bool QuagmirranAcidSprayAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Acid Spray frontal cone - boss_quagmirran.cpp:54
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_ACID_SPRAY))
+    // RESEARCHED: Acid Spray frontal cone - boss_quagmirran.cpp:52-55
+    // Random target, cast every 25 seconds
+    // Use FindCurrentSpellBySpellId for IMMEDIATE detection
+    if (boss->FindCurrentSpellBySpellId(SPELL_ACID_SPRAY))
     {
-        // Check if we're in front arc
-        if (boss->HasInArc(M_PI / 3, bot))
+        // Check if we're in front arc (wider safety margin)
+        if (boss->HasInArc(M_PI / 2, bot)) // 90 degree cone for safety
         {
-            // Move to side/behind
-            float angle = boss->GetOrientation() + (M_PI / 2);
+            // EMERGENCY: Move behind boss NOW
+            float angle = boss->GetOrientation() + M_PI;
             float x = boss->GetPositionX() + cos(angle) * 10.0f;
             float y = boss->GetPositionY() + sin(angle) * 10.0f;
             float z = boss->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, 
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -267,8 +358,8 @@ bool QuagmirranAcidSprayAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_ACID_SPRAY) && 
-           boss->HasInArc(M_PI / 3, bot);
+    return boss->FindCurrentSpellBySpellId(SPELL_ACID_SPRAY) && 
+           boss->HasInArc(M_PI / 2, bot);
 }
 
 // Interrupt Poison Bolt Volley
@@ -282,17 +373,29 @@ bool QuagmirranPoisonBoltVolleyAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Poison Bolt Volley AoE - boss_quagmirran.cpp:58
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_POISON_BOLT_VOLLEY))
+    // RESEARCHED: Poison Bolt Volley AoE - boss_quagmirran.cpp:56-59
+    // Cast every 24.4 seconds, MUST interrupt immediately
+    if (boss->FindCurrentSpellBySpellId(SPELL_POISON_BOLT_VOLLEY))
     {
-        // RESEARCHED: Pattern from HellfireRampartsActions.cpp:138-145
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        // Melee interrupt if in range
+        if (bot->IsWithinMeleeRange(boss))
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, boss, false))
+            botAI->InterruptSpell();
+            return true;
+        }
+        
+        // Ranged interrupts with priority - SAFE PATTERN
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+        if (spellIdsValue)
+        {
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, boss);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, boss, false))
+                {
+                    return botAI->CastSpell(spellId, boss);
+                }
             }
         }
     }
@@ -310,7 +413,7 @@ bool QuagmirranPoisonBoltVolleyAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_POISON_BOLT_VOLLEY);
+    return boss->FindCurrentSpellBySpellId(SPELL_POISON_BOLT_VOLLEY);
 }
 
 // Tank positioning for Uppercut
@@ -328,13 +431,21 @@ bool QuagmirranUppercutAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Uppercut knockback - boss_quagmirran.cpp:50
-    // Position boss away from edges to avoid being knocked off
-    // This is a general tank positioning reminder
-    float distance = bot->GetDistance(boss);
-    if (distance > 5.0f && botAI->IsTank(bot))
+    // RESEARCHED: Uppercut knockback - boss_quagmirran.cpp:48-51
+    // Cast every 21.8 seconds on tank - position with back to wall
+    // CRITICAL: Detect when Uppercut is coming and prepare positioning
+    if (boss->FindCurrentSpellBySpellId(SPELL_UPPERCUT))
     {
-        // Move closer to boss to maintain threat
+        // Uppercut about to happen - ensure we have room behind us
+        // This is a knockback, so having a wall behind helps
+        return false; // Can't really move during cast
+    }
+    
+    // General tank positioning - keep boss faced away from group
+    float distance = bot->GetExactDist(boss);
+    if (distance > 5.0f)
+    {
+        // Move closer to maintain threat
         Position pos = boss->GetPosition();
         float angle = bot->GetAngle(boss);
         float newDist = 3.0f;
@@ -358,5 +469,72 @@ bool QuagmirranUppercutAction::isUseful()
         return false;
 
     Unit* boss = bot->FindNearestCreature(NPC_QUAGMIRRAN, 50.0f);
-    return boss && boss->IsAlive() && boss->IsInCombat();
+    return boss && boss->IsAlive() && boss->IsInCombat() && bot->GetExactDist(boss) > 5.0f;
+}
+
+// Position behind boss to avoid Cleave
+bool QuagmirranCleavePositionAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Tanks handle cleave, others avoid
+    if (botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_QUAGMIRRAN, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Cleave every 9.1s initially, then 18.8-24.8s - boss_quagmirran.cpp:44-47
+    // Non-tanks should stay behind boss at all times
+    if (botAI->IsMelee(bot))
+    {
+        // Check if we're in front arc (dangerous for cleave)
+        if (boss->HasInArc(M_PI / 2, bot))
+        {
+            // Move behind boss
+            float angle = boss->GetOrientation() + M_PI;
+            float x = boss->GetPositionX() + cos(angle) * 5.0f;
+            float y = boss->GetPositionY() + sin(angle) * 5.0f;
+            float z = boss->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, 
+                        MovementPriority::MOVEMENT_COMBAT);
+        }
+    }
+    
+    // Also move if cleave is being cast RIGHT NOW
+    if (boss->FindCurrentSpellBySpellId(SPELL_CLEAVE))
+    {
+        if (boss->HasInArc(M_PI / 3, bot) && bot->GetExactDist(boss) < 10.0f)
+        {
+            // Emergency move to side
+            float angle = boss->GetOrientation() + (M_PI / 2);
+            float x = boss->GetPositionX() + cos(angle) * 10.0f;
+            float y = boss->GetPositionY() + sin(angle) * 10.0f;
+            return MoveTo(bot->GetMapId(), x, y, boss->GetPositionZ(), 
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        }
+    }
+
+    return false;
+}
+
+bool QuagmirranCleavePositionAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    if (botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_QUAGMIRRAN, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Useful if melee and in front, or if cleave is being cast
+    return (botAI->IsMelee(bot) && boss->HasInArc(M_PI / 2, bot)) ||
+           (boss->FindCurrentSpellBySpellId(SPELL_CLEAVE) && boss->HasInArc(M_PI / 3, bot) && bot->GetExactDist(boss) < 10.0f);
 }

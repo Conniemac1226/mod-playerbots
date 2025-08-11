@@ -222,3 +222,40 @@ bool NazanBellowingRoarTrigger::IsActive()
     // RESEARCHED: Bellowing Roar fear - boss_vazruden_the_herald.cpp:218-225  
     return bot->HasAura(SPELL_BELLOWING_ROAR);
 }
+
+bool OmorTreacherySpreadTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // CASE 1: Bot has the aura - needs to move away from others
+    if (bot->HasAura(SPELL_TREACHEROUS_AURA))
+    {
+        GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
+        for (const auto& guid : friendlyUnits)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (unit && bot != unit && bot->GetDistance(unit) < 15.0f) // 15 yards danger zone
+            {
+                return true; // Bot needs to move away from allies
+            }
+        }
+    }
+    
+    // CASE 2: Another player has the aura - bot needs to avoid them
+    GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
+    for (const auto& guid : friendlyUnits)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && bot != unit && unit->HasAura(SPELL_TREACHEROUS_AURA))
+        {
+            if (bot->GetDistance(unit) < 15.0f) // Too close to cursed ally
+            {
+                return true; // Bot needs to move away from cursed ally
+            }
+        }
+    }
+
+    return false;
+}

@@ -1,6 +1,7 @@
 #include "Playerbots.h"
 #include "ArcatrazActions.h"
 #include "ArcatrazStrategy.h"
+#include "Value.h"
 
 bool AvoidVoidZoneAction::Execute(Event event)
 {
@@ -10,6 +11,8 @@ bool AvoidVoidZoneAction::Execute(Event event)
         return false;
     }
     
+    // RESEARCHED: Void Zone - boss_zereketh_the_unbound.cpp:55-57
+    // Void zones persist and deal damage - must evacuate immediately!
     GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
@@ -19,12 +22,20 @@ bool AvoidVoidZoneAction::Execute(Event event)
             continue;
         }
         
-        if (unit->GetName() == "Void Zone")
+        // Void Zone is typically a trigger/area effect (check by spell effect)
+        if (unit->GetEntry() == 21101 || unit->GetName() == "Void Zone") // Void Zone trigger
         {
             float distance = bot->GetExactDist2d(unit);
-            if (distance < 10.0f)
+            if (distance < 12.0f) // Increased safety radius
             {
-                return MoveAway(unit, 12.0f - distance);
+                // EMERGENCY: Move away from void zone
+                float angle = bot->GetAngle(unit) + M_PI;
+                float moveDistance = 15.0f - distance;
+                float x = bot->GetPositionX() + cos(angle) * moveDistance;
+                float y = bot->GetPositionY() + sin(angle) * moveDistance;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
             }
         }
     }
@@ -40,14 +51,26 @@ bool AvoidShadowNovaAction::Execute(Event event)
         return false;
     }
     
+    // RESEARCHED: Shadow Nova - boss_zereketh_the_unbound.cpp:59-65
+    // AoE centered on boss - evacuate immediately when cast starts!
     if (boss->FindCurrentSpellBySpellId(SPELL_SHADOW_NOVA))
     {
-        float safeDistance = 20.0f;
+        float safeDistance = 25.0f; // Increased safety margin
         float currentDist = bot->GetExactDist2d(boss);
         
         if (currentDist < safeDistance)
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            // EMERGENCY: Move to safe range
+            float angle = bot->GetAngle(boss) + M_PI;
+            float moveDistance = safeDistance - currentDist + 5.0f;
+            float x = bot->GetPositionX() + cos(angle) * moveDistance;
+            float y = bot->GetPositionY() + sin(angle) * moveDistance;
+            float z = bot->GetPositionZ();
+            
+            // Stop casting and move
+            bot->InterruptNonMeleeSpells(true);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
     
@@ -56,6 +79,8 @@ bool AvoidShadowNovaAction::Execute(Event event)
 
 bool SeedOfCorruptionDispelAction::Execute(Event event)
 {
+    // RESEARCHED: Seed of Corruption - boss_zereketh_the_unbound.cpp:67-69
+    // Explodes on expiry or dispel - spread out if afflicted!
     if (bot->HasAura(SPELL_SEED_OF_CORRUPTION))
     {
         GuidVector members = AI_VALUE(GuidVector, "group members");
@@ -67,15 +92,22 @@ bool SeedOfCorruptionDispelAction::Execute(Event event)
             }
             
             Unit* unit = botAI->GetUnit(member);
-            if (!unit)
+            if (!unit || !unit->IsAlive())
             {
                 continue;
             }
             
             float distance = bot->GetExactDist2d(unit);
-            if (distance < 10.0f)
+            if (distance < 15.0f) // Seed explodes in AoE
             {
-                return MoveAway(unit, 12.0f - distance);
+                // EMERGENCY: Spread from allies
+                float angle = bot->GetAngle(unit) + M_PI;
+                float moveDistance = 20.0f - distance;
+                float x = bot->GetPositionX() + cos(angle) * moveDistance;
+                float y = bot->GetPositionY() + sin(angle) * moveDistance;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
             }
         }
     }
@@ -113,11 +145,31 @@ bool DalliahHealInterruptAction::Execute(Event event)
         return false;
     }
     
+    // RESEARCHED: Heal cast after Whirlwind - boss_dalliah_the_doomsayer.cpp:104-108
+    // Boss heals herself 7 seconds after whirlwind - MUST interrupt!
     if (boss->FindCurrentSpellBySpellId(SPELL_HEAL))
     {
-        // Interrupt the boss's heal
-        bot->InterruptSpell(CURRENT_CHANNELED_SPELL);
-        return true;
+        // Try melee interrupt if in range
+        if (bot->IsWithinMeleeRange(boss))
+        {
+            botAI->InterruptSpell();
+            return true;
+        }
+        
+        // Try ranged interrupts - SAFE PATTERN
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+        if (spellIdsValue)
+        {
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+            {
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, boss, false))
+                {
+                    return botAI->CastSpell(spellId, boss);
+                }
+            }
+        }
     }
     
     return false;
@@ -225,9 +277,52 @@ bool SkyrissFearAction::Execute(Event event)
         return false;
     }
     
+    // RESEARCHED: Fear - boss_harbinger_skyriss.cpp:86-92
+    // Boss casts Fear on random non-tank target every 25 seconds
+    // If feared, try to break it or spread to prevent chain fears
     if (bot->HasAura(SPELL_FEAR))
     {
-        return false;
+        // Try to use fear break abilities (PvP trinket, etc)
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "escape");
+        if (spellIdsValue)
+        {
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+            {
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
+            }
+        }
+    }
+    // Detect fear cast and spread to minimize chain fears
+    else if (boss->FindCurrentSpellBySpellId(SPELL_FEAR))
+    {
+        // Spread from other players to avoid chain fear
+        GuidVector members = AI_VALUE(GuidVector, "group members");
+        for (auto& member : members)
+        {
+            if (member == bot->GetGUID())
+                continue;
+            
+            Unit* unit = botAI->GetUnit(member);
+            if (!unit || !unit->IsAlive())
+                continue;
+            
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < 8.0f) // Fear can chain to nearby targets
+            {
+                // Move away from allies to prevent chain fear
+                float angle = bot->GetAngle(unit) + M_PI;
+                float x = bot->GetPositionX() + cos(angle) * 10.0f;
+                float y = bot->GetPositionY() + sin(angle) * 10.0f;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
+            }
+        }
     }
     
     return false;
@@ -241,9 +336,42 @@ bool SkyrissDominationAction::Execute(Event event)
         return false;
     }
     
+    // RESEARCHED: Domination - boss_harbinger_skyriss.cpp:94-99
+    // Boss casts Domination (mind control) on random target every 30 seconds
+    // Need to handle controlled ally as hostile temporarily
     if (bot->HasAura(SPELL_DOMINATION))
     {
+        // Bot is mind controlled - can't do anything
+        // Just wait for it to expire or be dispelled
         return false;
+    }
+    
+    // Check if any ally is dominated and keep distance
+    GuidVector members = AI_VALUE(GuidVector, "group members");
+    for (auto& member : members)
+    {
+        if (member == bot->GetGUID())
+            continue;
+        
+        Unit* unit = botAI->GetUnit(member);
+        if (!unit || !unit->IsAlive())
+            continue;
+        
+        // Check if this ally is mind controlled
+        if (unit->HasAura(SPELL_DOMINATION))
+        {
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < 15.0f) // Stay away from dominated allies
+            {
+                // Move away from mind controlled ally
+                float angle = bot->GetAngle(unit) + M_PI;
+                float x = bot->GetPositionX() + cos(angle) * 20.0f;
+                float y = bot->GetPositionY() + sin(angle) * 20.0f;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
+            }
+        }
     }
     
     return false;

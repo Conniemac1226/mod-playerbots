@@ -15,10 +15,10 @@ void EscapeFromDurnholdeStrategy::InitTriggers(std::vector<TriggerNode*> &trigge
         "thrall low health", 
         NextAction::array(0, new NextAction("heal thrall", ACTION_CRITICAL_HEAL + 2), NULL)));
     
-    // Lieutenant Drake whirlwind avoidance
+    // Lieutenant Drake whirlwind avoidance (high priority - melee damage)
     triggers.push_back(new TriggerNode(
         "lieutenant drake whirlwind",
-        NextAction::array(0, new NextAction("efd avoid whirlwind", ACTION_MOVE + 3), NULL)));
+        NextAction::array(0, new NextAction("efd avoid whirlwind", ACTION_EMERGENCY), NULL)));
     
     // Return to position after whirlwind ends
     triggers.push_back(new TriggerNode(
@@ -30,10 +30,10 @@ void EscapeFromDurnholdeStrategy::InitTriggers(std::vector<TriggerNode*> &trigge
         "captain skarloc hammer of justice",
         NextAction::array(0, new NextAction("dispel hammer of justice", ACTION_DISPEL + 1), NULL)));
     
-    // Epoch Hunter positioning and magic disruption
+    // Epoch Hunter positioning and magic disruption (high priority - frontal cone damage)
     triggers.push_back(new TriggerNode(
         "epoch hunter sand breath",
-        NextAction::array(0, new NextAction("epoch hunter position", ACTION_MOVE + 2), NULL)));
+        NextAction::array(0, new NextAction("epoch hunter position", ACTION_EMERGENCY - 1), NULL)));
     
     triggers.push_back(new TriggerNode(
         "epoch hunter magic disruption aura",

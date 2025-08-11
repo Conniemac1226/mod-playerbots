@@ -41,4 +41,8 @@ void SlavePensStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "uppercut positioning",
         NextAction::array(0, new NextAction("tank position uppercut", ACTION_MOVE + 1), nullptr)));
+    
+    triggers.push_back(new TriggerNode(
+        "quagmirran cleave positioning",
+        NextAction::array(0, new NextAction("avoid quagmirran cleave", ACTION_MOVE + 1), nullptr)));
 }

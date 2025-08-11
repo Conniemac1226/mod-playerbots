@@ -119,7 +119,13 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
             float distance = bot->GetDistance(ally);
             if (distance < 10.0f)
             {
-                return FleePosition(ally->GetPosition(), 15.0f, 500U);
+                // EMERGENCY: Move away from opposite polarity
+                float angle = bot->GetAngle(ally) + M_PI;
+                float x = bot->GetPositionX() + cos(angle) * 15.0f;
+                float y = bot->GetPositionY() + sin(angle) * 15.0f;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
             }
         }
     }
@@ -128,7 +134,7 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
     {
         return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
                      safePos.m_positionZ, false, false, false, true,
-                     MovementPriority::MOVEMENT_COMBAT);
+                     MovementPriority::MOVEMENT_FORCED);
     }
 
     return false;
@@ -210,7 +216,13 @@ bool CapacitusPositionAction::Execute(Event event)
         float distance = bot->GetDistance(ally);
         if (distance < 8.0f && !botAI->IsTank(bot))
         {
-            return FleePosition(ally->GetPosition(), 10.0f, 500U);
+            // Spread from allies for charges
+            float angle = bot->GetAngle(ally) + M_PI;
+            float x = bot->GetPositionX() + cos(angle) * 10.0f;
+            float y = bot->GetPositionY() + sin(angle) * 10.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -252,7 +264,13 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
                 g_sepethrea_lastFlamesTime[botGuid] = currentTime;
                 
                 // Kite the flames away from raid
-                return FleePosition(unit->GetPosition(), 20.0f, 1000U);
+                // EMERGENCY: Kite the flames away from raid
+                float angle = bot->GetAngle(unit) + M_PI;
+                float x = bot->GetPositionX() + cos(angle) * 20.0f;
+                float y = bot->GetPositionY() + sin(angle) * 20.0f;
+                float z = bot->GetPositionZ();
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                            MovementPriority::MOVEMENT_FORCED);
             }
         }
     }
@@ -299,7 +317,7 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
             
             return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
                          safePos.m_positionZ, false, false, false, true,
-                         MovementPriority::MOVEMENT_COMBAT);
+                         MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -336,7 +354,13 @@ bool SepethreaInfernoAction::Execute(Event event)
                 float distance = bot->GetDistance(unit);
                 if (distance < 15.0f)
                 {
-                    return FleePosition(unit->GetPosition(), 20.0f, 500U);
+                    // EMERGENCY: Move away from Inferno AoE
+                    float angle = bot->GetAngle(unit) + M_PI;
+                    float x = bot->GetPositionX() + cos(angle) * 20.0f;
+                    float y = bot->GetPositionY() + sin(angle) * 20.0f;
+                    float z = bot->GetPositionZ();
+                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                                MovementPriority::MOVEMENT_FORCED);
                 }
             }
         }
@@ -496,7 +520,13 @@ bool PathaleonArcaneTorrentAction::Execute(Event event)
         float distance = bot->GetDistance(boss);
         if (distance < 20.0f && !botAI->IsMelee(bot))
         {
-            return FleePosition(boss->GetPosition(), 25.0f, 500U);
+            // EMERGENCY: Move out of Arcane Torrent range
+            float angle = bot->GetAngle(boss) + M_PI;
+            float x = bot->GetPositionX() + cos(angle) * 25.0f;
+            float y = bot->GetPositionY() + sin(angle) * 25.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -526,7 +556,13 @@ bool PathaleonEnrageAction::Execute(Event event)
         if (boss->GetHealthPct() < 5.0f)
         {
             // Get ready to flee when he dies
-            return FleePosition(boss->GetPosition(), 30.0f, 1000U);
+            // EMERGENCY: Get ready to flee when he dies (suicide explosion)
+            float angle = bot->GetAngle(boss) + M_PI;
+            float x = bot->GetPositionX() + cos(angle) * 30.0f;
+            float y = bot->GetPositionY() + sin(angle) * 30.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
         
         // Healers focus on tank during enrage
@@ -580,7 +616,13 @@ bool PathaleonArcaneExplosionAction::Execute(Event event)
         float distance = bot->GetDistance(boss);
         if (distance < 10.0f && !botAI->IsMelee(bot))
         {
-            return FleePosition(boss->GetPosition(), 15.0f, 500U);
+            // EMERGENCY: Move out of Arcane Explosion range
+            float angle = bot->GetAngle(boss) + M_PI;
+            float x = bot->GetPositionX() + cos(angle) * 15.0f;
+            float y = bot->GetPositionY() + sin(angle) * 15.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 

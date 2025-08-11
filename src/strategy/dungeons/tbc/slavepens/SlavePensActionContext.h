@@ -18,6 +18,7 @@ public:
         creators["avoid acid spray"] = &SlavePensActionContext::avoid_acid_spray;
         creators["interrupt poison bolt volley"] = &SlavePensActionContext::interrupt_poison_bolt_volley;
         creators["tank position uppercut"] = &SlavePensActionContext::tank_position_uppercut;
+        creators["avoid quagmirran cleave"] = &SlavePensActionContext::avoid_quagmirran_cleave;
     }
 
 private:
@@ -30,6 +31,7 @@ private:
     static Action* avoid_acid_spray(PlayerbotAI* ai) { return new QuagmirranAcidSprayAction(ai); }
     static Action* interrupt_poison_bolt_volley(PlayerbotAI* ai) { return new QuagmirranPoisonBoltVolleyAction(ai); }
     static Action* tank_position_uppercut(PlayerbotAI* ai) { return new QuagmirranUppercutAction(ai); }
+    static Action* avoid_quagmirran_cleave(PlayerbotAI* ai) { return new QuagmirranCleavePositionAction(ai); }
 };
 
 #endif

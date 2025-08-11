@@ -114,6 +114,14 @@ public:
     bool isUseful() override;
 };
 
+class OmorTreacherySpreadAction : public MovementAction
+{
+public:
+    OmorTreacherySpreadAction(PlayerbotAI* ai) : MovementAction(ai, "omor treachery spread") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 // Vazruden & Nazan Actions
 class NazanLiquidFireAction : public MovementAction
 {
