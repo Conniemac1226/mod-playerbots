@@ -2,6 +2,7 @@
 #include "ShatteredHallsTriggers.h"
 #include "ShatteredHallsActions.h"
 
+// Constants are already defined in ShatteredHallsActions.h
 
 bool NethekurseShadowFissureTrigger::IsActive()
 {

@@ -5,21 +5,7 @@
 #include "PlayerbotAIConfig.h"
 #include "GenericTriggers.h"
 #include "DungeonStrategyUtils.h"
-
-enum KarazhanIDs
-{
-    // Attumen the Huntsman
-    NPC_MIDNIGHT                = 16151,
-    NPC_ATTUMEN_UNMOUNTED      = 15550,
-    NPC_ATTUMEN_MOUNTED        = 16152,
-    
-    SPELL_SHADOWCLEAVE         = 29832,
-    SPELL_INTANGIBLE_PRESENCE  = 29833,
-    SPELL_KNOCKDOWN            = 29711,
-    SPELL_CHARGE               = 29847,
-    SPELL_MOUNT                = 29770,
-    SPELL_SUMMON_ATTUMEN       = 29714
-};
+#include "KarazhanActions.h"
 
 // Attumen the Huntsman triggers
 class AttumenEngagedTrigger : public Trigger
@@ -47,6 +33,232 @@ class AttumenShadowcleaveTrigger : public Trigger
 {
 public:
     AttumenShadowcleaveTrigger(PlayerbotAI* ai) : Trigger(ai, "attumen shadowcleave") {}
+    bool IsActive() override;
+};
+
+// Moroes triggers
+class MoroesEngagedTrigger : public Trigger
+{
+public:
+    MoroesEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "moroes engaged") {}
+    bool IsActive() override;
+};
+
+class MoroesAddsTrigger : public Trigger
+{
+public:
+    MoroesAddsTrigger(PlayerbotAI* ai) : Trigger(ai, "moroes adds") {}
+    bool IsActive() override;
+};
+
+class MoroesGarroteTrigger : public Trigger
+{
+public:
+    MoroesGarroteTrigger(PlayerbotAI* ai) : Trigger(ai, "moroes garrote") {}
+    bool IsActive() override;
+};
+
+// Maiden of Virtue triggers
+class MaidenEngagedTrigger : public Trigger
+{
+public:
+    MaidenEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "maiden engaged") {}
+    bool IsActive() override;
+};
+
+class MaidenRepentanceTrigger : public Trigger
+{
+public:
+    MaidenRepentanceTrigger(PlayerbotAI* ai) : Trigger(ai, "maiden repentance") {}
+    bool IsActive() override;
+};
+
+class MaidenHolyGroundTrigger : public Trigger
+{
+public:
+    MaidenHolyGroundTrigger(PlayerbotAI* ai) : Trigger(ai, "maiden holy ground") {}
+    bool IsActive() override;
+};
+
+// Opera Event triggers
+class OperaEngagedTrigger : public Trigger
+{
+public:
+    OperaEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "opera engaged") {}
+    bool IsActive() override;
+};
+
+class OperaOzEngagedTrigger : public Trigger
+{
+public:
+    OperaOzEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "opera oz engaged") {}
+    bool IsActive() override;
+};
+
+class OperaRomuloJulianneTrigger : public Trigger
+{
+public:
+    OperaRomuloJulianneTrigger(PlayerbotAI* ai) : Trigger(ai, "opera romulo julianne") {}
+    bool IsActive() override;
+};
+
+class OperaWolfTrigger : public Trigger
+{
+public:
+    OperaWolfTrigger(PlayerbotAI* ai) : Trigger(ai, "opera wolf") {}
+    bool IsActive() override;
+};
+
+// Curator triggers
+class CuratorEngagedTrigger : public Trigger
+{
+public:
+    CuratorEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "curator engaged") {}
+    bool IsActive() override;
+};
+
+class CuratorFlareTrigger : public Trigger
+{
+public:
+    CuratorFlareTrigger(PlayerbotAI* ai) : Trigger(ai, "curator flare") {}
+    bool IsActive() override;
+};
+
+class CuratorEvocationTrigger : public Trigger
+{
+public:
+    CuratorEvocationTrigger(PlayerbotAI* ai) : Trigger(ai, "curator evocation") {}
+    bool IsActive() override;
+};
+
+// Shade of Aran triggers
+class AranEngagedTrigger : public Trigger
+{
+public:
+    AranEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "aran engaged") {}
+    bool IsActive() override;
+};
+
+class AranFlameWreathTrigger : public Trigger
+{
+public:
+    AranFlameWreathTrigger(PlayerbotAI* ai) : Trigger(ai, "aran flame wreath") {}
+    bool IsActive() override;
+};
+
+class AranBlizzardTrigger : public Trigger
+{
+public:
+    AranBlizzardTrigger(PlayerbotAI* ai) : Trigger(ai, "aran blizzard") {}
+    bool IsActive() override;
+};
+
+class AranDragonsBreathTrigger : public Trigger
+{
+public:
+    AranDragonsBreathTrigger(PlayerbotAI* ai) : Trigger(ai, "aran dragons breath") {}
+    bool IsActive() override;
+};
+
+class AranArcanExplosionTrigger : public Trigger
+{
+public:
+    AranArcanExplosionTrigger(PlayerbotAI* ai) : Trigger(ai, "aran arcane explosion") {}
+    bool IsActive() override;
+};
+
+class AranMassPolymorphTrigger : public Trigger
+{
+public:
+    AranMassPolymorphTrigger(PlayerbotAI* ai) : Trigger(ai, "aran mass polymorph") {}
+    bool IsActive() override;
+};
+
+// Terestian Illhoof triggers
+class IllhoofEngagedTrigger : public Trigger
+{
+public:
+    IllhoofEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "illhoof engaged") {}
+    bool IsActive() override;
+};
+
+class IllhoofDemonChainsTrigger : public Trigger
+{
+public:
+    IllhoofDemonChainsTrigger(PlayerbotAI* ai) : Trigger(ai, "illhoof demon chains") {}
+    bool IsActive() override;
+};
+
+class IllhoofImpsTrigger : public Trigger
+{
+public:
+    IllhoofImpsTrigger(PlayerbotAI* ai) : Trigger(ai, "illhoof imps") {}
+    bool IsActive() override;
+};
+
+// Netherspite triggers
+class NetherspiteEngagedTrigger : public Trigger
+{
+public:
+    NetherspiteEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "netherspite engaged") {}
+    bool IsActive() override;
+};
+
+class NetherspiteBeamsTrigger : public Trigger
+{
+public:
+    NetherspiteBeamsTrigger(PlayerbotAI* ai) : Trigger(ai, "netherspite beams") {}
+    bool IsActive() override;
+};
+
+class NetherspiteVoidZoneTrigger : public Trigger
+{
+public:
+    NetherspiteVoidZoneTrigger(PlayerbotAI* ai) : Trigger(ai, "netherspite void zone") {}
+    bool IsActive() override;
+};
+
+// Prince Malchezaar triggers
+class MalchezaarEngagedTrigger : public Trigger
+{
+public:
+    MalchezaarEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "malchezaar engaged") {}
+    bool IsActive() override;
+};
+
+class MalchezaarInfernalTrigger : public Trigger
+{
+public:
+    MalchezaarInfernalTrigger(PlayerbotAI* ai) : Trigger(ai, "malchezaar infernal") {}
+    bool IsActive() override;
+};
+
+class MalchezaarEnfeebleTrigger : public Trigger
+{
+public:
+    MalchezaarEnfeebleTrigger(PlayerbotAI* ai) : Trigger(ai, "malchezaar enfeeble") {}
+    bool IsActive() override;
+};
+
+// Nightbane triggers
+class NightbaneEngagedTrigger : public Trigger
+{
+public:
+    NightbaneEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "nightbane engaged") {}
+    bool IsActive() override;
+};
+
+class NightbaneAirPhaseTrigger : public Trigger
+{
+public:
+    NightbaneAirPhaseTrigger(PlayerbotAI* ai) : Trigger(ai, "nightbane air phase") {}
+    bool IsActive() override;
+};
+
+class NightbaneCharredEarthTrigger : public Trigger
+{
+public:
+    NightbaneCharredEarthTrigger(PlayerbotAI* ai) : Trigger(ai, "nightbane charred earth") {}
     bool IsActive() override;
 };
 

@@ -17,11 +17,6 @@ const uint32 SPELL_SUMMON_FRAYER = 34557;
 
 const uint32 SPELL_ALLERGIC_REACTION = 34697;
 const uint32 SPELL_TELEPORT_SELF = 34673;
-const uint32 SPELL_DAMAGE_IMMUNE_ARCANE = 34304;
-const uint32 SPELL_DAMAGE_IMMUNE_FIRE = 34305;
-const uint32 SPELL_DAMAGE_IMMUNE_FROST = 34306;
-const uint32 SPELL_DAMAGE_IMMUNE_NATURE = 34308;
-const uint32 SPELL_DAMAGE_IMMUNE_SHADOW = 34309;
 
 const uint32 SPELL_SACRIFICE = 34661;
 const uint32 SPELL_HELLFIRE = 34659;
@@ -33,9 +28,6 @@ const uint32 SPELL_ARCANE_VOLLEY = 36705;
 const uint32 NPC_FRAYER = 19953;
 const uint32 NPC_BLOODWARDER_MENDER = 19633;
 const uint32 NPC_BLOODWARDER_RESERVIST = 20078;
-const uint32 NPC_THORN_LASHER = 19920;
-const uint32 NPC_THORN_FLAYER = 19921;
-const uint32 NPC_SAPLING = 19949;
 
 class SarannisResonanceDispelAction : public Action
 {
@@ -81,13 +73,6 @@ public:
     bool Execute(Event event) override;
 };
 
-class LajAddsPriorityAction : public AttackAction
-{
-public:
-    LajAddsPriorityAction(PlayerbotAI* botAI) : AttackAction(botAI, "laj adds priority") {}
-    bool Execute(Event event) override;
-};
-
 class ThorngrinSacrificeAction : public MovementAction
 {
 public:
@@ -113,13 +98,6 @@ class WarpSplinterArcaneVolleyAction : public MovementAction
 {
 public:
     WarpSplinterArcaneVolleyAction(PlayerbotAI* botAI) : MovementAction(botAI, "warp splinter arcane volley") {}
-    bool Execute(Event event) override;
-};
-
-class WarpSplinterSaplingsPriorityAction : public AttackAction
-{
-public:
-    WarpSplinterSaplingsPriorityAction(PlayerbotAI* botAI) : AttackAction(botAI, "warp splinter saplings priority") {}
     bool Execute(Event event) override;
 };
 

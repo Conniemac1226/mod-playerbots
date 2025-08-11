@@ -47,13 +47,6 @@ public:
     bool IsActive() override;
 };
 
-class LajAddsTrigger : public Trigger
-{
-public:
-    LajAddsTrigger(PlayerbotAI* botAI) : Trigger(botAI, "laj adds") {}
-    bool IsActive() override;
-};
-
 class ThorngrinSacrificeTrigger : public Trigger
 {
 public:
@@ -79,13 +72,6 @@ class WarpSplinterArcaneVolleyTrigger : public Trigger
 {
 public:
     WarpSplinterArcaneVolleyTrigger(PlayerbotAI* botAI) : Trigger(botAI, "warp splinter arcane volley") {}
-    bool IsActive() override;
-};
-
-class WarpSplinterSaplingsTrigger : public Trigger
-{
-public:
-    WarpSplinterSaplingsTrigger(PlayerbotAI* botAI) : Trigger(botAI, "warp splinter saplings") {}
     bool IsActive() override;
 };
 

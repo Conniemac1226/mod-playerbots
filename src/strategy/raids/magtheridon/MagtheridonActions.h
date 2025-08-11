@@ -2,7 +2,6 @@
 #define _PLAYERBOT_MAGTHERIDONACTIONS_H
 
 #include "Action.h"
-#include "AttackAction.h"
 #include "MovementActions.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
@@ -58,10 +57,10 @@ enum MagtheridonGameObjects
 };
 
 // Hellfire Channeler priority targeting
-class HellfireChannelerTargetAction : public AttackAction
+class HellfireChannelerTargetAction : public Action
 {
 public:
-    HellfireChannelerTargetAction(PlayerbotAI* ai) : AttackAction(ai, "hellfire channeler target") {}
+    HellfireChannelerTargetAction(PlayerbotAI* ai) : Action(ai, "hellfire channeler target") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
@@ -76,10 +75,10 @@ public:
 };
 
 // Blast Nova handling - click cube
-class ClickManticronCubeAction : public MovementAction
+class ClickManticronCubeAction : public Action
 {
 public:
-    ClickManticronCubeAction(PlayerbotAI* ai) : MovementAction(ai, "click manticron cube") {}
+    ClickManticronCubeAction(PlayerbotAI* ai) : Action(ai, "click manticron cube") {}
     bool Execute(Event event) override;
     bool isUseful() override;
     
@@ -162,10 +161,10 @@ private:
 };
 
 // Warder priority targeting
-class HellfireWarderTargetAction : public AttackAction
+class HellfireWarderTargetAction : public Action
 {
 public:
-    HellfireWarderTargetAction(PlayerbotAI* ai) : AttackAction(ai, "hellfire warder target") {}
+    HellfireWarderTargetAction(PlayerbotAI* ai) : Action(ai, "hellfire warder target") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

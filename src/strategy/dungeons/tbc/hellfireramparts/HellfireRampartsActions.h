@@ -65,6 +65,14 @@ public:
     bool isUseful() override;
 };
 
+class GargolmarSurgeAction : public MovementAction
+{
+public:
+    GargolmarSurgeAction(PlayerbotAI* ai) : MovementAction(ai, "gargolmar surge") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 // Omor the Unscarred Actions
 class AttackFiendishHoundAction : public AttackAction
 {
@@ -86,6 +94,22 @@ class OmorTreacherousAuraAction : public Action
 {
 public:
     OmorTreacherousAuraAction(PlayerbotAI* ai) : Action(ai, "omor treacherous aura") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class OmorDemonicShieldAction : public Action
+{
+public:
+    OmorDemonicShieldAction(PlayerbotAI* ai) : Action(ai, "omor demonic shield") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class OmorRangedPositionAction : public MovementAction
+{
+public:
+    OmorRangedPositionAction(PlayerbotAI* ai) : MovementAction(ai, "omor ranged position") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
@@ -119,6 +143,14 @@ class AttackVazrudenAction : public AttackAction
 {
 public:
     AttackVazrudenAction(PlayerbotAI* ai) : AttackAction(ai, "attack vazruden") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class NazanBellowingRoarAction : public Action
+{
+public:
+    NazanBellowingRoarAction(PlayerbotAI* ai) : Action(ai, "nazan bellowing roar") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
