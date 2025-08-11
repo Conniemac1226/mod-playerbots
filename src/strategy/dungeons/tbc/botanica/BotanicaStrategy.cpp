@@ -24,9 +24,6 @@ void BotanicaStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("laj teleport",
         NextAction::array(0, new NextAction("laj teleport position", ACTION_MOVE + 3), nullptr)));
     
-    triggers.push_back(new TriggerNode("laj adds",
-        NextAction::array(0, new NextAction("laj adds priority", ACTION_NORMAL + 5), nullptr)));
-    
     // Thorngrin the Tender
     triggers.push_back(new TriggerNode("thorngrin sacrifice",
         NextAction::array(0, new NextAction("thorngrin sacrifice", ACTION_DISPEL + 1), nullptr)));
@@ -40,9 +37,6 @@ void BotanicaStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     
     triggers.push_back(new TriggerNode("warp splinter arcane volley",
         NextAction::array(0, new NextAction("warp splinter arcane volley", ACTION_INTERRUPT), nullptr)));
-    
-    triggers.push_back(new TriggerNode("warp splinter saplings",
-        NextAction::array(0, new NextAction("warp splinter saplings priority", ACTION_NORMAL + 5), nullptr)));
 }
 
 void BotanicaStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)

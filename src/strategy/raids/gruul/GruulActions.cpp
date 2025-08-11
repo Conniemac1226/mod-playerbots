@@ -214,8 +214,8 @@ bool MaulgarFocusTargetAction::Execute(Event event)
     {
         if (Unit* target = bot->FindNearestCreature(npcId, 150.0f, true))
         {
-            if (Attack(target))
-                return true;
+            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
+            return true;
         }
     }
     
@@ -358,8 +358,8 @@ bool OlmPetAction::Execute(Event event)
     // Focus Wild Fel Stalker pets
     if (Unit* pet = bot->FindNearestCreature(NPC_WILD_FEL_STALKER, 100.0f, true))
     {
-        if (Attack(pet))
-            return true;
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(pet);
+        return true;
     }
     
     return false;

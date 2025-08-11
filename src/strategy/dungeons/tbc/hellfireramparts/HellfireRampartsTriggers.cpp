@@ -38,6 +38,22 @@ bool GargolmarRetaliationTrigger::IsActive()
     return boss->HasAura(SPELL_RETALIATION);
 }
 
+// Gargolmar Surge casting
+bool GargolmarSurgeTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_WATCHKEEPER_GARGOLMAR, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Surge cast every 11s - boss_watchkeeper_gargolmar.cpp:88-95
+    // Check if we're far enough to be potential target
+    return bot->GetDistance(boss) > 20.0f;
+}
+
 // Omor - Fiendish Hounds summoned
 bool FiendishHoundActiveTrigger::IsActive()
 {
@@ -78,6 +94,37 @@ bool OmorTreacherousAuraTrigger::IsActive()
     return bot->HasAura(SPELL_TREACHEROUS_AURA);
 }
 
+// Omor Demonic Shield at 21% health
+bool OmorDemonicShieldTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Demonic Shield - boss_omor_the_unscarred.cpp:56-62
+    return boss->HasAura(SPELL_DEMONIC_SHIELD);
+}
+
+// Omor is engaged - positioning check for non-tanks
+bool OmorEngagedTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Omor doesn't move - boss_omor_the_unscarred.cpp:44
+    // Non-tank melees should stay at range
+    return !botAI->IsRanged(bot) && !botAI->IsTank(bot) && bot->GetDistance(boss) < 8.0f;
+}
+
 // Liquid Fire patches nearby
 bool LiquidFireNearbyTrigger::IsActive()
 {
@@ -85,9 +132,21 @@ bool LiquidFireNearbyTrigger::IsActive()
     if (!bot)
         return false;
 
-    // RESEARCHED: Liquid Fire summon - boss_vazruden_the_herald.cpp:37
-    Unit* fire = bot->FindNearestCreature(NPC_LIQUID_FIRE, 10.0f);
-    return fire && fire->IsAlive();
+    // RESEARCHED: Liquid Fire is ground effect, check for fire visuals
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& guid : npcs)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (!unit)
+            continue;
+            
+        // Check for fire visual NPCs
+        if (unit->GetEntry() == 17084 || unit->GetEntry() == 18240)
+        {
+            if (bot->GetDistance(unit) < 8.0f)
+                return true;
+        }
+    }
 
     return false;
 }
@@ -147,4 +206,19 @@ bool VazrudenAloneTrigger::IsActive()
 
     // Vazruden alone after Nazan dies
     return (!nazan || !nazan->IsAlive()) && vazruden && vazruden->IsAlive();
+}
+
+// Nazan Bellowing Roar (Heroic only)
+bool NazanBellowingRoarTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Only in heroic
+    if (bot->GetMap()->GetDifficulty() != DUNGEON_DIFFICULTY_HEROIC)
+        return false;
+
+    // RESEARCHED: Bellowing Roar fear - boss_vazruden_the_herald.cpp:218-225  
+    return bot->HasAura(SPELL_BELLOWING_ROAR);
 }

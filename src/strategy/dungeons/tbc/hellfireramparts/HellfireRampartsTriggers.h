@@ -21,6 +21,13 @@ public:
     bool IsActive() override;
 };
 
+class GargolmarSurgeTrigger : public Trigger
+{
+public:
+    GargolmarSurgeTrigger(PlayerbotAI* ai) : Trigger(ai, "gargolmar surge") {}
+    bool IsActive() override;
+};
+
 // Omor the Unscarred Triggers
 class FiendishHoundActiveTrigger : public Trigger
 {
@@ -40,6 +47,20 @@ class OmorTreacherousAuraTrigger : public Trigger
 {
 public:
     OmorTreacherousAuraTrigger(PlayerbotAI* ai) : Trigger(ai, "omor treacherous aura") {}
+    bool IsActive() override;
+};
+
+class OmorDemonicShieldTrigger : public Trigger
+{
+public:
+    OmorDemonicShieldTrigger(PlayerbotAI* ai) : Trigger(ai, "omor demonic shield") {}
+    bool IsActive() override;
+};
+
+class OmorEngagedTrigger : public Trigger
+{
+public:
+    OmorEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "omor engaged") {}
     bool IsActive() override;
 };
 
@@ -69,6 +90,13 @@ class VazrudenAloneTrigger : public Trigger
 {
 public:
     VazrudenAloneTrigger(PlayerbotAI* ai) : Trigger(ai, "vazruden alone") {}
+    bool IsActive() override;
+};
+
+class NazanBellowingRoarTrigger : public Trigger
+{
+public:
+    NazanBellowingRoarTrigger(PlayerbotAI* ai) : Trigger(ai, "nazan bellowing roar") {}
     bool IsActive() override;
 };
 

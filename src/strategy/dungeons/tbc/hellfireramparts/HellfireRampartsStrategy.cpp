@@ -12,7 +12,19 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("gargolmar retaliation",
              NextAction::array(0, new NextAction("gargolmar retaliation", ACTION_MOVE + 2), nullptr)));
     
+    // Surge targets farthest player - move closer if too far
+    triggers.push_back(new TriggerNode("gargolmar surge",
+             NextAction::array(0, new NextAction("gargolmar surge", ACTION_MOVE + 1), nullptr)));
+    
     // Boss: Omor the Unscarred
+    // Non-tank positioning for stationary caster boss
+    triggers.push_back(new TriggerNode("omor engaged",
+             NextAction::array(0, new NextAction("omor ranged position", ACTION_MOVE + 1), nullptr)));
+    
+    // Demonic Shield at 21% - stop damage and focus adds
+    triggers.push_back(new TriggerNode("omor demonic shield",
+             NextAction::array(0, new NextAction("omor demonic shield", ACTION_EMERGENCY), nullptr)));
+    
     // Fiendish Hounds - priority adds
     triggers.push_back(new TriggerNode("fiendish hound active",
              NextAction::array(0, new NextAction("attack fiendish hound", ACTION_EMERGENCY + 1), nullptr)));
@@ -33,6 +45,10 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // Avoid Cone of Fire
     triggers.push_back(new TriggerNode("nazan cone of fire",
              NextAction::array(0, new NextAction("avoid cone of fire", ACTION_MOVE + 4), nullptr)));
+    
+    // Bellowing Roar fear (Heroic)
+    triggers.push_back(new TriggerNode("nazan bellowing roar",
+             NextAction::array(0, new NextAction("nazan bellowing roar", ACTION_DISPEL + 2), nullptr)));
     
     // Attack Nazan first when landed
     triggers.push_back(new TriggerNode("nazan landed",

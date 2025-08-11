@@ -62,13 +62,8 @@ bool GargolmarRetaliationAction::Execute(Event event)
             float distance = bot->GetDistance(boss);
             if (distance < 10.0f)
             {
-                // Move to ranged position
-                // Move to ranged position
-                float angle = bot->GetAngle(boss) + M_PI;
-                float x = bot->GetPositionX() + cos(angle) * 20.0f;
-                float y = bot->GetPositionY() + sin(angle) * 20.0f;
-                float z = bot->GetPositionZ();
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                // Move to ranged position using MoveAway pattern from WOTLK
+                return MoveAway(boss, 15.0f - distance);
             }
         }
     }
@@ -88,6 +83,50 @@ bool GargolmarRetaliationAction::isUseful()
 
     // RESEARCHED: Retaliation at 20% health - boss_watchkeeper_gargolmar.cpp:70
     return boss->HasAura(SPELL_RETALIATION) && bot->GetDistance(boss) < 10.0f;
+}
+
+// Handle Gargolmar's Surge (targets farthest player)
+bool GargolmarSurgeAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "watchkeeper gargolmar");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Surge targets min distance (farthest) - boss_watchkeeper_gargolmar.cpp:91
+    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_SURGE))
+    {
+        // If we're ranged and far away, we might be the target - move closer
+        float distance = bot->GetDistance(boss);
+        if (distance > 20.0f)
+        {
+            // Move closer to avoid being surge target
+            float angle = bot->GetAngle(boss);
+            float x = bot->GetPositionX() + cos(angle) * 5.0f;
+            float y = bot->GetPositionY() + sin(angle) * 5.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        }
+    }
+
+    return false;
+}
+
+bool GargolmarSurgeAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "watchkeeper gargolmar");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Only useful for ranged who are too far
+    return bot->GetDistance(boss) > 20.0f;
 }
 
 // Omor the Unscarred - Attack Fiendish Hounds
@@ -196,6 +235,89 @@ bool OmorTreacherousAuraAction::isUseful()
     return bot->HasAura(SPELL_TREACHEROUS_AURA);
 }
 
+// Handle Omor's Demonic Shield at 21% health
+bool OmorDemonicShieldAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Demonic Shield at 21% - boss_omor_the_unscarred.cpp:56-62
+    if (boss->HasAura(SPELL_DEMONIC_SHIELD))
+    {
+        // Stop attacking Omor during shield, focus adds if any
+        Unit* hound = AI_VALUE2(Unit*, "find target", "fiendish hound");
+        if (hound && hound->IsAlive())
+        {
+            // Set new target using proper API
+            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(hound);
+            return true;
+        }
+        
+        // Otherwise just wait
+        return true;
+    }
+
+    return false;
+}
+
+bool OmorDemonicShieldAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    return boss->HasAura(SPELL_DEMONIC_SHIELD);
+}
+
+// Position for ranged against Omor (he doesn't move)
+bool OmorRangedPositionAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Omor has no movement - boss_omor_the_unscarred.cpp:44
+    // Melee should not try to tank him in melee range
+    if (!botAI->IsRanged(bot) && !botAI->IsTank(bot))
+    {
+        float distance = bot->GetDistance(boss);
+        if (distance < 8.0f)
+        {
+            // Non-tanks should stay at range
+            return MoveAway(boss, 10.0f - distance);
+        }
+    }
+
+    return false;
+}
+
+bool OmorRangedPositionAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Only melee non-tanks need to adjust
+    return !botAI->IsRanged(bot) && !botAI->IsTank(bot) && bot->GetDistance(boss) < 8.0f;
+}
+
 // Nazan & Vazruden - Avoid Liquid Fire
 bool NazanLiquidFireAction::Execute(Event event)
 {
@@ -203,16 +325,24 @@ bool NazanLiquidFireAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find Liquid Fire patches
-    Unit* fire = AI_VALUE2(Unit*, "find target", "liquid fire");
-    if (fire && bot->GetDistance(fire) < 8.0f)
+    // RESEARCHED: Liquid Fire is a ground effect, not an NPC - need to check for area effect
+    // Check for nearby fire patches using direct creature search
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& guid : npcs)
     {
-        // Move away from fire
-        float angle = bot->GetAngle(fire) + M_PI;
-        float x = bot->GetPositionX() + cos(angle) * 10.0f;
-        float y = bot->GetPositionY() + sin(angle) * 10.0f;
-        float z = bot->GetPositionZ();
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        Unit* unit = botAI->GetUnit(guid);
+        if (!unit)
+            continue;
+            
+        // Liquid Fire visual/trigger units
+        if (unit->GetEntry() == 17084 || unit->GetEntry() == 18240) // Common fire visual NPCs
+        {
+            float distance = bot->GetDistance(unit);
+            if (distance < 8.0f)
+            {
+                return MoveAway(unit, 10.0f - distance);
+            }
+        }
     }
 
     return false;
@@ -241,16 +371,22 @@ bool NazanConeOfFireAction::Execute(Event event)
     if (!nazan || !nazan->IsAlive() || !nazan->IsInCombat())
         return false;
 
-    // RESEARCHED: Cone of Fire from boss_vazruden_the_herald.cpp:43
-    if (nazan->HasUnitState(UNIT_STATE_CASTING) && nazan->FindCurrentSpellBySpellId(SPELL_CONE_OF_FIRE))
+    // RESEARCHED: Cone of Fire from boss_vazruden_the_herald.cpp:43 and :210
+    // Only happens when Nazan has landed (phase 2)
+    if (!nazan->IsLevitating() && nazan->HasUnitState(UNIT_STATE_CASTING) && 
+        nazan->FindCurrentSpellBySpellId(SPELL_CONE_OF_FIRE))
     {
-        // Move behind the dragon
-        float angle = nazan->GetOrientation() + M_PI;
-        float x = nazan->GetPositionX() + cos(angle) * 15.0f;
-        float y = nazan->GetPositionY() + sin(angle) * 15.0f;
-        float z = nazan->GetPositionZ();
+        // Check if we're in front arc
+        if (nazan->HasInArc(M_PI / 2, bot))
+        {
+            // Move behind the dragon
+            float angle = nazan->GetOrientation() + M_PI;
+            float x = nazan->GetPositionX() + cos(angle) * 10.0f;
+            float y = nazan->GetPositionY() + sin(angle) * 10.0f;
+            float z = nazan->GetPositionZ();
 
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        }
     }
 
     return false;
@@ -342,4 +478,58 @@ bool AttackVazrudenAction::isUseful()
 
     // Attack Vazruden only after Nazan is dead
     return (!nazan || !nazan->IsAlive()) && vazruden && vazruden->IsAlive();
+}
+
+// Handle Nazan's Bellowing Roar (Heroic only)
+bool NazanBellowingRoarAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // RESEARCHED: Bellowing Roar fear in heroic - boss_vazruden_the_herald.cpp:218-225
+    if (bot->HasAura(SPELL_BELLOWING_ROAR))
+    {
+        // Use fear ward or tremor totem if available
+        if (bot->getClass() == CLASS_PRIEST)
+        {
+            if (botAI->CanCastSpell(6346, bot, false)) // Fear Ward
+            {
+                return botAI->CastSpell(6346, bot);
+            }
+        }
+        else if (bot->getClass() == CLASS_SHAMAN)
+        {
+            if (botAI->CanCastSpell(8143, bot, false)) // Tremor Totem
+            {
+                return botAI->CastSpell(8143, bot);
+            }
+        }
+        
+        // Try to dispel fear
+        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel")->Get();
+        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        {
+            uint32 spellId = *it;
+            if (botAI->CanCastSpell(spellId, bot, false))
+            {
+                return botAI->CastSpell(spellId, bot);
+            }
+        }
+    }
+
+    return false;
+}
+
+bool NazanBellowingRoarAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Only in heroic
+    if (bot->GetMap()->GetDifficulty() != DUNGEON_DIFFICULTY_HEROIC)
+        return false;
+
+    return bot->HasAura(SPELL_BELLOWING_ROAR);
 }

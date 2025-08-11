@@ -32,7 +32,8 @@ bool HellfireChannelerTargetAction::Execute(Event event)
     
     if (bestChanneler && bestChanneler != currentTarget)
     {
-        return Attack(bestChanneler);
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(bestChanneler);
+        return true;
     }
     
     return false;
@@ -91,9 +92,8 @@ bool ClickManticronCubeAction::Execute(Event event)
     // Move to cube if not in range
     if (bot->GetDistance(cube) > INTERACTION_DISTANCE)
     {
-        return MoveTo(cube->GetMapId(), cube->GetPositionX(), cube->GetPositionY(), 
-                     cube->GetPositionZ(), false, false, false, true, 
-                     MovementPriority::MOVEMENT_COMBAT);
+        bot->GetMotionMaster()->MovePoint(0, cube->GetPositionX(), cube->GetPositionY(), cube->GetPositionZ());
+        return false; // Not in range yet
     }
     
     // Click the cube
@@ -101,6 +101,7 @@ bool ClickManticronCubeAction::Execute(Event event)
     packet << cube->GetGUID();
     bot->GetSession()->HandleGameObjectUseOpcode(packet);
     
+    // Channel duration handled by game mechanics
     return true;
 }
 
@@ -425,7 +426,7 @@ Position AvoidBlazeAction::GetAwayFromBlaze()
                 
             if (unit->HasAura(SPELL_BLAZE_SUMMON) || unit->GetEntry() == 17653)
             {
-                float dist = testPos.GetExactDist2d(unit->GetPosition());
+                float dist = testPos.GetExactDist(unit->GetPosition());
                 if (dist < minBlazeDist)
                     minBlazeDist = dist;
             }
@@ -512,7 +513,8 @@ bool HellfireWarderTargetAction::Execute(Event event)
             
         if (unit->GetEntry() == NPC_HELLFIRE_WARDER)
         {
-            return Attack(unit);
+            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(unit);
+            return true;
         }
     }
     
@@ -699,7 +701,7 @@ Position AvoidInfernalAction::GetSafeFromInfernal()
                 
             if (unit->GetEntry() == 17454)
             {
-                float dist = testPos.GetExactDist2d(unit->GetPosition());
+                float dist = testPos.GetExactDist(unit->GetPosition());
                 if (dist < minInfernalDist)
                     minInfernalDist = dist;
             }

@@ -28,12 +28,10 @@ private:
     static Action* freywinn_tranquility(PlayerbotAI* botAI) { return new FreywinnTranquilityAction(botAI); }
     static Action* laj_allergic_reaction(PlayerbotAI* botAI) { return new LajAllergicReactionAction(botAI); }
     static Action* laj_teleport_position(PlayerbotAI* botAI) { return new LajTeleportPositionAction(botAI); }
-    static Action* laj_adds_priority(PlayerbotAI* botAI) { return new LajAddsPriorityAction(botAI); }
     static Action* thorngrin_sacrifice(PlayerbotAI* botAI) { return new ThorngrinSacrificeAction(botAI); }
     static Action* thorngrin_hellfire(PlayerbotAI* botAI) { return new ThorngrinHellfireAction(botAI); }
     static Action* warp_splinter_war_stomp(PlayerbotAI* botAI) { return new WarpSplinterWarStompAction(botAI); }
     static Action* warp_splinter_arcane_volley(PlayerbotAI* botAI) { return new WarpSplinterArcaneVolleyAction(botAI); }
-    static Action* warp_splinter_saplings_priority(PlayerbotAI* botAI) { return new WarpSplinterSaplingsPriorityAction(botAI); }
 };
 
 #endif
