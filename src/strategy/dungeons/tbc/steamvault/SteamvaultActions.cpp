@@ -4,10 +4,9 @@
 #include "Unit.h"
 #include "AttackersValue.h"
 #include "Playerbots.h"
+#include "Value.h"
 
-// Per-bot state maps for Lightning Cloud avoidance
-std::map<ObjectGuid, uint32> g_thespia_lastMoveTime;
-std::map<ObjectGuid, bool> g_thespia_inSafePosition;
+// Use NPC and spell IDs from SteamvaultTriggers.h
 
 // Hydromancer Thespia Actions
 bool AvoidLightningCloudAction::Execute(Event event)
@@ -16,35 +15,29 @@ bool AvoidLightningCloudAction::Execute(Event event)
     if (!bot)
         return false;
 
-    ObjectGuid botGuid = bot->GetGUID();
-    uint32 currentTime = getMSTime();
-
     Unit* boss = AI_VALUE2(Unit*, "find target", "hydromancer thespia");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Reset state if needed (new lightning cloud cast)
-    if (g_thespia_inSafePosition[botGuid])
+    // RESEARCHED: Lightning Cloud - boss_hydromancer_thespia.cpp:64-66
+    // Boss casts Lightning Cloud on random target location
+    // Must evacuate the area immediately!
+    if (boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_CLOUD))
     {
-        if ((currentTime - g_thespia_lastMoveTime[botGuid]) > 8000)
+        // Check if we're the target or near target area
+        float distance = bot->GetDistance(boss);
+        if (distance < 25.0f) // Lightning Cloud has large AoE
         {
-            g_thespia_inSafePosition[botGuid] = false;
-        }
-        else
-        {
-            return false; // Already moved
-        }
-    }
-
-    // Move away from boss during Lightning Cloud
-    float distance = bot->GetDistance(boss);
-    if (distance < 20.0f)
-    {
-        if (FleePosition(boss->GetPosition(), 25.0f, 500U))
-        {
-            g_thespia_lastMoveTime[botGuid] = currentTime;
-            g_thespia_inSafePosition[botGuid] = true;
-            return true;
+            // EMERGENCY: Move to safe distance
+            float angle = bot->GetAngle(boss) + M_PI;
+            float x = bot->GetPositionX() + cos(angle) * 30.0f;
+            float y = bot->GetPositionY() + sin(angle) * 30.0f;
+            float z = bot->GetPositionZ();
+            
+            // Stop casting and move immediately
+            bot->InterruptNonMeleeSpells(true);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, 
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -53,7 +46,15 @@ bool AvoidLightningCloudAction::Execute(Event event)
 
 bool AvoidLightningCloudAction::isUseful()
 {
-    return AI_VALUE(bool, "thespia lightning cloud");
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
+    Unit* boss = bot->FindNearestCreature(NPC_HYDROMANCER_THESPIA, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+        
+    return boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_CLOUD) && bot->GetDistance(boss) < 25.0f;
 }
 
 bool DispelLungBurstAction::Execute(Event event)
@@ -65,13 +66,17 @@ bool DispelLungBurstAction::Execute(Event event)
     // Try to dispel Lung Burst from self or allies
     if (bot->HasAura(SPELL_LUNG_BURST))
     {
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, bot, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, bot);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
             }
         }
     }
@@ -134,13 +139,17 @@ bool DispelShrinkRayAction::Execute(Event event)
     // Try to dispel shrink ray
     if (bot->HasAura(SPELL_SUPER_SHRINK_RAY))
     {
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, bot, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, bot);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
             }
         }
     }
@@ -162,15 +171,28 @@ bool AvoidSawBladeAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Move perpendicular to boss during Saw Blade cast
-    float angle = bot->GetAngle(boss);
-    float newAngle = angle + M_PI / 2; // Move 90 degrees to the side
-    
-    float moveX = bot->GetPositionX() + cos(newAngle) * 10.0f;
-    float moveY = bot->GetPositionY() + sin(newAngle) * 10.0f;
-    float moveZ = bot->GetPositionZ();
+    // RESEARCHED: Saw Blade - boss_mekgineer_steamrigger.cpp:74-81
+    // Thrown at random target or victim if no valid target
+    // Move immediately when cast starts!
+    if (boss->FindCurrentSpellBySpellId(SPELL_SAW_BLADE))
+    {
+        // Check if we're the target
+        if (boss->GetTarget() == bot->GetGUID() || boss->GetVictim() == bot)
+        {
+            // EMERGENCY: Move perpendicular to avoid the blade path
+            float angle = boss->GetAngle(bot);
+            float newAngle = angle + (frand(0, 1) > 0.5f ? M_PI / 2 : -M_PI / 2); // Random side
+            
+            float moveX = bot->GetPositionX() + cos(newAngle) * 15.0f;
+            float moveY = bot->GetPositionY() + sin(newAngle) * 15.0f;
+            float moveZ = bot->GetPositionZ();
 
-    return MoveTo(bot->GetMapId(), moveX, moveY, moveZ, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), moveX, moveY, moveZ, false, false, false, true, 
+                        MovementPriority::MOVEMENT_FORCED);
+        }
+    }
+    
+    return false;
 }
 
 bool AvoidSawBladeAction::isUseful()
@@ -188,13 +210,17 @@ bool RemoveElectrifiedNetAction::Execute(Event event)
     if (bot->HasAura(SPELL_ELECTRIFIED_NET))
     {
         // Try PvP trinket or escape abilities
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "escape")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "escape");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, bot, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, bot);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
             }
         }
     }
@@ -258,14 +284,25 @@ bool StopCastingSpellReflectionAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Stop casting if boss has spell reflection
-    if (boss->HasAura(SPELL_SPELL_REFLECTION))
+    // RESEARCHED: Spell Reflection - boss_warlord_kalithresh.cpp:79-82
+    // Boss casts spell reflection every 20-36 seconds
+    // CRITICAL: Stop ALL spellcasting immediately!
+    if (boss->HasAura(SPELL_SPELL_REFLECTION) || boss->FindCurrentSpellBySpellId(SPELL_SPELL_REFLECTION))
     {
+        // Interrupt any current cast
         if (bot->HasUnitState(UNIT_STATE_CASTING))
         {
-            bot->InterruptNonMeleeSpells(false);
-            return true;
+            bot->InterruptNonMeleeSpells(true);
         }
+        
+        // Clear target to prevent auto-cast
+        if (botAI->IsCaster(bot))
+        {
+            bot->AttackStop();
+            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(nullptr);
+        }
+        
+        return true;
     }
 
     return false;
@@ -309,13 +346,17 @@ bool HealImpaleTargetAction::Execute(Event event)
 
     if (impaleTarget)
     {
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "heal")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "heal");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, impaleTarget, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, impaleTarget);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, impaleTarget, false))
+                {
+                    return botAI->CastSpell(spellId, impaleTarget);
+                }
             }
         }
     }
@@ -390,13 +431,17 @@ bool InterruptDistillerChannelAction::Execute(Event event)
             if (unit->HasUnitState(UNIT_STATE_CASTING) && unit->FindCurrentSpellBySpellId(SPELL_WARLORDS_RAGE_DISTILLER))
             {
                 // Interrupt the channel
-                std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt")->Get();
-                for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+                Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+                if (spellIdsValue)
                 {
-                    uint32 spellId = *it;
-                    if (botAI->CanCastSpell(spellId, unit, false))
+                    std::list<uint32> spellIds = spellIdsValue->Get();
+                    for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
                     {
-                        return botAI->CastSpell(spellId, unit);
+                        uint32 spellId = *it;
+                        if (botAI->CanCastSpell(spellId, unit, false))
+                        {
+                            return botAI->CastSpell(spellId, unit);
+                        }
                     }
                 }
             }

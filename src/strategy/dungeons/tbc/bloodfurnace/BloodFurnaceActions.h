@@ -53,10 +53,10 @@ public:
     bool isUseful() override;
 };
 
-class MakerDominationAction : public Action
+class MakerDominationAction : public MovementAction
 {
 public:
-    MakerDominationAction(PlayerbotAI* ai) : Action(ai, "break domination") {}
+    MakerDominationAction(PlayerbotAI* ai) : MovementAction(ai, "break domination") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

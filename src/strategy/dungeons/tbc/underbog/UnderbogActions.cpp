@@ -1,5 +1,6 @@
 #include "UnderbogActions.h"
 #include "Playerbots.h"
+#include "Value.h"
 
 // Hungarfen - Avoid mushroom explosions at 20% health
 bool HungarfenMushroomAction::Execute(Event event)
@@ -56,17 +57,20 @@ bool HungarfenFoulSporesAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Foul Spores at 20% health - boss_hungarfen.cpp:59
-    if (boss->GetHealthPct() <= 20.0f && boss->HasAura(SPELL_FOUL_SPORES))
+    // Boss roots himself and channels for 11 seconds - evacuate immediately!
+    if (boss->GetHealthPct() <= 20.0f && 
+        (boss->FindCurrentSpellBySpellId(SPELL_FOUL_SPORES) || boss->HasAura(SPELL_FOUL_SPORES)))
     {
         float distance = bot->GetDistance(boss);
-        if (distance < 20.0f) // Foul Spores has large radius
+        if (distance < 25.0f) // Foul Spores has large radius - stay far!
         {
-            // Move to max range
+            // EMERGENCY: Move to max range
             float angle = bot->GetAngle(boss) + M_PI;
-            float x = bot->GetPositionX() + cos(angle) * 25.0f;
-            float y = bot->GetPositionY() + sin(angle) * 25.0f;
+            float x = bot->GetPositionX() + cos(angle) * 30.0f;
+            float y = bot->GetPositionY() + sin(angle) * 30.0f;
             float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, 
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -83,7 +87,9 @@ bool HungarfenFoulSporesAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->GetHealthPct() <= 20.0f && boss->HasAura(SPELL_FOUL_SPORES);
+    return boss->GetHealthPct() <= 20.0f && 
+           (boss->FindCurrentSpellBySpellId(SPELL_FOUL_SPORES) || boss->HasAura(SPELL_FOUL_SPORES)) && 
+           bot->GetDistance(boss) < 25.0f;
 }
 
 // Ghazan - Avoid Acid Breath frontal cone
@@ -98,17 +104,19 @@ bool GhazanAcidBreathAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Acid Breath frontal cone - boss_ghazan.cpp:69
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_ACID_BREATH))
+    // Use immediate detection for faster response
+    if (boss->FindCurrentSpellBySpellId(SPELL_ACID_BREATH))
     {
-        // Check if we're in front arc
+        // Check if we're in front arc (60 degree cone)
         if (boss->HasInArc(M_PI / 3, bot))
         {
-            // Move to side/behind
+            // EMERGENCY: Move to side/behind
             float angle = boss->GetOrientation() + (M_PI / 2);
             float x = boss->GetPositionX() + cos(angle) * 10.0f;
             float y = boss->GetPositionY() + sin(angle) * 10.0f;
             float z = boss->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, 
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -125,7 +133,7 @@ bool GhazanAcidBreathAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_ACID_BREATH) && 
+    return boss->FindCurrentSpellBySpellId(SPELL_ACID_BREATH) && 
            boss->HasInArc(M_PI / 3, bot);
 }
 
@@ -141,17 +149,20 @@ bool GhazanTailSweepAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Tail Sweep behind - boss_ghazan.cpp:77
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_TAIL_SWEEP))
+    // Tail Sweep hits BEHIND the boss - move if we're behind!
+    if (boss->FindCurrentSpellBySpellId(SPELL_TAIL_SWEEP))
     {
-        // Check if we're behind boss
-        if (!boss->HasInArc(M_PI, bot))
+        // Check if we're behind boss (180 degree arc behind)
+        float angle_diff = fabs(bot->GetRelativeAngle(boss));
+        if (angle_diff > M_PI * 2.0f / 3.0f) // Behind = more than 120 degrees from front
         {
-            // Move to side
-            float angle = boss->GetOrientation() + (M_PI / 2);
-            float x = boss->GetPositionX() + cos(angle) * 10.0f;
-            float y = boss->GetPositionY() + sin(angle) * 10.0f;
+            // EMERGENCY: Move to side/front
+            float angle = boss->GetOrientation() + (M_PI / 3); // Move to 60 degrees from front
+            float x = boss->GetPositionX() + cos(angle) * 8.0f;
+            float y = boss->GetPositionY() + sin(angle) * 8.0f;
             float z = boss->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, 
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -168,8 +179,10 @@ bool GhazanTailSweepAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Only useful if we're behind the boss
-    return !boss->HasInArc(M_PI, bot);
+    // Only useful if we're behind the boss where tail sweep hits
+    float angle_diff = fabs(bot->GetRelativeAngle(boss));
+    return boss->FindCurrentSpellBySpellId(SPELL_TAIL_SWEEP) && 
+           (angle_diff > M_PI * 2.0f / 3.0f); // Behind = more than 120 degrees from front
 }
 
 // Swamplord Musel'ek - Attack bear pet first
@@ -210,14 +223,20 @@ bool MuselekFreezingTrapAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Freezing trap throw - boss_swamplord_muselek.cpp:138
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_THROW_FREEZING_TRAP))
+    // Trap is thrown at player's current location - MOVE IMMEDIATELY!
+    if (boss->FindCurrentSpellBySpellId(SPELL_THROW_FREEZING_TRAP))
     {
-        // Move away from current position (trap lands at target location)
-        float angle = bot->GetAngle(boss) + (M_PI / 4);
-        float x = bot->GetPositionX() + cos(angle) * 10.0f;
-        float y = bot->GetPositionY() + sin(angle) * 10.0f;
-        float z = bot->GetPositionZ();
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        // Check if we're the target
+        if (boss->GetTarget() == bot->GetGUID() || boss->GetVictim() == bot)
+        {
+            // EMERGENCY: Move away from current position (trap lands here!)
+            float angle = frand(0, 2 * M_PI); // Random direction for better spread
+            float x = bot->GetPositionX() + cos(angle) * 12.0f;
+            float y = bot->GetPositionY() + sin(angle) * 12.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, 
+                        MovementPriority::MOVEMENT_FORCED);
+        }
     }
 
     return false;
@@ -246,14 +265,18 @@ bool MuselekHuntersMarkAction::Execute(Event event)
     // RESEARCHED: Hunter's Mark debuff - boss_swamplord_muselek.cpp:155
     if (bot->HasAura(SPELL_HUNTERS_MARK))
     {
-        // Try to dispel the mark
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        // Try to dispel the mark - SAFE PATTERN
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, bot, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, bot);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
             }
         }
     }
@@ -345,14 +368,18 @@ bool BlackStalkerChainLightningAction::Execute(Event event)
     // RESEARCHED: Chain Lightning cast - boss_the_black_stalker.cpp:72
     if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_CHAIN_LIGHTNING))
     {
-        // RESEARCHED: Pattern from HellfireRampartsActions.cpp:138-145
-        std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt")->Get();
-        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        // RESEARCHED: Pattern from HellfireRampartsActions.cpp:138-145 - SAFE PATTERN
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+        if (spellIdsValue)
         {
-            uint32 spellId = *it;
-            if (botAI->CanCastSpell(spellId, boss, false))
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
-                return botAI->CastSpell(spellId, boss);
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, boss, false))
+                {
+                    return botAI->CastSpell(spellId, boss);
+                }
             }
         }
     }

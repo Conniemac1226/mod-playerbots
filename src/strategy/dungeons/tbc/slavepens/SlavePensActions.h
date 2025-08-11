@@ -124,4 +124,12 @@ public:
     bool isUseful() override;
 };
 
+class QuagmirranCleavePositionAction : public MovementAction
+{
+public:
+    QuagmirranCleavePositionAction(PlayerbotAI* ai) : MovementAction(ai, "avoid quagmirran cleave") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 #endif

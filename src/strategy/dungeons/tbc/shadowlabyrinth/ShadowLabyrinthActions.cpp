@@ -10,18 +10,30 @@ bool AvoidCorrosiveAcidAction::Execute(Event event)
         return false;
     }
     
-    if (bot->HasAura(SPELL_CORROSIVE_ACID))
-    {
-        return false;
-    }
-    
+    // Corrosive Acid is a frontal cone on random target, spread out
     if (boss->FindCurrentSpellBySpellId(SPELL_CORROSIVE_ACID))
     {
-        Unit* target = boss->GetVictim();
-        if (target && target == bot)
+        // Check if other players are near us
+        Group* group = bot->GetGroup();
+        if (group)
         {
-            float safeDistance = 10.0f;
-            return MoveAway(boss, safeDistance);
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (member && member != bot && member->IsAlive())
+                {
+                    float dist = bot->GetExactDist2d(member);
+                    if (dist < 8.0f)
+                    {
+                        // Move away from other players to avoid acid spread
+                        float angle = bot->GetAngle(member) + M_PI;
+                        float destX = bot->GetPositionX() + cos(angle) * 10.0f;
+                        float destY = bot->GetPositionY() + sin(angle) * 10.0f;
+                        return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                    }
+                }
+            }
         }
     }
     
@@ -36,9 +48,30 @@ bool HellmawFearReactAction::Execute(Event event)
         return false;
     }
     
-    if (bot->HasAura(SPELL_FEAR))
+    // Check if boss is casting Fear (33547) and spread preemptively
+    if (boss->FindCurrentSpellBySpellId(SPELL_FEAR))
     {
-        return false;
+        // Spread out to minimize fear chains
+        Group* group = bot->GetGroup();
+        if (group)
+        {
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (member && member != bot && member->IsAlive())
+                {
+                    float dist = bot->GetExactDist2d(member);
+                    if (dist < 10.0f)
+                    {
+                        float angle = bot->GetAngle(member) + M_PI;
+                        float destX = bot->GetPositionX() + cos(angle) * 12.0f;
+                        float destY = bot->GetPositionY() + sin(angle) * 12.0f;
+                        return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                    }
+                }
+            }
+        }
     }
     
     return false;
@@ -52,9 +85,45 @@ bool InciteChaosReactAction::Execute(Event event)
         return false;
     }
     
-    if (bot->HasAura(SPELL_INCITE_CHAOS_B))
+    // During Incite Chaos, players attack each other - spread out!
+    if (boss->FindCurrentSpellBySpellId(SPELL_INCITE_CHAOS) || bot->HasAura(SPELL_INCITE_CHAOS_B))
     {
-        return false;
+        // Move away from all other players to minimize damage
+        float bestAngle = 0;
+        float maxMinDist = 0;
+        
+        for (float angle = 0; angle < 2 * M_PI; angle += M_PI / 8)
+        {
+            float testX = boss->GetPositionX() + cos(angle) * 20.0f;
+            float testY = boss->GetPositionY() + sin(angle) * 20.0f;
+            float minDist = 100.0f;
+            
+            Group* group = bot->GetGroup();
+            if (group)
+            {
+                for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                {
+                    Player* member = ref->GetSource();
+                    if (member && member != bot && member->IsAlive())
+                    {
+                        float dist = member->GetExactDist2d(testX, testY);
+                        if (dist < minDist)
+                            minDist = dist;
+                    }
+                }
+            }
+            
+            if (minDist > maxMinDist)
+            {
+                maxMinDist = minDist;
+                bestAngle = angle;
+            }
+        }
+        
+        float destX = boss->GetPositionX() + cos(bestAngle) * 20.0f;
+        float destY = boss->GetPositionY() + sin(bestAngle) * 20.0f;
+        return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     }
     
     return false;
@@ -68,14 +137,26 @@ bool AvoidWarStompAction::Execute(Event event)
         return false;
     }
     
-    if (boss->FindCurrentSpellBySpellId(SPELL_WAR_STOMP))
+    // War Stomp is instant but we can predict it based on timing
+    // It happens every 16-26 seconds, move out if melee and not tank
+    if (!botAI->IsTank(bot) && bot->GetExactDist2d(boss) < 10.0f)
     {
-        float safeDistance = 10.0f;
-        float currentDist = bot->GetExactDist2d(boss);
+        // Check if boss might cast War Stomp soon (simplified timing check)
+        static std::map<ObjectGuid, time_t> lastStompTime;
+        time_t currentTime = time(nullptr);
         
-        if (currentDist < safeDistance)
+        if (lastStompTime[boss->GetGUID()] == 0)
+            lastStompTime[boss->GetGUID()] = currentTime;
+        
+        if ((currentTime - lastStompTime[boss->GetGUID()]) > 15)
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            // Preemptively move out
+            float angle = boss->GetAngle(bot) + M_PI;
+            float destX = bot->GetPositionX() + cos(angle) * 12.0f;
+            float destY = bot->GetPositionY() + sin(angle) * 12.0f;
+            lastStompTime[boss->GetGUID()] = currentTime;
+            return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         }
     }
     
@@ -97,23 +178,35 @@ bool VoidTravelerPriorityAction::Execute(Event event)
     
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
+    // Void Travelers walk to Vorpil and sacrifice, healing him
+    // Must kill them before they reach him
     GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* closestTraveler = nullptr;
+    float closestDistToBoss = 100.0f;
+    
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
-        if (!unit)
+        if (!unit || !unit->IsAlive())
         {
             continue;
         }
         
         if (unit->GetEntry() == NPC_VOID_TRAVELER)
         {
-            if (currentTarget != unit)
+            float distToBoss = unit->GetExactDist2d(boss);
+            if (distToBoss < closestDistToBoss)
             {
-                return Attack(unit);
+                closestDistToBoss = distToBoss;
+                closestTraveler = unit;
             }
-            return false;
         }
+    }
+    
+    // Switch to closest traveler to boss
+    if (closestTraveler && currentTarget != closestTraveler)
+    {
+        return Attack(closestTraveler);
     }
     
     return false;
@@ -127,19 +220,35 @@ bool MoveFromRainOfFireAction::Execute(Event event)
         return false;
     }
     
-    if (boss->HasAura(SPELL_RAIN_OF_FIRE) || boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE))
+    // Rain of Fire is cast at center after teleport
+    if (boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE))
     {
         Position centerPos = {-253.548f, -263.646f, 17.0864f};
+        float safeRadius = 15.0f; // Rain of Fire radius plus safety margin
         float currentDist = bot->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY());
         
-        if (currentDist < 12.0f)
+        if (currentDist < safeRadius)
         {
-            float moveDistance = 14.0f - currentDist;
-            float angle = bot->GetAngle(&centerPos);
-            float destX = bot->GetPositionX() - cos(angle) * moveDistance;
-            float destY = bot->GetPositionY() - sin(angle) * moveDistance;
-            return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ());
+            // Move away from center immediately
+            float angle = atan2(bot->GetPositionY() - centerPos.GetPositionY(),
+                              bot->GetPositionX() - centerPos.GetPositionX());
+            float destX = centerPos.GetPositionX() + cos(angle) * (safeRadius + 3.0f);
+            float destY = centerPos.GetPositionY() + sin(angle) * (safeRadius + 3.0f);
+            return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         }
+    }
+    
+    // Also check if we're standing in Rain of Fire (ground effect)
+    if (bot->HasAura(33617)) // Rain of Fire damage aura
+    {
+        Position centerPos = {-253.548f, -263.646f, 17.0864f};
+        float angle = atan2(bot->GetPositionY() - centerPos.GetPositionY(),
+                          bot->GetPositionX() - centerPos.GetPositionX());
+        float destX = centerPos.GetPositionX() + cos(angle) * 18.0f;
+        float destY = centerPos.GetPositionY() + sin(angle) * 18.0f;
+        return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     }
     
     return false;
@@ -153,19 +262,23 @@ bool DrawShadowsReactAction::Execute(Event event)
         return false;
     }
     
-    if (boss->HasAura(SPELL_DRAW_SHADOWS) || boss->FindCurrentSpellBySpellId(SPELL_DRAW_SHADOWS))
+    // Draw Shadows teleports boss to center, then casts Rain of Fire
+    // Move away from center immediately when Draw Shadows is cast
+    if (boss->FindCurrentSpellBySpellId(SPELL_DRAW_SHADOWS))
     {
         Position centerPos = {-253.548f, -263.646f, 17.0864f};
-        float safeDistance = 30.0f;
+        float safeDistance = 15.0f; // Rain of Fire has ~12 yard radius
         float currentDist = bot->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY());
         
         if (currentDist < safeDistance)
         {
-            float moveDistance = safeDistance - currentDist + 5.0f;
-            float angle = bot->GetAngle(&centerPos);
-            float destX = bot->GetPositionX() - cos(angle) * moveDistance;
-            float destY = bot->GetPositionY() - sin(angle) * moveDistance;
-            return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ());
+            // Move directly away from center
+            float angle = atan2(bot->GetPositionY() - centerPos.GetPositionY(), 
+                              bot->GetPositionX() - centerPos.GetPositionX());
+            float destX = centerPos.GetPositionX() + cos(angle) * (safeDistance + 3.0f);
+            float destY = centerPos.GetPositionY() + sin(angle) * (safeDistance + 3.0f);
+            return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         }
     }
     
@@ -180,14 +293,25 @@ bool MurmurSonicBoomAction::Execute(Event event)
         return false;
     }
     
-    if (boss->HasAura(SPELL_SONIC_BOOM_CAST) || boss->FindCurrentSpellBySpellId(SPELL_SONIC_BOOM_CAST))
+    // CRITICAL: Sonic Boom does 80% of CURRENT health damage!
+    // Must be 34+ yards away to avoid it
+    if (boss->FindCurrentSpellBySpellId(SPELL_SONIC_BOOM_CAST))
     {
-        float safeDistance = 34.0f;
-        float currentDist = bot->GetExactDist2d(boss);
+        float safeDistance = 36.0f; // 34 yards + safety margin
+        float currentDist = bot->GetExactDist(boss);
         
         if (currentDist < safeDistance)
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            // Move directly away from boss FAST
+            float angle = boss->GetAngle(bot) + M_PI;
+            float moveDistance = safeDistance - currentDist + 2.0f;
+            float destX = boss->GetPositionX() + cos(angle) * (currentDist + moveDistance);
+            float destY = boss->GetPositionY() + sin(angle) * (currentDist + moveDistance);
+            float destZ = boss->GetPositionZ();
+            
+            // Force immediate movement with highest priority
+            return MoveTo(boss->GetMapId(), destX, destY, destZ, 
+                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         }
     }
     
@@ -202,16 +326,42 @@ bool MurmurResonanceAction::Execute(Event event)
         return false;
     }
     
-    if (boss->HasAura(SPELL_RESONANCE) || boss->FindCurrentSpellBySpellId(SPELL_RESONANCE))
+    // Resonance is cast when no one is in melee range
+    // Tank must stay close to prevent it
+    if (botAI->IsTank(bot))
     {
-        if (botAI->IsTank(bot))
+        float meleeRange = 5.0f;
+        float currentDist = bot->GetExactDist(boss);
+        
+        // Always stay in melee range as tank
+        if (currentDist > meleeRange)
         {
-            float targetDist = 5.0f;
-            float currentDist = bot->GetExactDist2d(boss);
-            
-            if (currentDist > targetDist)
+            return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), 
+                         boss->GetPositionZ(), false, false, false, true,
+                         MovementPriority::MOVEMENT_FORCED);
+        }
+    }
+    else if (boss->FindCurrentSpellBySpellId(SPELL_RESONANCE))
+    {
+        // Non-tanks should spread to minimize damage
+        Group* group = bot->GetGroup();
+        if (group)
+        {
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
             {
-                return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), boss->GetPositionZ());
+                Player* member = ref->GetSource();
+                if (member && member != bot && member->IsAlive())
+                {
+                    float dist = bot->GetExactDist2d(member);
+                    if (dist < 10.0f)
+                    {
+                        float angle = bot->GetAngle(member) + M_PI;
+                        float destX = bot->GetPositionX() + cos(angle) * 12.0f;
+                        float destY = bot->GetPositionY() + sin(angle) * 12.0f;
+                        return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                    }
+                }
             }
         }
     }
@@ -227,14 +377,30 @@ bool MurmurMagneticPullAction::Execute(Event event)
         return false;
     }
     
-    if (bot->HasAura(SPELL_MAGNETIC_PULL))
+    // Magnetic Pull brings a player to Murmur, followed by Murmur's Touch
+    // The touched player needs to move away from others to avoid spread
+    if (bot->HasAura(SPELL_MURMURS_TOUCH) || bot->HasAura(SPELL_MAGNETIC_PULL))
     {
-        float safeDistance = 15.0f;
-        float currentDist = bot->GetExactDist2d(boss);
-        
-        if (currentDist < safeDistance)
+        // Move away from other players to avoid Murmur's Touch explosion
+        Group* group = bot->GetGroup();
+        if (group)
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (member && member != bot && member->IsAlive())
+                {
+                    float dist = bot->GetExactDist2d(member);
+                    if (dist < 15.0f) // Murmur's Touch has splash damage
+                    {
+                        float angle = bot->GetAngle(member) + M_PI;
+                        float destX = bot->GetPositionX() + cos(angle) * 20.0f;
+                        float destY = bot->GetPositionY() + sin(angle) * 20.0f;
+                        return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                    }
+                }
+            }
         }
     }
     
@@ -249,14 +415,35 @@ bool MurmurThunderingStormAction::Execute(Event event)
         return false;
     }
     
+    // Thundering Storm targets players 25-100 yards away (Heroic only)
+    // Best position is either very close (<25y) or very far (>100y)
     if (boss->FindCurrentSpellBySpellId(SPELL_THUNDERING_STORM))
     {
-        float safeDistance = 15.0f;
-        float currentDist = bot->GetExactDist2d(boss);
+        float currentDist = bot->GetExactDist(boss);
         
-        if (currentDist < safeDistance && !botAI->IsTank(bot))
+        // If in danger zone (25-100 yards), move closer or farther
+        if (currentDist >= 25.0f && currentDist <= 100.0f)
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            // Tanks and melee move in close
+            if (botAI->IsTank(bot) || botAI->IsMelee(bot))
+            {
+                if (currentDist > 20.0f)
+                {
+                    // Move closer to boss
+                    return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), 
+                                 boss->GetPositionZ(), false, false, false, true, 
+                                 MovementPriority::MOVEMENT_FORCED);
+                }
+            }
+            // Ranged try to get farther if possible
+            else if (currentDist < 95.0f)
+            {
+                float angle = boss->GetAngle(bot) + M_PI;
+                float destX = boss->GetPositionX() + cos(angle) * 102.0f;
+                float destY = boss->GetPositionY() + sin(angle) * 102.0f;
+                return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            }
         }
     }
     

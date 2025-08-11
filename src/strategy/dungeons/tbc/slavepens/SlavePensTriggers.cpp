@@ -129,3 +129,22 @@ bool QuagmirranUppercutTrigger::IsActive()
     Unit* boss = bot->FindNearestCreature(NPC_QUAGMIRRAN, 50.0f);
     return boss && boss->IsAlive() && boss->IsInCombat();
 }
+
+// Cleave positioning for non-tanks
+bool QuagmirranCleavePositionTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    if (botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_QUAGMIRRAN, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Cleave frontal check - boss_quagmirran.cpp:44-47
+    return (botAI->IsMelee(bot) && boss->HasInArc(M_PI / 2, bot)) ||
+           (boss->FindCurrentSpellBySpellId(SPELL_CLEAVE) && boss->HasInArc(M_PI / 3, bot) && bot->GetExactDist(boss) < 10.0f);
+}

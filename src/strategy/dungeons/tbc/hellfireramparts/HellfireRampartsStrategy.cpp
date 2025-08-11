@@ -36,6 +36,10 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // Dispel Treacherous Aura
     triggers.push_back(new TriggerNode("omor treacherous aura",
              NextAction::array(0, new NextAction("omor treacherous aura", ACTION_DISPEL + 1), nullptr)));
+
+    // Spread out for Treacherous Aura - CRITICAL: 400+ damage per second to nearby allies!
+    triggers.push_back(new TriggerNode("omor treachery spread",
+             NextAction::array(0, new NextAction("omor treachery spread", ACTION_EMERGENCY - 5), nullptr)));
     
     // Boss: Vazruden & Nazan
     // Avoid Liquid Fire patches

@@ -64,6 +64,13 @@ public:
     bool IsActive() override;
 };
 
+class OmorTreacherySpreadTrigger : public Trigger
+{
+public:
+    OmorTreacherySpreadTrigger(PlayerbotAI* ai) : Trigger(ai, "omor treachery spread") {}
+    bool IsActive() override;
+};
+
 // Vazruden & Nazan Triggers
 class LiquidFireNearbyTrigger : public Trigger
 {

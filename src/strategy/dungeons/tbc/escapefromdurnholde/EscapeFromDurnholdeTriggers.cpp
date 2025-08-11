@@ -97,6 +97,15 @@ bool EpochHunterSandBreathTrigger::IsActive()
     if (!epoch || !epoch->IsAlive())
         return false;
     
+    // Check if Epoch Hunter is CASTING Sand Breath for immediate reaction
+    if (epoch->HasUnitState(UNIT_STATE_CASTING) && epoch->FindCurrentSpellBySpellId(SPELL_EPOCH_SAND_BREATH))
+    {
+        // Check if bot is in front arc where Sand Breath will hit
+        if (bot->GetDistance(epoch) < 20.0f && epoch->HasInArc(M_PI / 3.0f, bot))
+            return true;
+    }
+    
+    // Also check current position if within danger zone
     if (bot->GetDistance(epoch) > 15.0f)
         return false;
     

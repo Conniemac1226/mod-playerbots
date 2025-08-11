@@ -196,9 +196,9 @@ bool EfdAvoidWhirlwindAction::Execute(Event event)
     float targetY = drake->GetPositionY() + sin(angle) * distance;
     float targetZ = drake->GetPositionZ();
     
-    // Move to safe position using proper movement API
+    // Move to safe position using proper movement API with FORCED priority for critical escape
     bool result = MoveTo(bot->GetMapId(), targetX, targetY, targetZ, 
-                        false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     
     if (result)
     {
@@ -295,9 +295,9 @@ bool EpochHunterPositionAction::Execute(Event event)
     float targetY = epoch->GetPositionY() + sin(sideAngle) * distance;
     float targetZ = epoch->GetPositionZ();
     
-    // Move to safe position using proper movement API
+    // Move to safe position using proper movement API with FORCED priority for Sand Breath avoidance
     bool result = MoveTo(bot->GetMapId(), targetX, targetY, targetZ,
-                        false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     
     if (result)
     {

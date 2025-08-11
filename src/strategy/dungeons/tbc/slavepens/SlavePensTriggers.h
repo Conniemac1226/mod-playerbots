@@ -71,4 +71,11 @@ public:
     bool IsActive() override;
 };
 
+class QuagmirranCleavePositionTrigger : public Trigger
+{
+public:
+    QuagmirranCleavePositionTrigger(PlayerbotAI* ai) : Trigger(ai, "quagmirran cleave positioning") {}
+    bool IsActive() override;
+};
+
 #endif

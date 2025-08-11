@@ -1,6 +1,7 @@
 #include "Playerbots.h"
 #include "BotanicaActions.h"
 #include "BotanicaStrategy.h"
+#include "Value.h"
 
 bool SarannisResonanceDispelAction::Execute(Event event)
 {
@@ -119,8 +120,11 @@ bool FreywinnTranquilityAction::Execute(Event event)
         return false;
     }
     
-    if (boss->HasAura(SPELL_TREE_FORM))
+    // RESEARCHED: Tranquility - boss_high_botanist_freywinn.cpp:77-78
+    // Boss casts Tranquility in tree form - MUST interrupt or kill frayers!
+    if (boss->HasAura(SPELL_TREE_FORM) && boss->FindCurrentSpellBySpellId(SPELL_TRANQUILITY))
     {
+        // Check if frayers are still alive - they must die first
         GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
         for (auto& npc : npcs)
         {
@@ -132,7 +136,31 @@ bool FreywinnTranquilityAction::Execute(Event event)
             
             if (unit->GetEntry() == NPC_FRAYER && unit->IsAlive())
             {
-                return false;
+                // Frayers still alive - can't interrupt while they exist
+                return Attack(unit);
+            }
+        }
+        
+        // All frayers dead - try to interrupt Tranquility
+        // Try melee interrupt if in range
+        if (bot->IsWithinMeleeRange(boss))
+        {
+            botAI->InterruptSpell();
+            return true;
+        }
+        
+        // Try ranged interrupts - SAFE PATTERN
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+        if (spellIdsValue)
+        {
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+            {
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, boss, false))
+                {
+                    return botAI->CastSpell(spellId, boss);
+                }
             }
         }
     }
@@ -218,9 +246,36 @@ bool ThorngrinSacrificeAction::Execute(Event event)
         return false;
     }
     
-    if (bot->HasAura(SPELL_SACRIFICE))
+    // RESEARCHED: Sacrifice - boss_thorngrin_the_tender.cpp:76-82
+    // Boss sacrifices random target, they need massive healing
+    if (botAI->IsHeal(bot))
     {
-        return false;
+        // Find sacrificed target and prioritize healing them
+        GuidVector members = AI_VALUE(GuidVector, "group members");
+        for (auto& member : members)
+        {
+            Unit* unit = botAI->GetUnit(member);
+            if (!unit || !unit->IsAlive())
+                continue;
+            
+            if (unit->HasAura(SPELL_SACRIFICE))
+            {
+                // Emergency heal on sacrificed target
+                Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "heal");
+                if (spellIdsValue)
+                {
+                    std::list<uint32> spellIds = spellIdsValue->Get();
+                    for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+                    {
+                        uint32 spellId = *it;
+                        if (botAI->CanCastSpell(spellId, unit, false))
+                        {
+                            return botAI->CastSpell(spellId, unit);
+                        }
+                    }
+                }
+            }
+        }
     }
     
     return false;
@@ -234,14 +289,27 @@ bool ThorngrinHellfireAction::Execute(Event event)
         return false;
     }
     
-    if (boss->HasAura(SPELL_HELLFIRE) || boss->FindCurrentSpellBySpellId(SPELL_HELLFIRE))
+    // RESEARCHED: Hellfire - boss_thorngrin_the_tender.cpp:87
+    // AoE spell that damages all nearby targets
+    // Move when cast starts to avoid damage!
+    if (boss->FindCurrentSpellBySpellId(SPELL_HELLFIRE))
     {
-        float safeDistance = 10.0f;
+        float safeDistance = 15.0f; // Hellfire has 15 yard radius per spell data
         float currentDist = bot->GetExactDist2d(boss);
         
         if (currentDist < safeDistance)
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            // EMERGENCY: Move out of hellfire range
+            float angle = bot->GetAngle(boss) + M_PI;
+            float moveDistance = safeDistance - currentDist + 3.0f;
+            float x = bot->GetPositionX() + cos(angle) * moveDistance;
+            float y = bot->GetPositionY() + sin(angle) * moveDistance;
+            float z = bot->GetPositionZ();
+            
+            // Stop casting and move immediately
+            bot->InterruptNonMeleeSpells(true);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
     
@@ -278,11 +346,30 @@ bool WarpSplinterArcaneVolleyAction::Execute(Event event)
         return false;
     }
     
+    // RESEARCHED: Arcane Volley is a channeled spell that needs interrupting
     if (boss->FindCurrentSpellBySpellId(SPELL_ARCANE_VOLLEY))
     {
-        // Interrupt the boss's arcane volley
-        bot->InterruptSpell(CURRENT_CHANNELED_SPELL);
-        return true;
+        // Try melee interrupt if in range
+        if (bot->IsWithinMeleeRange(boss))
+        {
+            botAI->InterruptSpell();
+            return true;
+        }
+        
+        // Try ranged interrupts - SAFE PATTERN
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+        if (spellIdsValue)
+        {
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+            {
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, boss, false))
+                {
+                    return botAI->CastSpell(spellId, boss);
+                }
+            }
+        }
     }
     
     return false;

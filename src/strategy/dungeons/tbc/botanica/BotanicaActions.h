@@ -52,10 +52,10 @@ public:
     bool Execute(Event event) override;
 };
 
-class FreywinnTranquilityAction : public Action
+class FreywinnTranquilityAction : public AttackAction
 {
 public:
-    FreywinnTranquilityAction(PlayerbotAI* botAI) : Action(botAI, "freywinn tranquility") {}
+    FreywinnTranquilityAction(PlayerbotAI* botAI) : AttackAction(botAI, "freywinn tranquility") {}
     bool Execute(Event event) override;
 };
 

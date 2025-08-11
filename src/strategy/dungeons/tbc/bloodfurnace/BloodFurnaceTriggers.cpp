@@ -1,6 +1,7 @@
 #include "BloodFurnaceTriggers.h"
 #include "BloodFurnaceActions.h"
 #include "Playerbots.h"
+#include "Value.h"
 
 // The Maker - Exploding Beaker trigger
 bool TheMakerExplodingBeakerTrigger::IsActive()
@@ -59,14 +60,18 @@ bool BroggokInterruptPoisonBoltTrigger::IsActive()
     if (!boss->HasUnitState(UNIT_STATE_CASTING) || !boss->FindCurrentSpellBySpellId(SPELL_POISON_BOLT))
         return false;
 
-    // Check if bot has interrupt spells available
-    std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt")->Get();
-    for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+    // Check if bot has interrupt spells available - SAFE PATTERN
+    Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+    if (spellIdsValue)
     {
-        uint32 spellId = *it;
-        if (botAI->CanCastSpell(spellId, boss, false))
+        std::list<uint32> spellIds = spellIdsValue->Get();
+        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
         {
-            return true;
+            uint32 spellId = *it;
+            if (botAI->CanCastSpell(spellId, boss, false))
+            {
+                return true;
+            }
         }
     }
 
@@ -155,14 +160,18 @@ bool KelidanInterruptShadowBoltVolleyTrigger::IsActive()
     if (!boss->HasUnitState(UNIT_STATE_CASTING) || !boss->FindCurrentSpellBySpellId(SPELL_SHADOW_BOLT_VOLLEY))
         return false;
 
-    // Check if bot has interrupt spells available
-    std::list<uint32> spellIds = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt")->Get();
-    for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+    // Check if bot has interrupt spells available - SAFE PATTERN
+    Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
+    if (spellIdsValue)
     {
-        uint32 spellId = *it;
-        if (botAI->CanCastSpell(spellId, boss, false))
+        std::list<uint32> spellIds = spellIdsValue->Get();
+        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
         {
-            return true;
+            uint32 spellId = *it;
+            if (botAI->CanCastSpell(spellId, boss, false))
+            {
+                return true;
+            }
         }
     }
 

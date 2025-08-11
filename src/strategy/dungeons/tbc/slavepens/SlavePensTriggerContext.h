@@ -18,6 +18,7 @@ public:
         creators["acid spray casting"] = &SlavePensTriggerContext::acid_spray_casting;
         creators["poison bolt volley casting"] = &SlavePensTriggerContext::poison_bolt_volley_casting;
         creators["uppercut positioning"] = &SlavePensTriggerContext::uppercut_positioning;
+        creators["quagmirran cleave positioning"] = &SlavePensTriggerContext::quagmirran_cleave_positioning;
     }
 
 private:
@@ -30,6 +31,7 @@ private:
     static Trigger* acid_spray_casting(PlayerbotAI* ai) { return new QuagmirranAcidSprayTrigger(ai); }
     static Trigger* poison_bolt_volley_casting(PlayerbotAI* ai) { return new QuagmirranPoisonBoltVolleyTrigger(ai); }
     static Trigger* uppercut_positioning(PlayerbotAI* ai) { return new QuagmirranUppercutTrigger(ai); }
+    static Trigger* quagmirran_cleave_positioning(PlayerbotAI* ai) { return new QuagmirranCleavePositionTrigger(ai); }
 };
 
 #endif
