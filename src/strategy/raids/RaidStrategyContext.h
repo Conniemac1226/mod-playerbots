@@ -15,6 +15,7 @@
 #include "karazhan/KarazhanStrategy.h"
 #include "gruul/GruulStrategy.h"
 #include "magtheridon/MagtheridonStrategy.h"
+#include "serpentshrine/SerpentshrineStrategy.h"
 
 class RaidStrategyContext : public NamedObjectContext<Strategy>
 {
@@ -37,6 +38,7 @@ public:
         creators["karazhan"] = &RaidStrategyContext::karazhan;
         creators["gruul"] = &RaidStrategyContext::gruul;
         creators["magtheridon"] = &RaidStrategyContext::magtheridon;
+        creators["serpentshrine"] = &RaidStrategyContext::serpentshrine;
     }
 
 private:
@@ -53,6 +55,7 @@ private:
     static Strategy* karazhan(PlayerbotAI* botAI) { return new KarazhanStrategy(botAI); }
     static Strategy* gruul(PlayerbotAI* botAI) { return new GruulStrategy(botAI); }
     static Strategy* magtheridon(PlayerbotAI* botAI) { return new MagtheridonStrategy(botAI); }
+    static Strategy* serpentshrine(PlayerbotAI* botAI) { return new SerpentshrineStrategy(botAI); }
 };
 
 #endif
