@@ -57,8 +57,12 @@
 #include "raids/icecrown/RaidIccTriggerContext.h"
 #include "raids/karazhan/KarazhanActionContext.h"
 #include "raids/karazhan/KarazhanTriggerContext.h"
+#include "raids/blacktemple/BlackTempleActionContext.h"
+#include "raids/blacktemple/BlackTempleTriggerContext.h"
 #include "raids/serpentshrine/SerpentshrineActionContext.h"
 #include "raids/serpentshrine/SerpentshrineTriggerContext.h"
+#include "raids/tempestkeep/TempestKeepActionContext.h"
+#include "raids/tempestkeep/TempestKeepTriggerContext.h"
 #include "raids/moltencore/RaidMcActionContext.h"
 #include "raids/moltencore/RaidMcTriggerContext.h"
 #include "raids/naxxramas/RaidNaxxActionContext.h"
@@ -136,7 +140,9 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidUlduarActionContext());
     actionContexts.Add(new RaidIccActionContext());
     actionContexts.Add(new KarazhanActionContext());
+    actionContexts.Add(new RaidBtActionContext());
     actionContexts.Add(new SerpentshrineActionContext());
+    actionContexts.Add(new TempestKeepActionContext());
     actionContexts.Add(new WotlkDungeonUKActionContext());
     actionContexts.Add(new WotlkDungeonNexActionContext());
     actionContexts.Add(new WotlkDungeonANActionContext());
@@ -178,7 +184,9 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidUlduarTriggerContext());
     triggerContexts.Add(new RaidIccTriggerContext());
     triggerContexts.Add(new KarazhanTriggerContext());
+    triggerContexts.Add(new RaidBtTriggerContext());
     triggerContexts.Add(new SerpentshrineTriggerContext());
+    triggerContexts.Add(new TempestKeepTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());

@@ -16,6 +16,8 @@
 #include "gruul/GruulStrategy.h"
 #include "magtheridon/MagtheridonStrategy.h"
 #include "serpentshrine/SerpentshrineStrategy.h"
+#include "tempestkeep/TempestKeepStrategy.h"
+#include "blacktemple/BlackTempleStrategy.h"
 
 class RaidStrategyContext : public NamedObjectContext<Strategy>
 {
@@ -39,6 +41,15 @@ public:
         creators["gruul"] = &RaidStrategyContext::gruul;
         creators["magtheridon"] = &RaidStrategyContext::magtheridon;
         creators["serpentshrine"] = &RaidStrategyContext::serpentshrine;
+        creators["tempestkeep"] = &RaidStrategyContext::tempestkeep;
+        creators["blacktemple"] = &RaidStrategyContext::blacktemple;
+        creators["najentus"] = &RaidStrategyContext::najentus;
+        creators["supremus"] = &RaidStrategyContext::supremus;
+        creators["shade of akama"] = &RaidStrategyContext::shade_of_akama;
+        creators["teron gorefiend"] = &RaidStrategyContext::teron_gorefiend;
+        creators["gurtogg bloodboil"] = &RaidStrategyContext::gurtogg_bloodboil;
+        creators["reliquary of souls"] = &RaidStrategyContext::reliquary_of_souls;
+        creators["mother shahraz"] = &RaidStrategyContext::mother_shahraz;
     }
 
 private:
@@ -56,6 +67,15 @@ private:
     static Strategy* gruul(PlayerbotAI* botAI) { return new GruulStrategy(botAI); }
     static Strategy* magtheridon(PlayerbotAI* botAI) { return new MagtheridonStrategy(botAI); }
     static Strategy* serpentshrine(PlayerbotAI* botAI) { return new SerpentshrineStrategy(botAI); }
+    static Strategy* tempestkeep(PlayerbotAI* botAI) { return new TempestKeepStrategy(botAI); }
+    static Strategy* blacktemple(PlayerbotAI* botAI) { return new RaidBtStrategy(botAI); }
+    static Strategy* najentus(PlayerbotAI* botAI) { return new RaidBtNajentusStrategy(botAI); }
+    static Strategy* supremus(PlayerbotAI* botAI) { return new RaidBtSupremusStrategy(botAI); }
+    static Strategy* shade_of_akama(PlayerbotAI* botAI) { return new RaidBtShadeOfAkamaStrategy(botAI); }
+    static Strategy* teron_gorefiend(PlayerbotAI* botAI) { return new RaidBtTeronGorefiendStrategy(botAI); }
+    static Strategy* gurtogg_bloodboil(PlayerbotAI* botAI) { return new RaidBtGurtoggBloodboilStrategy(botAI); }
+    static Strategy* reliquary_of_souls(PlayerbotAI* botAI) { return new RaidBtReliquaryOfSoulsStrategy(botAI); }
+    static Strategy* mother_shahraz(PlayerbotAI* botAI) { return new RaidBtMotherShahrazStrategy(botAI); }
 };
 
 #endif
