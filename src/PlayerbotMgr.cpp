@@ -36,28 +36,10 @@
 #include "BroadcastHelper.h"
 #include "PlayerbotDbStore.h"
 #include "WorldSessionMgr.h"
-#include "DatabaseEnv.h"
-#include <algorithm>
-#include "Log.h"
+#include "DatabaseEnv.h"        // Added for gender choice
+#include <algorithm>            // Added for gender choice
+#include "Log.h" // removes a long-standing crash (0xC0000005 ACCESS_VIOLATION)
 #include <shared_mutex> // removes a long-standing crash (0xC0000005 ACCESS_VIOLATION)
-#include "TravelMgr.h"
-
-namespace {
-    // [Crash fix] Centralize clearing of pointer values in the AI context
-    static void ClearAIContextPointerValues(PlayerbotAI* ai)
-    {
-        if (!ai) return;
-        if (AiObjectContext* ctx = ai->GetAiObjectContext())
-        {
-            // Known today
-            if (auto* tt = ctx->GetValue<TravelTarget*>("travel target"))
-                tt->Set(nullptr);
-
-            // TODO: add other pointer-type values here if you have any
-            // e.g.: ctx->GetValue<SomePtr>("some key")->Set(nullptr);
-        }
-    }
-}
 
 class BotInitGuard
 {
@@ -142,7 +124,7 @@ void PlayerbotHolder::AddPlayerBot(ObjectGuid playerGuid, uint32 masterAccountId
         PlayerbotMgr* mgr = GET_PLAYERBOT_MGR(masterPlayer);
         if (!mgr)
         {
-            LOG_DEBUG("mod-playerbots", "PlayerbotMgr not found for master player with GUID: {}", masterPlayer->GetGUID().GetRawValue());
+            LOG_DEBUG("playerbots", "PlayerbotMgr not found for master player with GUID: {}", masterPlayer->GetGUID().GetRawValue());
             return;
         }
         uint32 count = mgr->GetPlayerbotsCount() + botLoading.size();
@@ -240,33 +222,13 @@ void PlayerbotHolder::UpdateSessions()
     }
 }
 
-/*void PlayerbotHolder::HandleBotPackets(WorldSession* session)
+void PlayerbotHolder::HandleBotPackets(WorldSession* session)
 {
     WorldPacket* packet;
     while (session->GetPacketQueue().next(packet))
     {
         OpcodeClient opcode = static_cast<OpcodeClient>(packet->GetOpcode());
         ClientOpcodeHandler const* opHandle = opcodeTable[opcode];
-        opHandle->Call(session, *packet);
-        delete packet;
-    }
-}*/
-
-void PlayerbotHolder::HandleBotPackets(WorldSession* session) // [Crash Fix] Secure packet dispatch (avoid calling on a null handler)
-{
-    WorldPacket* packet;
-    while (session->GetPacketQueue().next(packet))
-    {
-        const OpcodeClient opcode = static_cast<OpcodeClient>(packet->GetOpcode());
-        const ClientOpcodeHandler* opHandle = opcodeTable[opcode];
-
-        if (!opHandle)
-        {
-            // Unknown handler: drop cleanly
-            delete packet;
-            continue;
-        }
-
         opHandle->Call(session, *packet);
         delete packet;
     }
@@ -356,13 +318,10 @@ void PlayerbotHolder::LogoutPlayerBot(ObjectGuid guid)
             sPlayerbotDbStore->Save(botAI);
         }
 
-        LOG_DEBUG("mod-playerbots", "Bot {} logging out", bot->GetName().c_str());
+        LOG_DEBUG("playerbots", "Bot {} logging out", bot->GetName().c_str());
         bot->SaveToDB(false, false);
 
-        // WorldSession* botWorldSessionPtr = bot->GetSession();
-		WorldSession* botWorldSessionPtr = bot->GetSession(); // Small safeguard on the session (as a precaution)
-        if (!botWorldSessionPtr)
-            return;
+        WorldSession* botWorldSessionPtr = bot->GetSession();
         WorldSession* masterWorldSessionPtr = nullptr;
 
         if (botWorldSessionPtr->isLogingOut())
@@ -395,13 +354,11 @@ void PlayerbotHolder::LogoutPlayerBot(ObjectGuid guid)
             logout = true;
         }
 
-        /*TravelTarget* target = nullptr;
+        TravelTarget* target = nullptr;
         if (botAI->GetAiObjectContext())  // Maybe some day re-write to delate all pointer values.
         {
             target = botAI->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
-        }*/
-        // [Crash fix] Centralized cleanup of pointer values in the context
-        ClearAIContextPointerValues(botAI);
+        }
 
         // Peiru: Allow bots to always instant logout to see if this resolves logout crashes
         logout = true;
@@ -418,25 +375,19 @@ void PlayerbotHolder::LogoutPlayerBot(ObjectGuid guid)
                 botWorldSessionPtr->HandleLogoutRequestOpcode(data);
                 if (!bot)
                 {
-                    /*RemoveFromPlayerbotsMap(guid);
-                    delete botWorldSessionPtr;
-                    if (target)
-                        delete target;*/
-					// [Crash fix] bot can be destroyed by the logout request: clean up without touching old pointers
                     RemoveFromPlayerbotsMap(guid);
                     delete botWorldSessionPtr;
+                    if (target)
+                        delete target;
                 }
                 return;
             }
             else
             {
-                /*RemoveFromPlayerbotsMap(guid);     // deletes bot player ptr inside this WorldSession PlayerBotMap
+                RemoveFromPlayerbotsMap(guid);     // deletes bot player ptr inside this WorldSession PlayerBotMap
                 delete botWorldSessionPtr;  // finally delete the bot's WorldSession
                 if (target)
-                    delete target;*/
-				// [Crash fix] no more deleting 'target' here: ownership handled by the AI/Context
-                RemoveFromPlayerbotsMap(guid);     // deletes bot player ptr inside this WorldSession PlayerBotMap
-                delete botWorldSessionPtr;         // finally delete the bot's WorldSession
+                    delete target;
             }
             return;
         }  // if instant logout possible, do it
@@ -469,11 +420,11 @@ void PlayerbotHolder::DisablePlayerBot(ObjectGuid guid)
             sPlayerbotDbStore->Save(botAI);
         }
 
-        LOG_DEBUG("mod-playerbots", "Bot {} logged out", bot->GetName().c_str());
+        LOG_DEBUG("playerbots", "Bot {} logged out", bot->GetName().c_str());
 
         bot->SaveToDB(false, false);
 
-        /*if (botAI->GetAiObjectContext())  // Maybe some day re-write to delate all pointer values.
+        if (botAI->GetAiObjectContext())  // Maybe some day re-write to delate all pointer values.
         {
             TravelTarget* target = botAI->GetAiObjectContext()->GetValue<TravelTarget*>("travel target")->Get();
             if (target)
@@ -482,9 +433,7 @@ void PlayerbotHolder::DisablePlayerBot(ObjectGuid guid)
 
         RemoveFromPlayerbotsMap(guid);  // deletes bot player ptr inside this WorldSession PlayerBotMap
 
-        delete botAI;*/
-        // [Crash fix] Centralized cleanup of pointer values in the context
-        ClearAIContextPointerValues(botAI);
+        delete botAI;
     }
 }
 
@@ -580,9 +529,6 @@ void PlayerbotHolder::OnBotLogin(Player* const bot)
     {
         botAI->ResetStrategies(!sRandomPlayerbotMgr->IsRandomBot(bot));
     }
-
-    botAI->Reset(true);  // Reset transient states (incl. LFG "proposal") to avoid the "one or more players are not eligible" error after reconnect.
-
     sPlayerbotDbStore->Load(botAI);
 
     if (master && !master->HasUnitState(UNIT_STATE_IN_FLIGHT))
@@ -590,17 +536,6 @@ void PlayerbotHolder::OnBotLogin(Player* const bot)
         bot->GetMotionMaster()->MovementExpired();
         bot->CleanupAfterTaxiFlight();
     }
-
-    // [Fix MoveSplineInitArgs::Validate: expression 'velocity > 0.01f' failed for GUID Full: 0x00000000000019ba Type: Player Low: 6586] Ensure valid speeds before any next movement command
-    bot->StopMoving();
-    bot->UpdateSpeed(MOVE_WALK,   true);
-    bot->UpdateSpeed(MOVE_RUN,    true);
-    bot->UpdateSpeed(MOVE_SWIM,   true);
-    bot->UpdateSpeed(MOVE_FLIGHT, true);   // OK even if not flying
-    
-    if (bot->GetSpeed(MOVE_RUN) <= 0.01f) // Belt-and-suspenders: if the run speed has stayed ~0, reset to the default rate
-        bot->SetSpeedRate(MOVE_RUN, 1.0f);
-    // End Fix
 
     // check activity
     botAI->AllowActivity(ALL_ACTIVITY, true);
@@ -613,21 +548,16 @@ void PlayerbotHolder::OnBotLogin(Player* const bot)
     if (master && master->GetGroup() && !group)
     {
         Group* mgroup = master->GetGroup();
-        // if (mgroup->GetMembersCount() >= 5)
-        if (mgroup->GetMembersCount() + 1 > 5)  // only convert in raid if the add of THIS bot make group > 5
+        if (mgroup->GetMembersCount() >= 5)
         {
             if (!mgroup->isRaidGroup() && !mgroup->isLFGGroup() && !mgroup->isBGGroup() && !mgroup->isBFGroup())
             {
                 mgroup->ConvertToRaid();
             }
-            //if (mgroup->isRaidGroup())
-            //{
-                //mgroup->AddMember(bot);
-            //}
-            mgroup->AddMember(bot);
-
-            LOG_DEBUG("mod-playerbots", "[GROUP] after add: members={}, isRaid={}, isLFG={}",
-                      (int)mgroup->GetMembersCount(), mgroup->isRaidGroup() ? 1 : 0, mgroup->isLFGGroup() ? 1 : 0);
+            if (mgroup->isRaidGroup())
+            {
+                mgroup->AddMember(bot);
+            }
         }
         else
         {
@@ -806,11 +736,9 @@ std::string const PlayerbotHolder::ProcessBotCommand(std::string const cmd, Obje
         }
     }
 
-    // if (GET_PLAYERBOT_AI(bot))
-    if (PlayerbotAI* ai = GET_PLAYERBOT_AI(bot)) // [Tidy/Crash fix] Acquire AI once and reuse; avoid multiple GET_PLAYERBOT_AI calls.
+    if (GET_PLAYERBOT_AI(bot))
     {
-        // if (Player* master = GET_PLAYERBOT_AI(bot)->GetMaster())
-        if (Player* master = ai->GetMaster())
+        if (Player* master = GET_PLAYERBOT_AI(bot)->GetMaster())
         {
             if (master->GetSession()->GetSecurity() <= SEC_PLAYER && sPlayerbotAIConfig->autoInitOnly &&
                 cmd != "init=auto")
@@ -1665,7 +1593,7 @@ void PlayerbotMgr::OnBotLoginInternal(Player* const bot)
     botAI->SetMaster(master);
     botAI->ResetStrategies();
 
-    LOG_INFO("mod-playerbots", "Bot {} logged in", bot->GetName().c_str());
+    LOG_INFO("playerbots", "Bot {} logged in", bot->GetName().c_str());
 }
 
 void PlayerbotMgr::OnPlayerLogin(Player* player)
@@ -1858,7 +1786,7 @@ void PlayerbotsMgr::RemovePlayerbotAI(ObjectGuid const& guid, bool removeMgrEntr
     {
         delete it->second;
         _playerbotsAIMap.erase(it);
-        LOG_DEBUG("mod-playerbots", "Removed stale AI for GUID {}",
+        LOG_DEBUG("playerbots", "Removed stale AI for GUID {}",
                   static_cast<uint64>(guid.GetRawValue()));
     }
 
