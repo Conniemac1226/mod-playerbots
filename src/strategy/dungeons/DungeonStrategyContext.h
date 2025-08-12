@@ -32,6 +32,7 @@
 #include "tbc/shadowlabyrinth/ShadowLabyrinthStrategy.h"
 #include "tbc/arcatraz/ArcatrazStrategy.h"
 #include "tbc/botanica/BotanicaStrategy.h"
+#include "tbc/mechanar/MechanarStrategy.h"
 
 /*
 Full list/TODO:
@@ -76,6 +77,7 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             creators["tbc-sl"] = &DungeonStrategyContext::tbc_sl;        // Shadow Labyrinth
             creators["tbc-arc"] = &DungeonStrategyContext::tbc_arc;      // The Arcatraz
             creators["tbc-bot"] = &DungeonStrategyContext::tbc_bot;      // The Botanica
+            creators["tbc-mech"] = &DungeonStrategyContext::tbc_mech;    // The Mechanar
             
             // Wrath of the Lich King
             creators["wotlk-uk"] = &DungeonStrategyContext::wotlk_uk;       // Utgarde Keep
@@ -111,6 +113,7 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         static Strategy* tbc_sl(PlayerbotAI* botAI) { return new ShadowLabyrinthStrategy(botAI); }
         static Strategy* tbc_arc(PlayerbotAI* botAI) { return new ArcatrazStrategy(botAI); }
         static Strategy* tbc_bot(PlayerbotAI* botAI) { return new BotanicaStrategy(botAI); }
+        static Strategy* tbc_mech(PlayerbotAI* botAI) { return new MechanarStrategy(botAI); }
         
         static Strategy* wotlk_uk(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
         static Strategy* wotlk_nex(PlayerbotAI* botAI) { return new WotlkDungeonNexStrategy(botAI); }

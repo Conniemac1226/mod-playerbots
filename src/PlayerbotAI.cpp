@@ -1552,6 +1552,9 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 553:
             strategyName = "tbc-bot";  // The Botanica
             break;
+        case 554:
+            strategyName = "tbc-mech";  // The Mechanar
+            break;
         case 555:
             strategyName = "tbc-sl";  // Shadow Labyrinth
             break;
@@ -1617,6 +1620,15 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
             break;
         case 544:
             strategyName = "magtheridon";  // Magtheridon's Lair
+            break;
+        case 548:
+            strategyName = "serpentshrine";  // Serpentshrine Cavern
+            break;
+        case 550:
+            strategyName = "tempestkeep";  // Tempest Keep: The Eye
+            break;
+        case 564:
+            strategyName = "blacktemple";  // Black Temple
             break;
         case 565:
             strategyName = "gruul";  // Gruul's Lair
