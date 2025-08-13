@@ -16,6 +16,7 @@ public:
         creators["dalliah heal"] = &ArcatrazTriggerContext::dalliah_heal;
         creators["soccothrates knock away"] = &ArcatrazTriggerContext::soccothrates_knock_away;
         creators["soccothrates charge"] = &ArcatrazTriggerContext::soccothrates_charge;
+        creators["mellichar adds active"] = &ArcatrazTriggerContext::mellichar_adds_active;
         creators["skyriss illusion"] = &ArcatrazTriggerContext::skyriss_illusion;
         creators["skyriss fear"] = &ArcatrazTriggerContext::skyriss_fear;
         creators["skyriss domination"] = &ArcatrazTriggerContext::skyriss_domination;
@@ -29,6 +30,7 @@ private:
     static Trigger* dalliah_heal(PlayerbotAI* botAI) { return new DalliahHealTrigger(botAI); }
     static Trigger* soccothrates_knock_away(PlayerbotAI* botAI) { return new SoccothratesKnockAwayTrigger(botAI); }
     static Trigger* soccothrates_charge(PlayerbotAI* botAI) { return new SoccothratesChargeTrigger(botAI); }
+    static Trigger* mellichar_adds_active(PlayerbotAI* botAI) { return new MellicharAddsActiveTrigger(botAI); }
     static Trigger* skyriss_illusion(PlayerbotAI* botAI) { return new SkyrissIllusionTrigger(botAI); }
     static Trigger* skyriss_fear(PlayerbotAI* botAI) { return new SkyrissFearTrigger(botAI); }
     static Trigger* skyriss_domination(PlayerbotAI* botAI) { return new SkyrissDominationTrigger(botAI); }

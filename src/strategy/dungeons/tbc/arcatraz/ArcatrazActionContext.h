@@ -16,6 +16,7 @@ public:
         creators["dalliah heal interrupt"] = &ArcatrazActionContext::dalliah_heal_interrupt;
         creators["soccothrates knock away"] = &ArcatrazActionContext::soccothrates_knock_away;
         creators["soccothrates charge"] = &ArcatrazActionContext::soccothrates_charge;
+        creators["attack mellichar adds"] = &ArcatrazActionContext::attack_mellichar_adds;
         creators["skyriss illusion"] = &ArcatrazActionContext::skyriss_illusion;
         creators["skyriss fear"] = &ArcatrazActionContext::skyriss_fear;
         creators["skyriss domination"] = &ArcatrazActionContext::skyriss_domination;
@@ -29,6 +30,7 @@ private:
     static Action* dalliah_heal_interrupt(PlayerbotAI* botAI) { return new DalliahHealInterruptAction(botAI); }
     static Action* soccothrates_knock_away(PlayerbotAI* botAI) { return new SoccothratesKnockAwayAction(botAI); }
     static Action* soccothrates_charge(PlayerbotAI* botAI) { return new SoccothratesChargeAction(botAI); }
+    static Action* attack_mellichar_adds(PlayerbotAI* botAI) { return new AttackMellicharAddsAction(botAI); }
     static Action* skyriss_illusion(PlayerbotAI* botAI) { return new SkyrissIllusionAction(botAI); }
     static Action* skyriss_fear(PlayerbotAI* botAI) { return new SkyrissFearAction(botAI); }
     static Action* skyriss_domination(PlayerbotAI* botAI) { return new SkyrissDominationAction(botAI); }

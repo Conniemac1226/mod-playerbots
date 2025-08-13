@@ -207,3 +207,37 @@ bool SkyrissDominationTrigger::IsActive()
     
     return boss->FindCurrentSpellBySpellId(SPELL_DOMINATION) || bot->HasAura(SPELL_DOMINATION);
 }
+
+bool MellicharAddsActiveTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
+    // Check if we're fighting Warden Mellichar (who is immune)
+    Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
+    if (!warden || !warden->IsInCombat())
+        return false;
+        
+    // Check for any of Mellichar's adds
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const uint32 mellicharAdds[] = {
+        NPC_TRICKSTER, NPC_PH_HUNTER, 
+        NPC_AKKIRIS, NPC_SULFURON, NPC_TW_DRAK, NPC_BL_DRAK
+    };
+    
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        for (uint32 addId : mellicharAdds)
+        {
+            if (unit->GetEntry() == addId)
+                return true;
+        }
+    }
+    
+    return false;
+}

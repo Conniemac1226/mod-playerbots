@@ -27,6 +27,10 @@ void ArcatrazStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("soccothrates charge",
         NextAction::array(0, new NextAction("soccothrates charge", ACTION_MOVE + 4), nullptr)));
     
+    // Warden Mellichar
+    triggers.push_back(new TriggerNode("mellichar adds active",
+        NextAction::array(0, new NextAction("attack mellichar adds", ACTION_RAID + 3), nullptr)));
+    
     // Harbinger Skyriss
     triggers.push_back(new TriggerNode("skyriss illusion",
         NextAction::array(0, new NextAction("skyriss illusion", ACTION_RAID + 2), nullptr)));

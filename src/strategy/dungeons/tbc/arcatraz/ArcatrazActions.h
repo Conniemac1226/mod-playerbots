@@ -26,6 +26,23 @@ const uint32 SPELL_DOMINATION = 37162;
 
 const uint32 NPC_HARBINGER_ILLUSION = 21466;
 
+// Warden Mellichar's adds
+const uint32 NPC_TRICKSTER = 20905;
+const uint32 NPC_PH_HUNTER = 20906;
+const uint32 NPC_MILLHOUSE = 20977;
+const uint32 NPC_AKKIRIS = 20908;
+const uint32 NPC_SULFURON = 20909;
+const uint32 NPC_TW_DRAK = 20910;
+const uint32 NPC_BL_DRAK = 20911;
+
+class AttackMellicharAddsAction : public AttackAction
+{
+public:
+    AttackMellicharAddsAction(PlayerbotAI* botAI) : AttackAction(botAI, "attack mellichar adds") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 class AvoidVoidZoneAction : public MovementAction
 {
 public:
