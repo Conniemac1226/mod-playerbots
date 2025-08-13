@@ -269,4 +269,153 @@ public:
     bool IsActive() override;
 };
 
+// Illidari Council
+class IllidariCouncilEngagedTrigger : public Trigger
+{
+public:
+    IllidariCouncilEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "council engaged") {}
+    bool IsActive() override;
+};
+
+class IllidariCouncilTargetPriorityTrigger : public Trigger
+{
+public:
+    IllidariCouncilTargetPriorityTrigger(PlayerbotAI* ai) : Trigger(ai, "council target priority") {}
+    bool IsActive() override;
+};
+
+class IllidariCouncilSpreadTrigger : public Trigger
+{
+public:
+    IllidariCouncilSpreadTrigger(PlayerbotAI* ai) : Trigger(ai, "council spread needed") {}
+    bool IsActive() override;
+};
+
+class IllidariCouncilInterruptMalandeTrigger : public Trigger
+{
+public:
+    IllidariCouncilInterruptMalandeTrigger(PlayerbotAI* ai) : Trigger(ai, "council interrupt malande") {}
+    bool IsActive() override;
+};
+
+class IllidariCouncilConsecrationTrigger : public Trigger
+{
+public:
+    IllidariCouncilConsecrationTrigger(PlayerbotAI* ai) : Trigger(ai, "council consecration") {}
+    bool IsActive() override;
+};
+
+class IllidariCouncilBlizzardTrigger : public Trigger
+{
+public:
+    IllidariCouncilBlizzardTrigger(PlayerbotAI* ai) : Trigger(ai, "council blizzard") {}
+    bool IsActive() override;
+};
+
+class IllidariCouncilFlamestrikeTrigger : public Trigger
+{
+public:
+    IllidariCouncilFlamestrikeTrigger(PlayerbotAI* ai) : Trigger(ai, "council flamestrike") {}
+    bool IsActive() override;
+};
+
+class IllidariCouncilPoisonTrigger : public Trigger
+{
+public:
+    IllidariCouncilPoisonTrigger(PlayerbotAI* ai) : Trigger(ai, "council poison") {}
+    bool IsActive() override;
+};
+
+class IllidariCouncilDivineWrathTrigger : public Trigger
+{
+public:
+    IllidariCouncilDivineWrathTrigger(PlayerbotAI* ai) : Trigger(ai, "council divine wrath") {}
+    bool IsActive() override;
+};
+
+// Illidan Stormrage
+class IllidanEngagedTrigger : public Trigger
+{
+public:
+    IllidanEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan engaged") {}
+    bool IsActive() override;
+};
+
+class IllidanFlameCrashTrigger : public Trigger
+{
+public:
+    IllidanFlameCrashTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan flame crash") {}
+    bool IsActive() override;
+};
+
+class IllidanParasiticShadowfiendTrigger : public Trigger
+{
+public:
+    IllidanParasiticShadowfiendTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan parasitic shadowfiend") {}
+    bool IsActive() override;
+};
+
+class IllidanDrawSoulTrigger : public Trigger
+{
+public:
+    IllidanDrawSoulTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan draw soul") {}
+    bool IsActive() override;
+};
+
+class IllidanAgonizingFlamesTrigger : public Trigger
+{
+public:
+    IllidanAgonizingFlamesTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan agonizing flames") {}
+    bool IsActive() override;
+};
+
+class IllidanEyeBeamTrigger : public Trigger
+{
+public:
+    IllidanEyeBeamTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan eye beam") {}
+    bool IsActive() override;
+};
+
+class IllidanDarkBarrageTrigger : public Trigger
+{
+public:
+    IllidanDarkBarrageTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan dark barrage") {}
+    bool IsActive() override;
+};
+
+class IllidanFlameOfAzzinothTrigger : public Trigger
+{
+public:
+    IllidanFlameOfAzzinothTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan flame of azzinoth") {}
+    bool IsActive() override;
+};
+
+class IllidanShadowDemonTrigger : public Trigger
+{
+public:
+    IllidanShadowDemonTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan shadow demon") {}
+    bool IsActive() override;
+};
+
+class IllidanDemonFormTrigger : public Trigger
+{
+public:
+    IllidanDemonFormTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan demon form") {}
+    bool IsActive() override;
+};
+
+class IllidanCageTrapTrigger : public Trigger
+{
+public:
+    IllidanCageTrapTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan cage trap") {}
+    bool IsActive() override;
+};
+
+class IllidanEnrageTrigger : public Trigger
+{
+public:
+    IllidanEnrageTrigger(PlayerbotAI* ai) : Trigger(ai, "illidan enrage") {}
+    bool IsActive() override;
+};
+
 #endif

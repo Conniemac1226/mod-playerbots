@@ -244,3 +244,115 @@ void RaidBtMotherShahrazStrategy::InitMultipliers(std::vector<Multiplier*>& mult
 {
     // Add Mother Shahraz-specific multipliers if needed
 }
+
+// Illidari Council
+void RaidBtIllidariCouncilStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
+{
+    // Target priority (Lady Malande > Veras > Zerevor > Gathios)
+    triggers.push_back(new TriggerNode(
+        "council target priority",
+        NextAction::array(0, new NextAction("council target priority", ACTION_NORMAL + 5.0f), NULL)));
+
+    // Spread out from other players for AoE
+    triggers.push_back(new TriggerNode(
+        "council spread needed",
+        NextAction::array(0, new NextAction("council spread", ACTION_MOVE + 3.0f), NULL)));
+
+    // Interrupt Malande's healing
+    triggers.push_back(new TriggerNode(
+        "council interrupt malande",
+        NextAction::array(0, new NextAction("council interrupt malande", ACTION_INTERRUPT), NULL)));
+
+    // Avoid Gathios's Consecration
+    triggers.push_back(new TriggerNode(
+        "council consecration",
+        NextAction::array(0, new NextAction("council avoid consecration", ACTION_EMERGENCY), NULL)));
+
+    // Avoid Zerevor's Blizzard
+    triggers.push_back(new TriggerNode(
+        "council blizzard",
+        NextAction::array(0, new NextAction("council avoid blizzard", ACTION_EMERGENCY + 1.0f), NULL)));
+
+    // Avoid Zerevor's Flamestrike
+    triggers.push_back(new TriggerNode(
+        "council flamestrike",
+        NextAction::array(0, new NextAction("council avoid flamestrike", ACTION_EMERGENCY + 1.0f), NULL)));
+
+    // Cleanse Veras's Deadly Poison
+    triggers.push_back(new TriggerNode(
+        "council poison",
+        NextAction::array(0, new NextAction("council poison cleanse", ACTION_DISPEL), NULL)));
+
+    // Avoid Malande's Divine Wrath
+    triggers.push_back(new TriggerNode(
+        "council divine wrath",
+        NextAction::array(0, new NextAction("council divine wrath avoid", ACTION_MOVE + 2.0f), NULL)));
+}
+
+void RaidBtIllidariCouncilStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
+{
+    // Add Illidari Council-specific multipliers if needed
+}
+
+// Illidan Stormrage
+void RaidBtIllidanStormrageStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
+{
+    // Phase management
+    triggers.push_back(new TriggerNode(
+        "illidan engaged",
+        NextAction::array(0, new NextAction("illidan phase check", ACTION_HIGH + 5.0f), NULL)));
+
+    // Phase 1: Ground phase
+    triggers.push_back(new TriggerNode(
+        "illidan flame crash",
+        NextAction::array(0, new NextAction("illidan flame crash avoid", ACTION_EMERGENCY + 2.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "illidan parasitic shadowfiend",
+        NextAction::array(0, new NextAction("illidan parasitic shadowfiend", ACTION_HIGH + 4.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "illidan draw soul",
+        NextAction::array(0, new NextAction("illidan draw soul heal", ACTION_HIGH + 3.0f), NULL)));
+
+    // Phase 2: Flying phase (Eye Beam)
+    triggers.push_back(new TriggerNode(
+        "illidan eye beam",
+        NextAction::array(0, new NextAction("illidan eye beam avoid", ACTION_EMERGENCY + 3.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "illidan dark barrage",
+        NextAction::array(0, new NextAction("illidan dark barrage interrupt", ACTION_INTERRUPT), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "illidan flame of azzinoth",
+        NextAction::array(0, new NextAction("illidan flame of azzinoth tank", ACTION_HIGH + 2.0f), NULL)));
+
+    // Phase 3: Maiev phase
+    triggers.push_back(new TriggerNode(
+        "illidan agonizing flames",
+        NextAction::array(0, new NextAction("illidan agonizing flames avoid", ACTION_EMERGENCY + 1.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "illidan cage trap",
+        NextAction::array(0, new NextAction("illidan cage avoid", ACTION_MOVE + 3.0f), NULL)));
+
+    // Phase 4: Demon Form
+    triggers.push_back(new TriggerNode(
+        "illidan shadow demon",
+        NextAction::array(0, new NextAction("illidan shadow demon", ACTION_HIGH + 5.0f), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "illidan demon form",
+        NextAction::array(0, new NextAction("illidan flame burst position", ACTION_MOVE + 2.0f), NULL)));
+
+    // Phase 5: Enrage (Frenzy)
+    triggers.push_back(new TriggerNode(
+        "illidan enrage",
+        NextAction::array(0, new NextAction("illidan enrage kite", ACTION_EMERGENCY + 4.0f), NULL)));
+}
+
+void RaidBtIllidanStormrageStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
+{
+    // Add Illidan-specific multipliers if needed
+}

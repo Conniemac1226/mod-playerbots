@@ -57,6 +57,31 @@ public:
         creators["shahraz fatal attraction"] = &RaidBtTriggerContext::shahraz_fatal_attraction;
         creators["shahraz beam target"] = &RaidBtTriggerContext::shahraz_beam_target;
         creators["shahraz prismatic aura"] = &RaidBtTriggerContext::shahraz_prismatic_aura;
+        
+        // Illidari Council
+        creators["council engaged"] = &RaidBtTriggerContext::council_engaged;
+        creators["council target priority"] = &RaidBtTriggerContext::council_target_priority;
+        creators["council spread needed"] = &RaidBtTriggerContext::council_spread_needed;
+        creators["council interrupt malande"] = &RaidBtTriggerContext::council_interrupt_malande;
+        creators["council consecration"] = &RaidBtTriggerContext::council_consecration;
+        creators["council blizzard"] = &RaidBtTriggerContext::council_blizzard;
+        creators["council flamestrike"] = &RaidBtTriggerContext::council_flamestrike;
+        creators["council poison"] = &RaidBtTriggerContext::council_poison;
+        creators["council divine wrath"] = &RaidBtTriggerContext::council_divine_wrath;
+        
+        // Illidan Stormrage
+        creators["illidan engaged"] = &RaidBtTriggerContext::illidan_engaged;
+        creators["illidan flame crash"] = &RaidBtTriggerContext::illidan_flame_crash;
+        creators["illidan parasitic shadowfiend"] = &RaidBtTriggerContext::illidan_parasitic_shadowfiend;
+        creators["illidan draw soul"] = &RaidBtTriggerContext::illidan_draw_soul;
+        creators["illidan agonizing flames"] = &RaidBtTriggerContext::illidan_agonizing_flames;
+        creators["illidan eye beam"] = &RaidBtTriggerContext::illidan_eye_beam;
+        creators["illidan dark barrage"] = &RaidBtTriggerContext::illidan_dark_barrage;
+        creators["illidan flame of azzinoth"] = &RaidBtTriggerContext::illidan_flame_of_azzinoth;
+        creators["illidan shadow demon"] = &RaidBtTriggerContext::illidan_shadow_demon;
+        creators["illidan demon form"] = &RaidBtTriggerContext::illidan_demon_form;
+        creators["illidan cage trap"] = &RaidBtTriggerContext::illidan_cage_trap;
+        creators["illidan enrage"] = &RaidBtTriggerContext::illidan_enrage;
     }
 
 private:
@@ -109,6 +134,31 @@ private:
     static Trigger* shahraz_fatal_attraction(PlayerbotAI* ai) { return new MotherShahrazFatalAttractionTrigger(ai); }
     static Trigger* shahraz_beam_target(PlayerbotAI* ai) { return new MotherShahrazBeamTargetTrigger(ai); }
     static Trigger* shahraz_prismatic_aura(PlayerbotAI* ai) { return new MotherShahrazPrismaticAuraTrigger(ai); }
+    
+    // Illidari Council
+    static Trigger* council_engaged(PlayerbotAI* ai) { return new IllidariCouncilEngagedTrigger(ai); }
+    static Trigger* council_target_priority(PlayerbotAI* ai) { return new IllidariCouncilTargetPriorityTrigger(ai); }
+    static Trigger* council_spread_needed(PlayerbotAI* ai) { return new IllidariCouncilSpreadTrigger(ai); }
+    static Trigger* council_interrupt_malande(PlayerbotAI* ai) { return new IllidariCouncilInterruptMalandeTrigger(ai); }
+    static Trigger* council_consecration(PlayerbotAI* ai) { return new IllidariCouncilConsecrationTrigger(ai); }
+    static Trigger* council_blizzard(PlayerbotAI* ai) { return new IllidariCouncilBlizzardTrigger(ai); }
+    static Trigger* council_flamestrike(PlayerbotAI* ai) { return new IllidariCouncilFlamestrikeTrigger(ai); }
+    static Trigger* council_poison(PlayerbotAI* ai) { return new IllidariCouncilPoisonTrigger(ai); }
+    static Trigger* council_divine_wrath(PlayerbotAI* ai) { return new IllidariCouncilDivineWrathTrigger(ai); }
+    
+    // Illidan Stormrage
+    static Trigger* illidan_engaged(PlayerbotAI* ai) { return new IllidanEngagedTrigger(ai); }
+    static Trigger* illidan_flame_crash(PlayerbotAI* ai) { return new IllidanFlameCrashTrigger(ai); }
+    static Trigger* illidan_parasitic_shadowfiend(PlayerbotAI* ai) { return new IllidanParasiticShadowfiendTrigger(ai); }
+    static Trigger* illidan_draw_soul(PlayerbotAI* ai) { return new IllidanDrawSoulTrigger(ai); }
+    static Trigger* illidan_agonizing_flames(PlayerbotAI* ai) { return new IllidanAgonizingFlamesTrigger(ai); }
+    static Trigger* illidan_eye_beam(PlayerbotAI* ai) { return new IllidanEyeBeamTrigger(ai); }
+    static Trigger* illidan_dark_barrage(PlayerbotAI* ai) { return new IllidanDarkBarrageTrigger(ai); }
+    static Trigger* illidan_flame_of_azzinoth(PlayerbotAI* ai) { return new IllidanFlameOfAzzinothTrigger(ai); }
+    static Trigger* illidan_shadow_demon(PlayerbotAI* ai) { return new IllidanShadowDemonTrigger(ai); }
+    static Trigger* illidan_demon_form(PlayerbotAI* ai) { return new IllidanDemonFormTrigger(ai); }
+    static Trigger* illidan_cage_trap(PlayerbotAI* ai) { return new IllidanCageTrapTrigger(ai); }
+    static Trigger* illidan_enrage(PlayerbotAI* ai) { return new IllidanEnrageTrigger(ai); }
 };
 
 #endif

@@ -251,4 +251,146 @@ public:
     bool Execute(Event event) override;
 };
 
+// Illidari Council
+class IllidariCouncilTargetAction : public AttackAction
+{
+public:
+    IllidariCouncilTargetAction(PlayerbotAI* ai) : AttackAction(ai, "council target priority") {}
+    bool Execute(Event event) override;
+};
+
+class IllidariCouncilSpreadAction : public MovementAction
+{
+public:
+    IllidariCouncilSpreadAction(PlayerbotAI* ai) : MovementAction(ai, "council spread") {}
+    bool Execute(Event event) override;
+};
+
+class IllidariCouncilInterruptMalandeAction : public Action
+{
+public:
+    IllidariCouncilInterruptMalandeAction(PlayerbotAI* ai) : Action(ai, "council interrupt malande") {}
+    bool Execute(Event event) override;
+};
+
+class IllidariCouncilAvoidConsecrationAction : public MovementAction
+{
+public:
+    IllidariCouncilAvoidConsecrationAction(PlayerbotAI* ai) : MovementAction(ai, "council avoid consecration") {}
+    bool Execute(Event event) override;
+};
+
+class IllidariCouncilAvoidBlizzardAction : public MovementAction
+{
+public:
+    IllidariCouncilAvoidBlizzardAction(PlayerbotAI* ai) : MovementAction(ai, "council avoid blizzard") {}
+    bool Execute(Event event) override;
+};
+
+class IllidariCouncilAvoidFlamestrikeAction : public MovementAction
+{
+public:
+    IllidariCouncilAvoidFlamestrikeAction(PlayerbotAI* ai) : MovementAction(ai, "council avoid flamestrike") {}
+    bool Execute(Event event) override;
+};
+
+class IllidariCouncilPoisonCleanseAction : public Action
+{
+public:
+    IllidariCouncilPoisonCleanseAction(PlayerbotAI* ai) : Action(ai, "council poison cleanse") {}
+    bool Execute(Event event) override;
+};
+
+class IllidariCouncilDivineWrathAvoidAction : public MovementAction
+{
+public:
+    IllidariCouncilDivineWrathAvoidAction(PlayerbotAI* ai) : MovementAction(ai, "council divine wrath avoid") {}
+    bool Execute(Event event) override;
+};
+
+// Illidan Stormrage
+class IllidanPhaseCheckAction : public Action
+{
+public:
+    IllidanPhaseCheckAction(PlayerbotAI* ai) : Action(ai, "illidan phase check") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanFlameCrashAvoidAction : public MovementAction
+{
+public:
+    IllidanFlameCrashAvoidAction(PlayerbotAI* ai) : MovementAction(ai, "illidan flame crash avoid") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanParasiticShadowfiendAction : public AttackAction
+{
+public:
+    IllidanParasiticShadowfiendAction(PlayerbotAI* ai) : AttackAction(ai, "illidan parasitic shadowfiend") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanDrawSoulHealAction : public Action
+{
+public:
+    IllidanDrawSoulHealAction(PlayerbotAI* ai) : Action(ai, "illidan draw soul heal") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanAgonizingFlamesAvoidAction : public MovementAction
+{
+public:
+    IllidanAgonizingFlamesAvoidAction(PlayerbotAI* ai) : MovementAction(ai, "illidan agonizing flames avoid") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanEyeBeamAvoidAction : public MovementAction
+{
+public:
+    IllidanEyeBeamAvoidAction(PlayerbotAI* ai) : MovementAction(ai, "illidan eye beam avoid") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanDarkBarrageInterruptAction : public Action
+{
+public:
+    IllidanDarkBarrageInterruptAction(PlayerbotAI* ai) : Action(ai, "illidan dark barrage interrupt") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanFlameOfAzzinothTankAction : public AttackAction
+{
+public:
+    IllidanFlameOfAzzinothTankAction(PlayerbotAI* ai) : AttackAction(ai, "illidan flame of azzinoth tank") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanShadowDemonAction : public AttackAction
+{
+public:
+    IllidanShadowDemonAction(PlayerbotAI* ai) : AttackAction(ai, "illidan shadow demon") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanFlameBurstPositionAction : public MovementAction
+{
+public:
+    IllidanFlameBurstPositionAction(PlayerbotAI* ai) : MovementAction(ai, "illidan flame burst position") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanCageAvoidAction : public MovementAction
+{
+public:
+    IllidanCageAvoidAction(PlayerbotAI* ai) : MovementAction(ai, "illidan cage avoid") {}
+    bool Execute(Event event) override;
+};
+
+class IllidanEnrageKiteAction : public MovementAction
+{
+public:
+    IllidanEnrageKiteAction(PlayerbotAI* ai) : MovementAction(ai, "illidan enrage kite") {}
+    bool Execute(Event event) override;
+};
+
 #endif

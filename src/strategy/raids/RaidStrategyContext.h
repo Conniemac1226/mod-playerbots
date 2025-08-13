@@ -50,6 +50,8 @@ public:
         creators["gurtogg bloodboil"] = &RaidStrategyContext::gurtogg_bloodboil;
         creators["reliquary of souls"] = &RaidStrategyContext::reliquary_of_souls;
         creators["mother shahraz"] = &RaidStrategyContext::mother_shahraz;
+        creators["illidari council"] = &RaidStrategyContext::illidari_council;
+        creators["illidan stormrage"] = &RaidStrategyContext::illidan_stormrage;
     }
 
 private:
@@ -76,6 +78,8 @@ private:
     static Strategy* gurtogg_bloodboil(PlayerbotAI* botAI) { return new RaidBtGurtoggBloodboilStrategy(botAI); }
     static Strategy* reliquary_of_souls(PlayerbotAI* botAI) { return new RaidBtReliquaryOfSoulsStrategy(botAI); }
     static Strategy* mother_shahraz(PlayerbotAI* botAI) { return new RaidBtMotherShahrazStrategy(botAI); }
+    static Strategy* illidari_council(PlayerbotAI* botAI) { return new RaidBtIllidariCouncilStrategy(botAI); }
+    static Strategy* illidan_stormrage(PlayerbotAI* botAI) { return new RaidBtIllidanStormrageStrategy(botAI); }
 };
 
 #endif
