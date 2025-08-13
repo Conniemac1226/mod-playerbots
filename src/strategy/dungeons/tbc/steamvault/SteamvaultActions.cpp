@@ -4,7 +4,6 @@
 #include "Unit.h"
 #include "AttackersValue.h"
 #include "Playerbots.h"
-#include "Value.h"
 
 // Use NPC and spell IDs from SteamvaultTriggers.h
 
@@ -85,7 +84,15 @@ bool DispelLungBurstAction::Execute(Event event)
 
 bool DispelLungBurstAction::isUseful()
 {
-    return AI_VALUE(bool, "thespia lung burst");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* lungBurstValue = botAI->GetAiObjectContext()->GetValue<bool>("thespia lung burst");
+    if (!lungBurstValue)
+        return false;
+    
+    return lungBurstValue->Get();
 }
 
 bool AttackWaterElementalAction::Execute(Event event)
@@ -95,7 +102,7 @@ bool AttackWaterElementalAction::Execute(Event event)
         return false;
 
     // Find water elementals using proven pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* elemental = nullptr;
     float closestDistance = 50.0f;
 
@@ -126,7 +133,16 @@ bool AttackWaterElementalAction::Execute(Event event)
 
 bool AttackWaterElementalAction::isUseful()
 {
-    return AI_VALUE(bool, "thespia water elemental active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    // Use safe Value pattern to prevent crashes
+    Value<bool>* elementalActiveValue = botAI->GetAiObjectContext()->GetValue<bool>("thespia water elemental active");
+    if (!elementalActiveValue)
+        return false;
+    
+    return elementalActiveValue->Get();
 }
 
 // Mekgineer Steamrigger Actions
@@ -158,7 +174,15 @@ bool DispelShrinkRayAction::Execute(Event event)
 
 bool DispelShrinkRayAction::isUseful()
 {
-    return AI_VALUE(bool, "steamrigger shrink ray");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* shrinkRayValue = botAI->GetAiObjectContext()->GetValue<bool>("steamrigger shrink ray");
+    if (!shrinkRayValue)
+        return false;
+    
+    return shrinkRayValue->Get();
 }
 
 bool AvoidSawBladeAction::Execute(Event event)
@@ -197,7 +221,15 @@ bool AvoidSawBladeAction::Execute(Event event)
 
 bool AvoidSawBladeAction::isUseful()
 {
-    return AI_VALUE(bool, "steamrigger saw blade");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* sawBladeValue = botAI->GetAiObjectContext()->GetValue<bool>("steamrigger saw blade");
+    if (!sawBladeValue)
+        return false;
+    
+    return sawBladeValue->Get();
 }
 
 bool RemoveElectrifiedNetAction::Execute(Event event)
@@ -229,7 +261,15 @@ bool RemoveElectrifiedNetAction::Execute(Event event)
 
 bool RemoveElectrifiedNetAction::isUseful()
 {
-    return AI_VALUE(bool, "steamrigger electrified net");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("steamrigger electrified net");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool AttackSteamriggerMechanicAction::Execute(Event event)
@@ -239,7 +279,7 @@ bool AttackSteamriggerMechanicAction::Execute(Event event)
         return false;
 
     // Find mechanics using proven pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* mechanic = nullptr;
     float closestDistance = 50.0f;
 
@@ -270,7 +310,15 @@ bool AttackSteamriggerMechanicAction::Execute(Event event)
 
 bool AttackSteamriggerMechanicAction::isUseful()
 {
-    return AI_VALUE(bool, "steamrigger mechanic active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("steamrigger mechanic active");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 // Warlord Kalithresh Actions
@@ -310,7 +358,15 @@ bool StopCastingSpellReflectionAction::Execute(Event event)
 
 bool StopCastingSpellReflectionAction::isUseful()
 {
-    return AI_VALUE(bool, "kalithresh spell reflection");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("kalithresh spell reflection");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool HealImpaleTargetAction::Execute(Event event)
@@ -366,7 +422,15 @@ bool HealImpaleTargetAction::Execute(Event event)
 
 bool HealImpaleTargetAction::isUseful()
 {
-    return AI_VALUE(bool, "kalithresh impale");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("kalithresh impale");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool AttackNagaDistillerAction::Execute(Event event)
@@ -376,7 +440,7 @@ bool AttackNagaDistillerAction::Execute(Event event)
         return false;
 
     // Find active Naga Distillers using proven pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* distiller = nullptr;
     float closestDistance = 100.0f;
 
@@ -408,7 +472,15 @@ bool AttackNagaDistillerAction::Execute(Event event)
 
 bool AttackNagaDistillerAction::isUseful()
 {
-    return AI_VALUE(bool, "kalithresh naga distiller active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("kalithresh naga distiller active");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool InterruptDistillerChannelAction::Execute(Event event)
@@ -418,7 +490,7 @@ bool InterruptDistillerChannelAction::Execute(Event event)
         return false;
 
     // Find distiller channeling on Kalithresh using proven pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
 
     for (auto& npc : npcs)
     {
@@ -453,5 +525,13 @@ bool InterruptDistillerChannelAction::Execute(Event event)
 
 bool InterruptDistillerChannelAction::isUseful()
 {
-    return AI_VALUE(bool, "kalithresh channeling rage");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("kalithresh channeling rage");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }

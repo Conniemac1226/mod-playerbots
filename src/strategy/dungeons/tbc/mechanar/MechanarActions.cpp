@@ -89,7 +89,7 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
     g_capacitus_lastPolarityTime[botGuid] = currentTime;
 
     // Find other players with same/opposite polarity
-    GuidVector members = AI_VALUE(GuidVector, "group members");
+    const GuidVector members = AI_VALUE(GuidVector, "group members");
     Position safePos;
     bool foundSamePolarity = false;
     
@@ -157,7 +157,7 @@ bool CapacitusNetherChargeAction::Execute(Event event)
 
     // RESEARCHED: boss_mechano_lord_capacitus.cpp:64-70
     // Nether Charges spawn and move randomly
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* nearestCharge = nullptr;
     float closestDistance = 100.0f;
 
@@ -192,7 +192,15 @@ bool CapacitusNetherChargeAction::Execute(Event event)
 
 bool CapacitusNetherChargeAction::isUseful()
 {
-    return AI_VALUE(bool, "nether charge active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* chargeActiveValue = botAI->GetAiObjectContext()->GetValue<bool>("nether charge active");
+    if (!chargeActiveValue)
+        return false;
+    
+    return chargeActiveValue->Get();
 }
 
 bool CapacitusPositionAction::Execute(Event event)
@@ -206,7 +214,8 @@ bool CapacitusPositionAction::Execute(Event event)
         return false;
 
     // Standard positioning - spread for charges
-    GuidVector members = AI_VALUE(GuidVector, "group members");
+    const GuidVector members = AI_VALUE(GuidVector, "group members");
+    
     for (auto& member : members)
     {
         Unit* ally = botAI->GetUnit(member);
@@ -231,7 +240,15 @@ bool CapacitusPositionAction::Execute(Event event)
 
 bool CapacitusPositionAction::isUseful()
 {
-    return AI_VALUE(bool, "capacitus engaged");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* engagedValue = botAI->GetAiObjectContext()->GetValue<bool>("capacitus engaged");
+    if (!engagedValue)
+        return false;
+    
+    return engagedValue->Get();
 }
 
 // ========== NETHERMANCER SEPETHREA ACTIONS ==========
@@ -246,8 +263,13 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     uint32 currentTime = getMSTime();
 
     // RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157
-    // Raging Flames fixate on random targets and chase them
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    // Raging Flames fixate on random targets and re-fixate every 15-25s during Inferno
+    // ALL players must move away from elementals to avoid AoE damage
+    
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* dangerousElement = nullptr;
+    float closestDanger = 100.0f;
+    bool isDirectlyFixated = false;
     
     for (auto& npc : npcs)
     {
@@ -257,28 +279,61 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
 
         if (unit->GetEntry() == NPC_RAGING_FLAMES)
         {
-            // Check if this flame is targeting us
+            float distance = bot->GetDistance(unit);
+            bool isCastingInferno = unit->HasUnitState(UNIT_STATE_CASTING) && 
+                                  unit->FindCurrentSpellBySpellId(SPELL_INFERNO);
+            
+            // CRITICAL: Move away from Inferno casting (immediate AoE danger)
+            if (isCastingInferno && distance < 15.0f)
+            {
+                dangerousElement = unit;
+                closestDanger = distance;
+                break; // Immediate action needed
+            }
+            
+            // HIGH PRIORITY: Directly fixated by this elemental
             if (unit->GetVictim() == bot)
             {
+                dangerousElement = unit;
+                closestDanger = distance;
+                isDirectlyFixated = true;
                 g_sepethrea_targetedByFlames[botGuid] = unit->GetGUID();
                 g_sepethrea_lastFlamesTime[botGuid] = currentTime;
-                
-                // Kite the flames away from raid
-                // EMERGENCY: Kite the flames away from raid
-                float angle = bot->GetAngle(unit) + M_PI;
-                float x = bot->GetPositionX() + cos(angle) * 20.0f;
-                float y = bot->GetPositionY() + sin(angle) * 20.0f;
-                float z = bot->GetPositionZ();
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                            MovementPriority::MOVEMENT_FORCED);
+            }
+            
+            // MODERATE PRIORITY: Close enough to be dangerous
+            else if (!dangerousElement && distance < 18.0f)
+            {
+                if (distance < closestDanger)
+                {
+                    dangerousElement = unit;
+                    closestDanger = distance;
+                }
             }
         }
+    }
+
+    if (dangerousElement)
+    {
+        // Calculate safe escape position
+        float angle = bot->GetAngle(dangerousElement) + M_PI; // Opposite direction
+        float escapeDistance = isDirectlyFixated ? 25.0f : 20.0f; // Kite further if fixated
+        
+        // Try to move towards raid area if possible, otherwise just away
+        Position safePos;
+        safePos.m_positionX = bot->GetPositionX() + cos(angle) * escapeDistance;
+        safePos.m_positionY = bot->GetPositionY() + sin(angle) * escapeDistance;
+        safePos.m_positionZ = bot->GetPositionZ();
+        
+        return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
+                     safePos.m_positionZ, false, false, false, true,
+                     MovementPriority::MOVEMENT_FORCED);
     }
 
     // Clear targeting if flames despawned or retargeted
     if (g_sepethrea_targetedByFlames[botGuid])
     {
-        if ((currentTime - g_sepethrea_lastFlamesTime[botGuid]) > 5000)
+        if ((currentTime - g_sepethrea_lastFlamesTime[botGuid]) > 10000)
         {
             g_sepethrea_targetedByFlames[botGuid].Clear();
         }
@@ -289,7 +344,15 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
 
 bool SepethreaRagingFlamesAction::isUseful()
 {
-    return AI_VALUE(bool, "raging flames active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* flamesValue = botAI->GetAiObjectContext()->GetValue<bool>("raging flames active");
+    if (!flamesValue)
+        return false;
+    
+    return flamesValue->Get();
 }
 
 bool SepethreaDragonsBreathAction::Execute(Event event)
@@ -326,7 +389,15 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
 
 bool SepethreaDragonsBreathAction::isUseful()
 {
-    return AI_VALUE(bool, "dragons breath danger");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* breathValue = botAI->GetAiObjectContext()->GetValue<bool>("dragons breath danger");
+    if (!breathValue)
+        return false;
+    
+    return breathValue->Get();
 }
 
 bool SepethreaInfernoAction::Execute(Event event)
@@ -337,7 +408,7 @@ bool SepethreaInfernoAction::Execute(Event event)
 
     // RESEARCHED: boss_nethermancer_sepethrea.cpp:153 & 187
     // Raging Flames cast Inferno which deals AoE damage
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
     {
@@ -371,7 +442,15 @@ bool SepethreaInfernoAction::Execute(Event event)
 
 bool SepethreaInfernoAction::isUseful()
 {
-    return AI_VALUE(bool, "inferno danger");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* infernoValue = botAI->GetAiObjectContext()->GetValue<bool>("inferno danger");
+    if (!infernoValue)
+        return false;
+    
+    return infernoValue->Get();
 }
 
 bool SepethreaArcaneBlastAction::Execute(Event event)
@@ -407,7 +486,93 @@ bool SepethreaArcaneBlastAction::Execute(Event event)
 bool SepethreaArcaneBlastAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    return bot && botAI->IsTank(bot) && AI_VALUE(bool, "sepethrea engaged");
+    if (!bot || !botAI || !botAI->IsTank(bot))
+        return false;
+
+    Value<bool>* engagedValue = botAI->GetAiObjectContext()->GetValue<bool>("sepethrea engaged");
+    if (!engagedValue)
+        return false;
+    
+    return engagedValue->Get();
+}
+
+bool SepethreaTargetElementalAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157
+    // Raging Flames must be killed quickly to reduce raid damage
+    // DPS should prioritize elementals over boss
+    
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* priorityElemental = nullptr;
+    float closestDistance = 100.0f;
+    
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_RAGING_FLAMES)
+        {
+            float distance = bot->GetDistance(unit);
+            
+            // Prioritize elementals that are:
+            // 1. Casting Inferno (most dangerous)
+            // 2. Closest to raid members
+            // 3. Fixated on healers/casters (protect them)
+            
+            bool isCastingInferno = unit->HasUnitState(UNIT_STATE_CASTING) && 
+                                  unit->FindCurrentSpellBySpellId(SPELL_INFERNO);
+            bool fixatingHealer = false;
+            
+            if (unit->GetVictim() && unit->GetVictim()->IsPlayer())
+            {
+                Player* victim = unit->GetVictim()->ToPlayer();
+                fixatingHealer = botAI->IsHeal(victim) || !botAI->IsMelee(victim);
+            }
+            
+            // Calculate priority score (lower = higher priority)
+            float priority = distance;
+            if (isCastingInferno) priority -= 50.0f; // Highest priority
+            if (fixatingHealer) priority -= 20.0f;   // Protect healers/casters
+            
+            if (priority < closestDistance && distance <= 40.0f)
+            {
+                priorityElemental = unit;
+                closestDistance = priority;
+            }
+        }
+    }
+
+    if (priorityElemental)
+    {
+        // Switch target to the priority elemental
+        Value<Unit*>* currentTargetValue = botAI->GetAiObjectContext()->GetValue<Unit*>("current target");
+        if (currentTargetValue && currentTargetValue->Get() != priorityElemental)
+        {
+            currentTargetValue->Set(priorityElemental);
+        }
+        return Attack(priorityElemental);
+    }
+
+    return false;
+}
+
+bool SepethreaTargetElementalAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || botAI->IsTank(bot) || botAI->IsHeal(bot))
+        return false; // Only for DPS
+    
+    Value<bool>* flamesValue = botAI->GetAiObjectContext()->GetValue<bool>("raging flames active");
+    if (!flamesValue)
+        return false;
+    
+    return flamesValue->Get();
 }
 
 // ========== PATHALEON THE CALCULATOR ACTIONS ==========
@@ -420,7 +585,7 @@ bool PathaleonDominationAction::Execute(Event event)
 
     // RESEARCHED: boss_pathaleon_the_calculator.cpp:117-122
     // Domination is mind control - affected players need to be CC'd
-    GuidVector members = AI_VALUE(GuidVector, "group members");
+    const GuidVector members = AI_VALUE(GuidVector, "group members");
     
     for (auto& member : members)
     {
@@ -457,7 +622,15 @@ bool PathaleonDominationAction::Execute(Event event)
 
 bool PathaleonDominationAction::isUseful()
 {
-    return AI_VALUE(bool, "domination active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* dominationValue = botAI->GetAiObjectContext()->GetValue<bool>("domination active");
+    if (!dominationValue)
+        return false;
+    
+    return dominationValue->Get();
 }
 
 bool PathaleonNetherWraithAction::Execute(Event event)
@@ -468,7 +641,7 @@ bool PathaleonNetherWraithAction::Execute(Event event)
 
     // RESEARCHED: boss_pathaleon_the_calculator.cpp:96-101
     // Summons 3-4 Nether Wraiths that need to be killed quickly
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* nearestWraith = nullptr;
     float closestDistance = 100.0f;
 
@@ -499,7 +672,15 @@ bool PathaleonNetherWraithAction::Execute(Event event)
 
 bool PathaleonNetherWraithAction::isUseful()
 {
-    return AI_VALUE(bool, "nether wraith active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* wraithValue = botAI->GetAiObjectContext()->GetValue<bool>("nether wraith active");
+    if (!wraithValue)
+        return false;
+    
+    return wraithValue->Get();
 }
 
 bool PathaleonArcaneTorrentAction::Execute(Event event)
@@ -535,7 +716,15 @@ bool PathaleonArcaneTorrentAction::Execute(Event event)
 
 bool PathaleonArcaneTorrentAction::isUseful()
 {
-    return AI_VALUE(bool, "arcane torrent danger");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* torrentValue = botAI->GetAiObjectContext()->GetValue<bool>("arcane torrent danger");
+    if (!torrentValue)
+        return false;
+    
+    return torrentValue->Get();
 }
 
 bool PathaleonEnrageAction::Execute(Event event)
@@ -568,7 +757,7 @@ bool PathaleonEnrageAction::Execute(Event event)
         // Healers focus on tank during enrage
         if (botAI->IsHeal(bot))
         {
-            GuidVector members = AI_VALUE(GuidVector, "group members");
+            const GuidVector members = AI_VALUE(GuidVector, "group members");
             for (auto& member : members)
             {
                 Unit* ally = botAI->GetUnit(member);
@@ -632,7 +821,14 @@ bool PathaleonArcaneExplosionAction::Execute(Event event)
 bool PathaleonArcaneExplosionAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    return bot && bot->GetMap()->IsHeroic() && AI_VALUE(bool, "arcane explosion danger");
+    if (!bot || !botAI || !bot->GetMap()->IsHeroic())
+        return false;
+
+    Value<bool>* explosionValue = botAI->GetAiObjectContext()->GetValue<bool>("arcane explosion danger");
+    if (!explosionValue)
+        return false;
+    
+    return explosionValue->Get();
 }
 
 bool PathaleonManaTapAction::Execute(Event event)
@@ -649,7 +845,7 @@ bool PathaleonManaTapAction::Execute(Event event)
         // Healers prioritize emergency heals only
         if (botAI->IsHeal(bot))
         {
-            GuidVector members = AI_VALUE(GuidVector, "group members");
+            const GuidVector members = AI_VALUE(GuidVector, "group members");
             for (auto& member : members)
             {
                 Unit* ally = botAI->GetUnit(member);

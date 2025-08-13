@@ -18,6 +18,7 @@
 #include "serpentshrine/SerpentshrineStrategy.h"
 #include "tempestkeep/TempestKeepStrategy.h"
 #include "blacktemple/BlackTempleStrategy.h"
+#include "zulaman/ZulAmanStrategy.h"
 
 class RaidStrategyContext : public NamedObjectContext<Strategy>
 {
@@ -52,6 +53,13 @@ public:
         creators["mother shahraz"] = &RaidStrategyContext::mother_shahraz;
         creators["illidari council"] = &RaidStrategyContext::illidari_council;
         creators["illidan stormrage"] = &RaidStrategyContext::illidan_stormrage;
+        creators["zulaman"] = &RaidStrategyContext::zulaman;
+        creators["nalorakk"] = &RaidStrategyContext::nalorakk;
+        creators["akilzon"] = &RaidStrategyContext::akilzon;
+        creators["janalai"] = &RaidStrategyContext::janalai;
+        creators["halazzi"] = &RaidStrategyContext::halazzi;
+        creators["hex lord malacrass"] = &RaidStrategyContext::hex_lord_malacrass;
+        creators["zuljin"] = &RaidStrategyContext::zuljin;
     }
 
 private:
@@ -80,6 +88,13 @@ private:
     static Strategy* mother_shahraz(PlayerbotAI* botAI) { return new RaidBtMotherShahrazStrategy(botAI); }
     static Strategy* illidari_council(PlayerbotAI* botAI) { return new RaidBtIllidariCouncilStrategy(botAI); }
     static Strategy* illidan_stormrage(PlayerbotAI* botAI) { return new RaidBtIllidanStormrageStrategy(botAI); }
+    static Strategy* zulaman(PlayerbotAI* botAI) { return new RaidZaStrategy(botAI); }
+    static Strategy* nalorakk(PlayerbotAI* botAI) { return new RaidZaNalorakkStrategy(botAI); }
+    static Strategy* akilzon(PlayerbotAI* botAI) { return new RaidZaAkilzonStrategy(botAI); }
+    static Strategy* janalai(PlayerbotAI* botAI) { return new RaidZaJanalaiStrategy(botAI); }
+    static Strategy* halazzi(PlayerbotAI* botAI) { return new RaidZaHalazziStrategy(botAI); }
+    static Strategy* hex_lord_malacrass(PlayerbotAI* botAI) { return new RaidZaHexLordStrategy(botAI); }
+    static Strategy* zuljin(PlayerbotAI* botAI) { return new RaidZaZuljinStrategy(botAI); }
 };
 
 #endif

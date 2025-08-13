@@ -4,211 +4,108 @@
 #include "Player.h"
 #include "Unit.h"
 #include "Creature.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
+#include "Value.h"
+#include "AiObjectContext.h"
 
 bool AeonusCleaveNearbyTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
     // Only trigger for non-tanks
     if (botAI->IsTank(bot))
         return false;
 
-    // Check if Aeonus is present and bot is in cleave danger
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_AEONUS)
-        {
-            // Pattern from Karazhan: check if in front arc and close (cleave danger)
-            if (bot->GetDistance(unit) < 10.0f && unit->HasInArc(M_PI / 2, bot))
-                return true;
-        }
-    }
-    
-    return false;
+    // Pattern from Karazhan: check if in front arc and close (cleave danger)
+    float distance = bot->GetDistance(boss);
+    return distance < 10.0f && boss->HasInArc(M_PI / 2, bot);
 }
 
 bool AeonusEngagedTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
-    // Check if Aeonus is engaged in combat
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_AEONUS && unit->IsInCombat())
-            return true;
-    }
-    
-    return false;
+    Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
+    return boss && boss->IsAlive() && boss->IsInCombat();
 }
 
 bool ChronoLordDejaEngagedTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
-    // Check if Chrono Lord Deja is engaged in combat
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_CHRONO_LORD_DEJA && unit->IsInCombat())
-            return true;
-    }
-    
-    return false;
+    Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
+    return boss && boss->IsAlive() && boss->IsInCombat();
 }
 
 bool TemporusEngagedTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
-    // Check if Temporus is engaged in combat
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_TEMPORUS && unit->IsInCombat())
-            return true;
-    }
-    
-    return false;
+    Unit* boss = AI_VALUE2(Unit*, "find target", "temporus");
+    return boss && boss->IsAlive() && boss->IsInCombat();
 }
 
 bool TimeLapseNearbyTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
-    // Check if Chrono Lord Deja is present and bot is in AoE range
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_CHRONO_LORD_DEJA)
-        {
-            // Check if bot is in Time Lapse AoE range
-            if (bot->GetDistance(unit) < 15.0f && unit->IsInCombat())
-                return true;
-        }
-    }
-    
-    return false;
+    // Check if bot is in Time Lapse AoE range
+    float distance = bot->GetDistance(boss);
+    return distance < 15.0f;
 }
 
 bool ArcaneDischargeNearbyTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
-    // Check if Chrono Lord Deja is present and bot is in AoE range
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_CHRONO_LORD_DEJA)
-        {
-            // Check if bot is in Arcane Discharge AoE range
-            if (bot->GetDistance(unit) < 20.0f && unit->IsInCombat())
-                return true;
-        }
-    }
-    
-    return false;
+    // Check if bot is in Arcane Discharge AoE range
+    float distance = bot->GetDistance(boss);
+    return distance < 20.0f;
 }
 
 bool WingBuffetNearbyTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
-    // Check if Temporus is present and positioning is suboptimal
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "temporus");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_TEMPORUS && unit->IsInCombat())
-        {
-            float distance = bot->GetDistance(unit);
-            // Trigger when positioning is suboptimal for wing buffet
-            if (distance > 5.0f && distance < 15.0f)
-                return true;
-        }
-    }
-    
-    return false;
+    float distance = bot->GetDistance(boss);
+    // Trigger when positioning is suboptimal for wing buffet
+    return distance > 5.0f && distance < 15.0f;
 }
 
 // RESEARCHED: boss_temporus.cpp:54 - HASTEN buff needs dispel
 bool TemporusHastenActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
     // Only trigger for classes that can dispel
@@ -217,33 +114,15 @@ bool TemporusHastenActiveTrigger::IsActive()
         bot->getClass() != CLASS_WARLOCK)
         return false;
 
-    // Check if Temporus has Hasten buff
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_TEMPORUS && unit->IsInCombat())
-        {
-            if (unit->HasAura(SPELL_HASTEN))
-                return true;
-        }
-    }
-    
-    return false;
+    Unit* boss = AI_VALUE2(Unit*, "find target", "temporus");
+    return boss && boss->IsAlive() && boss->IsInCombat() && boss->HasAura(SPELL_HASTEN);
 }
 
 // RESEARCHED: boss_chrono_lord_deja.cpp:58 - ARCANE_BLAST needs interrupt  
 bool DejaArcaneBlastCastingTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
     // Only trigger for classes with interrupts
@@ -259,54 +138,23 @@ bool DejaArcaneBlastCastingTrigger::IsActive()
             return false;
     }
 
-    // Check if Chrono Lord Deja is casting Arcane Blast
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 30.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 30.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_CHRONO_LORD_DEJA && unit->IsInCombat())
-        {
-            if (unit->HasUnitState(UNIT_STATE_CASTING) && 
-                unit->FindCurrentSpellBySpellId(SPELL_ARCANE_BLAST))
-                return true;
-        }
-    }
-    
-    return false;
+    // Check if boss is within interrupt range and casting Arcane Blast
+    float distance = bot->GetDistance(boss);
+    return distance <= 30.0f && boss->HasUnitState(UNIT_STATE_CASTING) && 
+           boss->FindCurrentSpellBySpellId(SPELL_ARCANE_BLAST);
 }
 
 // RESEARCHED: boss_aeonus.cpp:86 - ENRAGE increases damage
 bool AeonusEnragedTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
-    // Check if Aeonus has Enrage buff
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_AEONUS && unit->IsInCombat())
-        {
-            if (unit->HasAura(SPELL_ENRAGE))
-                return true;
-        }
-    }
-    
-    return false;
+    Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
+    return boss && boss->IsAlive() && boss->IsInCombat() && boss->HasAura(SPELL_ENRAGE);
 }

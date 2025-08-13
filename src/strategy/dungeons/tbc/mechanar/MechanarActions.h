@@ -147,6 +147,15 @@ public:
     bool isUseful() override;
 };
 
+// RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157 - Raging Flames priority targeting for DPS
+class SepethreaTargetElementalAction : public AttackAction
+{
+public:
+    SepethreaTargetElementalAction(PlayerbotAI* ai) : AttackAction(ai, "target raging flames") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 // ========== PATHALEON THE CALCULATOR ACTIONS ==========
 
 // RESEARCHED: boss_pathaleon_the_calculator.cpp:117-122 - Mind Control (Domination)

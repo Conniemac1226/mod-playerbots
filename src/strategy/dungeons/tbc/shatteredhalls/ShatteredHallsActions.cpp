@@ -12,7 +12,7 @@ bool AvoidShadowFissureAction::Execute(Event event)
 
     float safeDistance = 8.0f;
     
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
@@ -205,7 +205,7 @@ bool KillShatteredAssassinsAction::Execute(Event event)
     
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
-    GuidVector attackers = AI_VALUE(GuidVector, "attackers");
+    const GuidVector attackers = AI_VALUE(GuidVector, "attackers");
     for (auto& attacker : attackers)
     {
         Unit* unit = botAI->GetUnit(attacker);
@@ -242,7 +242,7 @@ bool NetheKursePeonPriorityAction::Execute(Event event)
     
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
@@ -293,7 +293,7 @@ bool AvoidFlameArrowFireAction::IsFireNearby()
     }
     
     // Check for units with fire aura or casting fire
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest npcs");
     for (auto& guid : npcs)
     {
         Unit* unit = botAI->GetUnit(guid);
@@ -316,7 +316,7 @@ bool AvoidFlameArrowFireAction::IsFireNearby()
     }
     
     // Check if archers are actively shooting at our position
-    GuidVector hostiles = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector hostiles = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& guid : hostiles)
     {
         Unit* unit = botAI->GetUnit(guid);
@@ -355,7 +355,7 @@ Position AvoidFlameArrowFireAction::GetSafePosition()
         float minFireDist = 999.0f;
         
         // Check distance from fire sources
-        GuidVector npcs = AI_VALUE(GuidVector, "nearest npcs");
+        const GuidVector npcs = AI_VALUE(GuidVector, "nearest npcs");
         for (auto& guid : npcs)
         {
             Unit* unit = botAI->GetUnit(guid);

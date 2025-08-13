@@ -45,7 +45,7 @@ bool NetherChargeActiveTrigger::IsActive()
         return false;
 
     // Check for Nether Charges using proven WotLK pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
     {
@@ -74,9 +74,7 @@ bool RagingFlamesActiveTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check for Raging Flames
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
@@ -85,12 +83,20 @@ bool RagingFlamesActiveTrigger::IsActive()
 
         if (unit->GetEntry() == NPC_RAGING_FLAMES)
         {
-            // Extra danger if they're targeting us
+            float distance = bot->GetDistance(unit);
+            
+            // IMMEDIATE DANGER: Elemental is casting Inferno (AoE)
+            if (unit->HasUnitState(UNIT_STATE_CASTING) && 
+                unit->FindCurrentSpellBySpellId(SPELL_INFERNO) &&
+                distance < 15.0f)
+                return true;
+                
+            // HIGH DANGER: Directly fixated by this elemental
             if (unit->GetVictim() == bot)
                 return true;
                 
-            // Or if they're nearby
-            if (bot->GetDistance(unit) < 20.0f)
+            // MODERATE DANGER: Elemental nearby and could re-fixate or cast AoE
+            if (distance < 18.0f)
                 return true;
         }
     }
@@ -126,7 +132,7 @@ bool InfernoDangerTrigger::IsActive()
         return false;
 
     // Check for Inferno from Raging Flames
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
     {
@@ -143,6 +149,30 @@ bool InfernoDangerTrigger::IsActive()
             {
                 return true;
             }
+        }
+    }
+    
+    return false;
+}
+
+bool RagingFlamesTargetTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || botAI->IsTank(bot) || botAI->IsHeal(bot))
+        return false; // Only for DPS
+    
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_RAGING_FLAMES)
+        {
+            // Should target elementals if they exist and we're in range
+            if (bot->GetDistance(unit) <= 40.0f)
+                return true;
         }
     }
     
@@ -168,7 +198,7 @@ bool DominationActiveTrigger::IsActive()
         return true;
 
     // Check if any ally is dominated (need to CC them)
-    GuidVector members = AI_VALUE(GuidVector, "group members");
+    const GuidVector members = AI_VALUE(GuidVector, "group members");
     for (auto& member : members)
     {
         Unit* ally = botAI->GetUnit(member);
@@ -189,7 +219,7 @@ bool NetherWraithActiveTrigger::IsActive()
         return false;
 
     // Check for Nether Wraiths
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
     {

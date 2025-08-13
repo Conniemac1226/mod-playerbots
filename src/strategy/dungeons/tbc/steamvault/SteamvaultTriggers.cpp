@@ -2,9 +2,6 @@
 #include "SpellInfo.h"
 #include "Unit.h"
 #include "Spell.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "Playerbots.h"
 
 // Hydromancer Thespia
@@ -35,18 +32,14 @@ bool ThespiaLungBurstTrigger::IsActive()
 bool ThespiaWaterElementalActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
-    // Check for water elementals
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
@@ -94,23 +87,19 @@ bool SteamriggerElectrifiedNetTrigger::IsActive()
 bool SteamriggerMechanicActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
     // Check if Steamrigger is in combat first
-    Unit* boss = bot->FindNearestCreature(NPC_MEKGINEER_STEAMRIGGER, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "mekgineer steamrigger");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check for mechanics
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
@@ -148,23 +137,19 @@ bool KalithreshImpaleTrigger::IsActive()
 bool KalithreshNagaDistillerActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
     // Check if Kalithresh is in combat
-    Unit* boss = bot->FindNearestCreature(NPC_WARLORD_KALITHRESH, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "warlord kalithresh");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check for Naga Distillers that are selectable (active)
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
@@ -177,18 +162,14 @@ bool KalithreshNagaDistillerActiveTrigger::IsActive()
 bool KalithreshChannelingRageTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI)
         return false;
 
-    // Check for distiller channeling rage on Kalithresh
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    for (auto& npc : npcs)
     {
-        Unit* unit = *i;
+        Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 

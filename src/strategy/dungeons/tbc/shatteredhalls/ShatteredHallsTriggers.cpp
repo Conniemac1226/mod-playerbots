@@ -17,7 +17,7 @@ bool NethekurseShadowFissureTrigger::IsActive()
         return true;
     }
     
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
@@ -63,7 +63,7 @@ bool NethekursePeonsTrigger::IsActive()
         return false;
     }
     
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
@@ -134,7 +134,7 @@ bool KargathAssassinsTrigger::IsActive()
         return false;
     }
     
-    GuidVector attackers = AI_VALUE(GuidVector, "attackers");
+    const GuidVector attackers = AI_VALUE(GuidVector, "attackers");
     for (auto& attacker : attackers)
     {
         Unit* unit = botAI->GetUnit(attacker);
@@ -155,7 +155,7 @@ bool KargathAssassinsTrigger::IsActive()
 bool FlameArrowGauntletTrigger::IsActive()
 {
     // Check if we are in the gauntlet area with active archers
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& guid : npcs)
     {
         Unit* unit = botAI->GetUnit(guid);
@@ -171,7 +171,7 @@ bool FlameArrowGauntletTrigger::IsActive()
     }
     
     // Also check if there are fire patches on the ground nearby
-    GuidVector allNpcs = AI_VALUE(GuidVector, "nearest npcs");
+    const GuidVector allNpcs = AI_VALUE(GuidVector, "nearest npcs");
     for (auto& guid : allNpcs)
     {
         Unit* unit = botAI->GetUnit(guid);
