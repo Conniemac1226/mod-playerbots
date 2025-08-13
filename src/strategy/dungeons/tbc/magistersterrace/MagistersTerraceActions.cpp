@@ -3,7 +3,6 @@
 #include "SpellInfo.h"
 #include "Unit.h"
 #include "AttackersValue.h"
-#include "Value.h"
 #include "Playerbots.h"
 
 // Per-bot state maps for Kael'thas gravity lapse
@@ -43,7 +42,15 @@ bool InterruptKaelthasPyroblastAction::Execute(Event event)
 
 bool InterruptKaelthasPyroblastAction::isUseful()
 {
-    return AI_VALUE(bool, "kaelthas casting pyroblast");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* pyroblastValue = botAI->GetAiObjectContext()->GetValue<bool>("kaelthas casting pyroblast");
+    if (!pyroblastValue)
+        return false;
+    
+    return pyroblastValue->Get();
 }
 
 bool AvoidGravityLapseAction::Execute(Event event)
@@ -55,34 +62,76 @@ bool AvoidGravityLapseAction::Execute(Event event)
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
 
-    // Check if boss is casting gravity lapse
+    // Check if boss is casting or channeling gravity lapse
     Unit* boss = AI_VALUE2(Unit*, "find target", "kael'thas sunstrider");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Reset state if needed (new gravity lapse phase)
-    if (g_kaelthas_inSafePosition[botGuid])
+    // CRITICAL: Interrupt any casting immediately during gravity lapse
+    if (bot->IsNonMeleeSpellCast(false))
     {
-        if ((currentTime - g_kaelthas_lastMoveTime[botGuid]) > 10000)
-        {
-            g_kaelthas_inSafePosition[botGuid] = false;
-        }
-        else
-        {
-            return false; // Already in safe position
-        }
+        bot->InterruptNonMeleeSpells(true);
+        return true; // Priority: Stop casting first
     }
 
-    // Move away from center during gravity lapse
     Position centerPos(225.0f, -5.0f, -2.0f); // Center of room
     float distance = bot->GetDistance(centerPos);
     
-    if (distance < 20.0f)
+    // CONTINUOUS POSITIONING: Always maintain safe distance during gravity lapse
+    if (distance < 25.0f) // Increased safety radius
     {
-        if (FleePosition(centerPos, 25.0f, 500U))
+        // Reset state tracking for continuous movement
+        g_kaelthas_inSafePosition[botGuid] = false;
+        
+        // Calculate escape position - move directly away from center
+        float angle = centerPos.GetAngle(bot);
+        float safeDistance = 30.0f; // Far from center
+        
+        float safeX = centerPos.GetPositionX() + cos(angle) * safeDistance;
+        float safeY = centerPos.GetPositionY() + sin(angle) * safeDistance;
+        float safeZ = centerPos.GetPositionZ();
+        
+        // Force movement with highest priority
+        bool moved = MoveTo(bot->GetMapId(), safeX, safeY, safeZ, 
+                           false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        
+        if (moved)
         {
             g_kaelthas_lastMoveTime[botGuid] = currentTime;
-            g_kaelthas_inSafePosition[botGuid] = true;
+            return true;
+        }
+        
+        // Fallback: Use FleePosition if MoveTo fails
+        if (FleePosition(centerPos, 30.0f, 100U))
+        {
+            g_kaelthas_lastMoveTime[botGuid] = currentTime;
+            return true;
+        }
+    }
+    
+    // Even at safe distance, prevent casting and maintain positioning
+    if (distance < 35.0f)
+    {
+        // Update timer to show we're actively managing this
+        g_kaelthas_lastMoveTime[botGuid] = currentTime;
+        
+        // Don't allow any spellcasting during gravity lapse
+        if (bot->IsNonMeleeSpellCast(false))
+        {
+            bot->InterruptNonMeleeSpells(true);
+            return true;
+        }
+        
+        // Keep moving slightly to avoid getting pulled back
+        if ((currentTime - g_kaelthas_lastMoveTime[botGuid]) > 2000) // Every 2 seconds
+        {
+            float angle = frand(0, 2 * M_PI);
+            float adjustX = bot->GetPositionX() + cos(angle) * 3.0f;
+            float adjustY = bot->GetPositionY() + sin(angle) * 3.0f;
+            float adjustZ = bot->GetPositionZ();
+            
+            MoveTo(bot->GetMapId(), adjustX, adjustY, adjustZ, 
+                  false, false, false, true, MovementPriority::MOVEMENT_FORCED);
             return true;
         }
     }
@@ -92,7 +141,15 @@ bool AvoidGravityLapseAction::Execute(Event event)
 
 bool AvoidGravityLapseAction::isUseful()
 {
-    return AI_VALUE(bool, "kaelthas casting gravity lapse");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* gravityLapseValue = botAI->GetAiObjectContext()->GetValue<bool>("kaelthas casting gravity lapse");
+    if (!gravityLapseValue)
+        return false;
+    
+    return gravityLapseValue->Get();
 }
 
 bool FleeArcaneSphereAction::Execute(Event event)
@@ -102,7 +159,7 @@ bool FleeArcaneSphereAction::Execute(Event event)
         return false;
 
     // Find nearest arcane sphere using proven pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* closestSphere = nullptr;
     float closestDistance = 15.0f;
 
@@ -133,7 +190,15 @@ bool FleeArcaneSphereAction::Execute(Event event)
 
 bool FleeArcaneSphereAction::isUseful()
 {
-    return AI_VALUE(bool, "kaelthas arcane sphere nearby");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* sphereValue = botAI->GetAiObjectContext()->GetValue<bool>("kaelthas arcane sphere nearby");
+    if (!sphereValue)
+        return false;
+    
+    return sphereValue->Get();
 }
 
 // Vexallus Actions
@@ -144,7 +209,7 @@ bool AttackPureEnergyAction::Execute(Event event)
         return false;
 
     // Find Pure Energy adds using proven pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* pureEnergy = nullptr;
     float closestDistance = 50.0f;
 
@@ -175,7 +240,16 @@ bool AttackPureEnergyAction::Execute(Event event)
 
 bool AttackPureEnergyAction::isUseful()
 {
-    return AI_VALUE(bool, "vexallus pure energy spawned");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    // Use safe Value pattern to prevent crashes
+    Value<bool>* pureEnergyValue = botAI->GetAiObjectContext()->GetValue<bool>("vexallus pure energy spawned");
+    if (!pureEnergyValue)
+        return false;
+    
+    return pureEnergyValue->Get();
 }
 
 // Selin Fireheart Actions
@@ -201,7 +275,15 @@ bool AvoidFelExplosionAction::Execute(Event event)
 
 bool AvoidFelExplosionAction::isUseful()
 {
-    return AI_VALUE(bool, "selin fireheart fel explosion");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* explosionValue = botAI->GetAiObjectContext()->GetValue<bool>("selin fireheart fel explosion");
+    if (!explosionValue)
+        return false;
+    
+    return explosionValue->Get();
 }
 
 bool AttackFelCrystalAction::Execute(Event event)
@@ -219,7 +301,7 @@ bool AttackFelCrystalAction::Execute(Event event)
         return false;
 
     // Find the crystal being channeled using proven pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* crystal = nullptr;
     float closestDistance = 50.0f;
 
@@ -251,7 +333,15 @@ bool AttackFelCrystalAction::Execute(Event event)
 
 bool AttackFelCrystalAction::isUseful()
 {
-    return AI_VALUE(bool, "fel crystal nearby");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* crystalValue = botAI->GetAiObjectContext()->GetValue<bool>("fel crystal nearby");
+    if (!crystalValue)
+        return false;
+    
+    return crystalValue->Get();
 }
 
 // Delrissa Actions
@@ -270,7 +360,7 @@ bool AttackDelrissaAddAction::Execute(Event event)
     const uint32 delrissaAdds[] = {24557, 24558, 24554, 24561, 24559, 24555, 24553, 24556};
 
     // Find adds using proven pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* priorityTarget = nullptr;
     float closestDistance = 50.0f;
 
@@ -305,5 +395,13 @@ bool AttackDelrissaAddAction::Execute(Event event)
 
 bool AttackDelrissaAddAction::isUseful()
 {
-    return AI_VALUE(bool, "delrissa add active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* addActiveValue = botAI->GetAiObjectContext()->GetValue<bool>("delrissa add active");
+    if (!addActiveValue)
+        return false;
+    
+    return addActiveValue->Get();
 }

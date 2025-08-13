@@ -1,7 +1,98 @@
 #include "Playerbots.h"
 #include "ArcatrazActions.h"
 #include "ArcatrazStrategy.h"
-#include "Value.h"
+#include "AttackersValue.h"
+
+bool AttackMellicharAddsAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // RESEARCHED: Warden Mellichar spawns adds in waves while immune to damage
+    // Bots must prioritize adds over the immune warden
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* priorityAdd = nullptr;
+    float closestDistance = 50.0f;
+    
+    // Priority order: Phase 1 > Millhouse > Other adds
+    const uint32 mellicharAdds[] = {
+        NPC_TRICKSTER, NPC_PH_HUNTER, NPC_MILLHOUSE, 
+        NPC_AKKIRIS, NPC_SULFURON, NPC_TW_DRAK, NPC_BL_DRAK
+    };
+    
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        // Check if this is one of Mellichar's adds
+        for (uint32 addId : mellicharAdds)
+        {
+            if (unit->GetEntry() == addId && AttackersValue::IsValidTarget(unit, bot))
+            {
+                float distance = bot->GetDistance(unit);
+                
+                // Special priority for Millhouse (helpful NPC, protect him)
+                if (addId == NPC_MILLHOUSE)
+                {
+                    // Don't attack Millhouse - he's friendly
+                    continue;
+                }
+                
+                if (distance < closestDistance)
+                {
+                    priorityAdd = unit;
+                    closestDistance = distance;
+                }
+                break;
+            }
+        }
+    }
+
+    if (priorityAdd)
+    {
+        // Switch target to priority add
+        return Attack(priorityAdd);
+    }
+    
+    return false;
+}
+
+bool AttackMellicharAddsAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || botAI->IsHeal(bot))
+        return false; // Healers focus on healing
+        
+    // Check if we're fighting Warden Mellichar (who is immune)
+    Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
+    if (!warden || !warden->IsInCombat())
+        return false;
+        
+    // Check for any of Mellichar's adds
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const uint32 mellicharAdds[] = {
+        NPC_TRICKSTER, NPC_PH_HUNTER, 
+        NPC_AKKIRIS, NPC_SULFURON, NPC_TW_DRAK, NPC_BL_DRAK
+    };
+    
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        for (uint32 addId : mellicharAdds)
+        {
+            if (unit->GetEntry() == addId)
+                return true;
+        }
+    }
+    
+    return false;
+}
 
 bool AvoidVoidZoneAction::Execute(Event event)
 {
@@ -13,7 +104,7 @@ bool AvoidVoidZoneAction::Execute(Event event)
     
     // RESEARCHED: Void Zone - boss_zereketh_the_unbound.cpp:55-57
     // Void zones persist and deal damage - must evacuate immediately!
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
@@ -83,7 +174,7 @@ bool SeedOfCorruptionDispelAction::Execute(Event event)
     // Explodes on expiry or dispel - spread out if afflicted!
     if (bot->HasAura(SPELL_SEED_OF_CORRUPTION))
     {
-        GuidVector members = AI_VALUE(GuidVector, "group members");
+        const GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
         {
             if (member == bot->GetGUID())
@@ -207,7 +298,7 @@ bool SoccothratesChargeAction::Execute(Event event)
     
     if (boss->HasAura(SPELL_FELFIRE) || boss->FindCurrentSpellBySpellId(SPELL_CHARGE))
     {
-        GuidVector members = AI_VALUE(GuidVector, "group members");
+        const GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
         {
             if (member == bot->GetGUID())
@@ -247,7 +338,7 @@ bool SkyrissIllusionAction::Execute(Event event)
     
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
@@ -301,7 +392,7 @@ bool SkyrissFearAction::Execute(Event event)
     else if (boss->FindCurrentSpellBySpellId(SPELL_FEAR))
     {
         // Spread from other players to avoid chain fear
-        GuidVector members = AI_VALUE(GuidVector, "group members");
+        const GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
         {
             if (member == bot->GetGUID())
@@ -347,7 +438,7 @@ bool SkyrissDominationAction::Execute(Event event)
     }
     
     // Check if any ally is dominated and keep distance
-    GuidVector members = AI_VALUE(GuidVector, "group members");
+    const GuidVector members = AI_VALUE(GuidVector, "group members");
     for (auto& member : members)
     {
         if (member == bot->GetGUID())

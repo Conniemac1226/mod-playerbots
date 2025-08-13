@@ -54,6 +54,13 @@ public:
     bool IsActive() override;
 };
 
+class MellicharAddsActiveTrigger : public Trigger
+{
+public:
+    MellicharAddsActiveTrigger(PlayerbotAI* botAI) : Trigger(botAI, "mellichar adds active") {}
+    bool IsActive() override;
+};
+
 class SkyrissIllusionTrigger : public Trigger
 {
 public:

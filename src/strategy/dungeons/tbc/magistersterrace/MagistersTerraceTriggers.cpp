@@ -31,7 +31,17 @@ bool KaelthasCastingGravityLapseTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_GRAVITY_LAPSE);
+    // Trigger during BOTH the initial cast AND the full gravity lapse effect duration
+    // This ensures continuous movement and casting interruption throughout the entire phase
+    bool isCastingGravityLapse = boss->HasUnitState(UNIT_STATE_CASTING) && 
+                                boss->FindCurrentSpellBySpellId(SPELL_GRAVITY_LAPSE);
+    
+    bool hasGravityLapseAura = boss->HasAura(SPELL_GRAVITY_LAPSE);
+    
+    // Also check if any player has gravity lapse effect (some versions apply it to players)
+    bool playerAffected = bot->HasAura(SPELL_GRAVITY_LAPSE);
+    
+    return isCastingGravityLapse || hasGravityLapseAura || playerAffected;
 }
 
 bool KaelthasArcaneSphereNearbyTrigger::IsActive()
