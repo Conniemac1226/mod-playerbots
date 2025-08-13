@@ -728,3 +728,237 @@ bool MotherShahrazPrismaticAuraTrigger::IsActive()
 
     return false;
 }
+
+// Illidari Council
+bool IllidariCouncilEngagedTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check if any council member is engaged
+    const char* councilMembers[] = {
+        "gathios the shatterer",
+        "high nethermancer zerevor",
+        "lady malande",
+        "veras darkshadow"
+    };
+
+    for (const char* memberName : councilMembers)
+    {
+        Unit* member = AI_VALUE2(Unit*, "find target", memberName);
+        if (member && member->IsAlive() && member->IsInCombat())
+            return true;
+    }
+
+    return false;
+}
+
+bool IllidariCouncilTargetPriorityTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (!currentTarget)
+        return false;
+
+    // Check if current target is a council member
+    const uint32 councilIds[] = {
+        22949,  // Gathios the Shatterer
+        22950,  // High Nethermancer Zerevor
+        22951,  // Lady Malande
+        22952   // Veras Darkshadow
+    };
+
+    bool isCouncilMember = false;
+    for (uint32 id : councilIds)
+    {
+        if (currentTarget->GetEntry() == id)
+        {
+            isCouncilMember = true;
+            break;
+        }
+    }
+
+    if (!isCouncilMember)
+        return false;
+
+    // Priority: Malande > Veras > Zerevor > Gathios
+    // Need to switch if higher priority target is available
+    if (currentTarget->GetEntry() == 22951) // Already on Malande (highest priority)
+        return false;
+
+    Unit* malande = AI_VALUE2(Unit*, "find target", "lady malande");
+    if (malande && malande->IsAlive() && malande->GetHealthPct() > 20.0f)
+        return true;
+
+    if (currentTarget->GetEntry() == 22952) // On Veras (second priority)
+        return false;
+
+    Unit* veras = AI_VALUE2(Unit*, "find target", "veras darkshadow");
+    if (veras && veras->IsAlive() && !veras->HasAura(41476) && veras->GetHealthPct() > 20.0f) // Not vanished
+        return true;
+
+    return false;
+}
+
+bool IllidariCouncilSpreadTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check if we're too close to other players
+    Value<GuidVector>* membersValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("group members");
+    if (!membersValue)
+        return false;
+        
+    GuidVector members = membersValue->Get();
+    
+    int nearbyCount = 0;
+    for (auto& guid : members)
+    {
+        Unit* member = botAI->GetUnit(guid);
+        if (!member || member == bot)
+            continue;
+
+        float distance = bot->GetDistance(member);
+        if (distance < 8.0f)
+        {
+            nearbyCount++;
+            if (nearbyCount >= 2)
+                return true;
+        }
+    }
+
+    return false;
+}
+
+bool IllidariCouncilInterruptMalandeTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Only for players who can interrupt
+    // Check if bot has any interrupt ability
+    bool canInterrupt = false;
+    
+    // Check common interrupt spell IDs
+    const uint32 SPELL_KICK = 1766;           // Rogue
+    const uint32 SPELL_COUNTERSPELL = 2139;   // Mage
+    const uint32 SPELL_PUMMEL = 6552;         // Warrior
+    const uint32 SPELL_MIND_FREEZE = 47528;   // Death Knight
+    const uint32 SPELL_WIND_SHEAR = 57994;    // Shaman
+    
+    if (bot->HasSpell(SPELL_KICK) || bot->HasSpell(SPELL_COUNTERSPELL) ||
+        bot->HasSpell(SPELL_PUMMEL) || bot->HasSpell(SPELL_MIND_FREEZE) ||
+        bot->HasSpell(SPELL_WIND_SHEAR))
+        canInterrupt = true;
+    
+    if (!canInterrupt)
+        return false;
+
+    Unit* malande = AI_VALUE2(Unit*, "find target", "lady malande");
+    if (!malande || !malande->IsAlive())
+        return false;
+
+    // Check if Malande is casting Circle of Healing or Empowered Smite
+    const uint32 SPELL_CIRCLE_OF_HEALING = 41455;
+    const uint32 SPELL_EMPOWERED_SMITE = 41471;
+
+    return malande->FindCurrentSpellBySpellId(SPELL_CIRCLE_OF_HEALING) ||
+           malande->FindCurrentSpellBySpellId(SPELL_EMPOWERED_SMITE);
+}
+
+bool IllidariCouncilConsecrationTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check for Consecration ground effect near us
+    Unit* gathios = AI_VALUE2(Unit*, "find target", "gathios the shatterer");
+    if (!gathios || !gathios->IsAlive())
+        return false;
+
+    // Check if we're in melee range of Gathios (consecration is around him)
+    float distance = bot->GetDistance(gathios);
+    return distance < 10.0f;
+}
+
+bool IllidariCouncilBlizzardTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check if we're in a Blizzard area
+    const uint32 SPELL_BLIZZARD = 41482;
+    
+    // Check for Blizzard ground effects
+    Value<GuidVector>* gosValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest game objects no los");
+    if (!gosValue)
+        return false;
+        
+    GuidVector gos = gosValue->Get();
+    
+    for (auto& guid : gos)
+    {
+        GameObject* go = botAI->GetGameObject(guid);
+        if (!go)
+            continue;
+
+        // Blizzard creates ground effects
+        float distance = bot->GetDistance(go);
+        if (distance < 8.0f)
+            return true;
+    }
+
+    return false;
+}
+
+bool IllidariCouncilFlamestrikeTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check if Zerevor is casting Flamestrike
+    Unit* zerevor = AI_VALUE2(Unit*, "find target", "high nethermancer zerevor");
+    if (!zerevor || !zerevor->IsAlive())
+        return false;
+
+    const uint32 SPELL_FLAMESTRIKE = 41481;
+    
+    // Check if casting flamestrike and we're in range
+    if (zerevor->FindCurrentSpellBySpellId(SPELL_FLAMESTRIKE))
+    {
+        // Flamestrike is typically targeted at ranged groups
+        float distance = bot->GetDistance(zerevor);
+        return distance > 15.0f && distance < 40.0f;
+    }
+
+    return false;
+}
+
+bool IllidariCouncilPoisonTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check if we have Deadly Poison from Veras
+    const uint32 SPELL_DEADLY_POISON = 41485;
+    return bot->HasAura(SPELL_DEADLY_POISON);
+}
+
+bool IllidariCouncilDivineWrathTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check if Malande is casting Divine Wrath
+    Unit* malande = AI_VALUE2(Unit*, "find target", "lady malande");
+    if (!malande || !malande->IsAlive())
+        return false;
+
+    const uint32 SPELL_DIVINE_WRATH = 41472;
+    
+    // Divine Wrath is a targeted spell - check if she's casting it
+    return malande->FindCurrentSpellBySpellId(SPELL_DIVINE_WRATH);
+}

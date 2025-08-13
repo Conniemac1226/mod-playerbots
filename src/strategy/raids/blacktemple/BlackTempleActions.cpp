@@ -2079,3 +2079,301 @@ bool MotherShahrazPrismaticResistanceAction::Execute(Event event)
 
     return false;
 }
+
+// Illidari Council
+static std::map<ObjectGuid, uint32> g_council_lastSpreadTime;
+static std::map<ObjectGuid, uint32> g_council_preferredTarget; // 0=none, 1=gathios, 2=zerevor, 3=malande, 4=veras
+
+bool IllidariCouncilTargetAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Priority order: Lady Malande (healer) > Veras (when visible) > Zerevor > Gathios
+    Unit* malande = AI_VALUE2(Unit*, "find target", "lady malande");
+    Unit* veras = AI_VALUE2(Unit*, "find target", "veras darkshadow");
+    Unit* zerevor = AI_VALUE2(Unit*, "find target", "high nethermancer zerevor");
+    Unit* gathios = AI_VALUE2(Unit*, "find target", "gathios the shatterer");
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    Unit* preferredTarget = nullptr;
+
+    // Priority 1: Always interrupt/kill Malande first (she heals)
+    if (malande && malande->IsAlive() && malande->IsInCombat())
+    {
+        preferredTarget = malande;
+        g_council_preferredTarget[bot->GetGUID()] = 3;
+    }
+    // Priority 2: Veras when visible (not vanished)
+    else if (veras && veras->IsAlive() && veras->IsInCombat() && !veras->HasAura(41476)) // SPELL_VANISH
+    {
+        preferredTarget = veras;
+        g_council_preferredTarget[bot->GetGUID()] = 4;
+    }
+    // Priority 3: Zerevor (dangerous AoE)
+    else if (zerevor && zerevor->IsAlive() && zerevor->IsInCombat())
+    {
+        preferredTarget = zerevor;
+        g_council_preferredTarget[bot->GetGUID()] = 2;
+    }
+    // Priority 4: Gathios
+    else if (gathios && gathios->IsAlive() && gathios->IsInCombat())
+    {
+        preferredTarget = gathios;
+        g_council_preferredTarget[bot->GetGUID()] = 1;
+    }
+
+    if (preferredTarget && preferredTarget != currentTarget)
+    {
+        return Attack(preferredTarget);
+    }
+
+    return false;
+}
+
+bool IllidariCouncilSpreadAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    ObjectGuid botGuid = bot->GetGUID();
+    uint32 currentTime = getMSTime();
+
+    // Prevent spam
+    if (g_council_lastSpreadTime[botGuid] > 0 && 
+        (currentTime - g_council_lastSpreadTime[botGuid]) < 3000)
+        return false;
+
+    // Spread for AoE abilities - check if too many players nearby
+    Value<GuidVector>* membersValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("group members");
+    if (!membersValue)
+        return false;
+        
+    GuidVector members = membersValue->Get();
+    
+    int nearbyCount = 0;
+    for (auto& guid : members)
+    {
+        Unit* member = botAI->GetUnit(guid);
+        if (!member || member == bot)
+            continue;
+
+        float distance = bot->GetDistance(member);
+        if (distance < 8.0f)
+            nearbyCount++;
+    }
+
+    // Spread if too many people stacked
+    if (nearbyCount > 2)
+    {
+        g_council_lastSpreadTime[botGuid] = currentTime;
+        
+        float angle = bot->GetOrientation() + (float(rand()) / RAND_MAX) * M_PI * 2;
+        float moveDistance = 10.0f;
+        
+        float newX = bot->GetPositionX() + cos(angle) * moveDistance;
+        float newY = bot->GetPositionY() + sin(angle) * moveDistance;
+        float newZ = bot->GetPositionZ();
+        
+        bot->UpdateGroundPositionZ(newX, newY, newZ);
+        
+        return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, true,
+                     MovementPriority::MOVEMENT_COMBAT);
+    }
+
+    return false;
+}
+
+bool IllidariCouncilInterruptMalandeAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    Unit* malande = AI_VALUE2(Unit*, "find target", "lady malande");
+    if (!malande || !malande->IsAlive())
+        return false;
+
+    // Check if Malande is casting Circle of Healing or Empowered Smite
+    const uint32 SPELL_CIRCLE_OF_HEALING = 41455;
+    const uint32 SPELL_EMPOWERED_SMITE = 41471;
+    
+    if (malande->FindCurrentSpellBySpellId(SPELL_CIRCLE_OF_HEALING) ||
+        malande->FindCurrentSpellBySpellId(SPELL_EMPOWERED_SMITE))
+    {
+        botAI->InterruptSpell();
+        return true;
+    }
+
+    return false;
+}
+
+bool IllidariCouncilAvoidConsecrationAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check for Consecration on ground (Gathios)
+    Value<GuidVector>* aoesValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile aoes");
+    if (!aoesValue)
+        return false;
+        
+    GuidVector aoes = aoesValue->Get();
+    
+    for (auto& guid : aoes)
+    {
+        Unit* aoe = botAI->GetUnit(guid);
+        if (!aoe)
+            continue;
+
+        // Consecration ground effect
+        if (aoe->GetEntry() == 21082 || aoe->HasAura(41541)) // Consecration entries
+        {
+            float distance = bot->GetDistance(aoe);
+            if (distance < 8.0f)
+            {
+                // Move away from consecration
+                float angle = bot->GetAngle(aoe) + M_PI;
+                float newX = bot->GetPositionX() + cos(angle) * 10.0f;
+                float newY = bot->GetPositionY() + sin(angle) * 10.0f;
+                float newZ = bot->GetPositionZ();
+                
+                bot->UpdateGroundPositionZ(newX, newY, newZ);
+                
+                return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, true,
+                             MovementPriority::MOVEMENT_FORCED);
+            }
+        }
+    }
+
+    return false;
+}
+
+bool IllidariCouncilAvoidBlizzardAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check if Zerevor is casting Blizzard at our location
+    Unit* zerevor = AI_VALUE2(Unit*, "find target", "high nethermancer zerevor");
+    if (!zerevor || !zerevor->IsAlive())
+        return false;
+
+    const uint32 SPELL_BLIZZARD = 41482;
+    if (zerevor->FindCurrentSpellBySpellId(SPELL_BLIZZARD))
+    {
+        // Check if we're in the Blizzard area
+        if (bot->HasAura(SPELL_BLIZZARD))
+        {
+            // Emergency move out
+            float angle = bot->GetOrientation() + (float(rand()) / RAND_MAX) * M_PI;
+            float moveDistance = 15.0f;
+            
+            float newX = bot->GetPositionX() + cos(angle) * moveDistance;
+            float newY = bot->GetPositionY() + sin(angle) * moveDistance;
+            float newZ = bot->GetPositionZ();
+            
+            bot->UpdateGroundPositionZ(newX, newY, newZ);
+            
+            return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, true,
+                         MovementPriority::MOVEMENT_FORCED);
+        }
+    }
+
+    return false;
+}
+
+bool IllidariCouncilAvoidFlamestrikeAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check if Zerevor is casting Flamestrike at our location
+    Unit* zerevor = AI_VALUE2(Unit*, "find target", "high nethermancer zerevor");
+    if (!zerevor || !zerevor->IsAlive())
+        return false;
+
+    const uint32 SPELL_FLAMESTRIKE = 41481;
+    if (zerevor->FindCurrentSpellBySpellId(SPELL_FLAMESTRIKE))
+    {
+        // Check if we're being targeted or in melee range
+        if (zerevor->GetVictim() == bot || bot->GetDistance(zerevor) < 10.0f)
+        {
+            // Move out preemptively
+            float angle = bot->GetAngle(zerevor) + M_PI;
+            float moveDistance = 15.0f;
+            
+            float newX = bot->GetPositionX() + cos(angle) * moveDistance;
+            float newY = bot->GetPositionY() + sin(angle) * moveDistance;
+            float newZ = bot->GetPositionZ();
+            
+            bot->UpdateGroundPositionZ(newX, newY, newZ);
+            
+            return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, true,
+                         MovementPriority::MOVEMENT_FORCED);
+        }
+    }
+
+    return false;
+}
+
+bool IllidariCouncilPoisonCleanseAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check for Deadly Poison from Veras
+    const uint32 SPELL_DEADLY_POISON = 41485;
+    
+    if (bot->HasAura(SPELL_DEADLY_POISON))
+    {
+        // Dispel or cleanse the poison if possible
+        // Check if bot has cleansing abilities
+        const uint32 SPELL_ABOLISH_POISON = 2893;  // Druid
+        const uint32 SPELL_CURE_POISON = 8946;     // Druid
+        const uint32 SPELL_CLEANSE = 4987;         // Paladin
+        const uint32 SPELL_DISPEL_MAGIC = 527;     // Priest
+        
+        if (bot->HasSpell(SPELL_ABOLISH_POISON) || bot->HasSpell(SPELL_CURE_POISON) ||
+            bot->HasSpell(SPELL_CLEANSE) || bot->HasSpell(SPELL_DISPEL_MAGIC))
+        {
+            // Bot has cleansing abilities, trigger cleanse action
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool IllidariCouncilDivineWrathAvoidAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    // Check if Malande is casting Divine Wrath
+    Unit* malande = AI_VALUE2(Unit*, "find target", "lady malande");
+    if (!malande || !malande->IsAlive())
+        return false;
+
+    const uint32 SPELL_DIVINE_WRATH = 41472;
+    if (malande->FindCurrentSpellBySpellId(SPELL_DIVINE_WRATH))
+    {
+        // Get away from Malande during Divine Wrath
+        float distance = bot->GetDistance(malande);
+        if (distance < 20.0f)
+        {
+            float angle = bot->GetAngle(malande) + M_PI;
+            float moveDistance = 25.0f;
+            
+            float newX = bot->GetPositionX() + cos(angle) * moveDistance;
+            float newY = bot->GetPositionY() + sin(angle) * moveDistance;
+            float newZ = bot->GetPositionZ();
+            
+            bot->UpdateGroundPositionZ(newX, newY, newZ);
+            
+            return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, true,
+                         MovementPriority::MOVEMENT_FORCED);
+        }
+    }
+
+    return false;
+}

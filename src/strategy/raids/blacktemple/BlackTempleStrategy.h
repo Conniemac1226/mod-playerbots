@@ -76,4 +76,22 @@ public:
     void InitMultipliers(std::vector<Multiplier*>& multipliers) override;
 };
 
+class RaidBtIllidariCouncilStrategy : public Strategy
+{
+public:
+    RaidBtIllidariCouncilStrategy(PlayerbotAI* ai) : Strategy(ai) {}
+    std::string const getName() override { return "illidari council"; }
+    void InitTriggers(std::vector<TriggerNode*>& triggers) override;
+    void InitMultipliers(std::vector<Multiplier*>& multipliers) override;
+};
+
+class RaidBtIllidanStormrageStrategy : public Strategy
+{
+public:
+    RaidBtIllidanStormrageStrategy(PlayerbotAI* ai) : Strategy(ai) {}
+    std::string const getName() override { return "illidan stormrage"; }
+    void InitTriggers(std::vector<TriggerNode*>& triggers) override;
+    void InitMultipliers(std::vector<Multiplier*>& multipliers) override;
+};
+
 #endif

@@ -54,6 +54,30 @@ public:
         creators["shahraz fatal attraction"] = &RaidBtActionContext::shahraz_fatal_attraction;
         creators["shahraz beam avoid"] = &RaidBtActionContext::shahraz_beam_avoid;
         creators["shahraz prismatic resistance"] = &RaidBtActionContext::shahraz_prismatic_resistance;
+        
+        // Illidari Council
+        creators["council target priority"] = &RaidBtActionContext::council_target_priority;
+        creators["council spread"] = &RaidBtActionContext::council_spread;
+        creators["council interrupt malande"] = &RaidBtActionContext::council_interrupt_malande;
+        creators["council avoid consecration"] = &RaidBtActionContext::council_avoid_consecration;
+        creators["council avoid blizzard"] = &RaidBtActionContext::council_avoid_blizzard;
+        creators["council avoid flamestrike"] = &RaidBtActionContext::council_avoid_flamestrike;
+        creators["council poison cleanse"] = &RaidBtActionContext::council_poison_cleanse;
+        creators["council divine wrath avoid"] = &RaidBtActionContext::council_divine_wrath_avoid;
+        
+        // Illidan Stormrage
+        creators["illidan phase check"] = &RaidBtActionContext::illidan_phase_check;
+        creators["illidan flame crash avoid"] = &RaidBtActionContext::illidan_flame_crash_avoid;
+        creators["illidan parasitic shadowfiend"] = &RaidBtActionContext::illidan_parasitic_shadowfiend;
+        creators["illidan draw soul heal"] = &RaidBtActionContext::illidan_draw_soul_heal;
+        creators["illidan agonizing flames avoid"] = &RaidBtActionContext::illidan_agonizing_flames_avoid;
+        creators["illidan eye beam avoid"] = &RaidBtActionContext::illidan_eye_beam_avoid;
+        creators["illidan dark barrage interrupt"] = &RaidBtActionContext::illidan_dark_barrage_interrupt;
+        creators["illidan flame of azzinoth tank"] = &RaidBtActionContext::illidan_flame_of_azzinoth_tank;
+        creators["illidan shadow demon"] = &RaidBtActionContext::illidan_shadow_demon;
+        creators["illidan flame burst position"] = &RaidBtActionContext::illidan_flame_burst_position;
+        creators["illidan cage avoid"] = &RaidBtActionContext::illidan_cage_avoid;
+        creators["illidan enrage kite"] = &RaidBtActionContext::illidan_enrage_kite;
     }
 
 private:
@@ -103,6 +127,30 @@ private:
     static Action* shahraz_fatal_attraction(PlayerbotAI* ai) { return new MotherShahrazFatalAttractionAction(ai); }
     static Action* shahraz_beam_avoid(PlayerbotAI* ai) { return new MotherShahrazBeamAvoidAction(ai); }
     static Action* shahraz_prismatic_resistance(PlayerbotAI* ai) { return new MotherShahrazPrismaticResistanceAction(ai); }
+    
+    // Illidari Council
+    static Action* council_target_priority(PlayerbotAI* ai) { return new IllidariCouncilTargetAction(ai); }
+    static Action* council_spread(PlayerbotAI* ai) { return new IllidariCouncilSpreadAction(ai); }
+    static Action* council_interrupt_malande(PlayerbotAI* ai) { return new IllidariCouncilInterruptMalandeAction(ai); }
+    static Action* council_avoid_consecration(PlayerbotAI* ai) { return new IllidariCouncilAvoidConsecrationAction(ai); }
+    static Action* council_avoid_blizzard(PlayerbotAI* ai) { return new IllidariCouncilAvoidBlizzardAction(ai); }
+    static Action* council_avoid_flamestrike(PlayerbotAI* ai) { return new IllidariCouncilAvoidFlamestrikeAction(ai); }
+    static Action* council_poison_cleanse(PlayerbotAI* ai) { return new IllidariCouncilPoisonCleanseAction(ai); }
+    static Action* council_divine_wrath_avoid(PlayerbotAI* ai) { return new IllidariCouncilDivineWrathAvoidAction(ai); }
+    
+    // Illidan Stormrage
+    static Action* illidan_phase_check(PlayerbotAI* ai) { return new IllidanPhaseCheckAction(ai); }
+    static Action* illidan_flame_crash_avoid(PlayerbotAI* ai) { return new IllidanFlameCrashAvoidAction(ai); }
+    static Action* illidan_parasitic_shadowfiend(PlayerbotAI* ai) { return new IllidanParasiticShadowfiendAction(ai); }
+    static Action* illidan_draw_soul_heal(PlayerbotAI* ai) { return new IllidanDrawSoulHealAction(ai); }
+    static Action* illidan_agonizing_flames_avoid(PlayerbotAI* ai) { return new IllidanAgonizingFlamesAvoidAction(ai); }
+    static Action* illidan_eye_beam_avoid(PlayerbotAI* ai) { return new IllidanEyeBeamAvoidAction(ai); }
+    static Action* illidan_dark_barrage_interrupt(PlayerbotAI* ai) { return new IllidanDarkBarrageInterruptAction(ai); }
+    static Action* illidan_flame_of_azzinoth_tank(PlayerbotAI* ai) { return new IllidanFlameOfAzzinothTankAction(ai); }
+    static Action* illidan_shadow_demon(PlayerbotAI* ai) { return new IllidanShadowDemonAction(ai); }
+    static Action* illidan_flame_burst_position(PlayerbotAI* ai) { return new IllidanFlameBurstPositionAction(ai); }
+    static Action* illidan_cage_avoid(PlayerbotAI* ai) { return new IllidanCageAvoidAction(ai); }
+    static Action* illidan_enrage_kite(PlayerbotAI* ai) { return new IllidanEnrageKiteAction(ai); }
 };
 
 #endif
