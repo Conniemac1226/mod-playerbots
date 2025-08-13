@@ -1,7 +1,6 @@
 #include "Playerbots.h"
 #include "BotanicaActions.h"
 #include "BotanicaStrategy.h"
-#include "Value.h"
 
 bool SarannisResonanceDispelAction::Execute(Event event)
 {
@@ -30,7 +29,7 @@ bool SarannisReinforcementsAction::Execute(Event event)
     
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
@@ -90,7 +89,7 @@ bool FreywinnFrayerPriorityAction::Execute(Event event)
     
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
@@ -125,7 +124,7 @@ bool FreywinnTranquilityAction::Execute(Event event)
     if (boss->HasAura(SPELL_TREE_FORM) && boss->FindCurrentSpellBySpellId(SPELL_TRANQUILITY))
     {
         // Check if frayers are still alive - they must die first
-        GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+        const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
         for (auto& npc : npcs)
         {
             Unit* unit = botAI->GetUnit(npc);
@@ -178,7 +177,7 @@ bool LajAllergicReactionAction::Execute(Event event)
     
     if (bot->HasAura(SPELL_ALLERGIC_REACTION))
     {
-        GuidVector members = AI_VALUE(GuidVector, "group members");
+        const GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
         {
             if (member == bot->GetGUID())
@@ -213,7 +212,7 @@ bool LajTeleportPositionAction::Execute(Event event)
     
     if (boss->FindCurrentSpellBySpellId(SPELL_TELEPORT_SELF))
     {
-        GuidVector members = AI_VALUE(GuidVector, "group members");
+        const GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
         {
             if (member == bot->GetGUID())
@@ -251,7 +250,7 @@ bool ThorngrinSacrificeAction::Execute(Event event)
     if (botAI->IsHeal(bot))
     {
         // Find sacrificed target and prioritize healing them
-        GuidVector members = AI_VALUE(GuidVector, "group members");
+        const GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
         {
             Unit* unit = botAI->GetUnit(member);

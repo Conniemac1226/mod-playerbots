@@ -25,7 +25,7 @@ bool AttackPortalAddAction::Execute(Event event)
     };
 
     // Use proven WotLK pattern
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* priorityTarget = nullptr;
     float closestDistance = 100.0f;
 
@@ -68,7 +68,15 @@ bool AttackPortalAddAction::Execute(Event event)
 
 bool AttackPortalAddAction::isUseful()
 {
-    return AI_VALUE(bool, "portal add active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("portal add active");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool ProtectMedivhAction::Execute(Event event)
@@ -102,7 +110,15 @@ bool ProtectMedivhAction::Execute(Event event)
 
 bool ProtectMedivhAction::isUseful()
 {
-    return AI_VALUE(bool, "medivh needs protection");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("medivh needs protection");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 // ========== AEONUS ACTIONS ==========
@@ -136,7 +152,15 @@ bool AeonusAvoidCleaveAction::Execute(Event event)
 
 bool AeonusAvoidCleaveAction::isUseful()
 {
-    return AI_VALUE(bool, "aeonus cleave danger");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("aeonus cleave danger");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool AeonusPositionAction::Execute(Event event)
@@ -176,7 +200,15 @@ bool AeonusPositionAction::Execute(Event event)
 
 bool AeonusPositionAction::isUseful()
 {
-    return AI_VALUE(bool, "aeonus engaged");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("aeonus engaged");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool AeonusSandBreathAction::Execute(Event event)
@@ -209,7 +241,15 @@ bool AeonusSandBreathAction::Execute(Event event)
 
 bool AeonusSandBreathAction::isUseful()
 {
-    return AI_VALUE(bool, "sand breath danger");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("sand breath danger");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool AeonusTimeStopAction::Execute(Event event)
@@ -246,7 +286,15 @@ bool AeonusTimeStopAction::Execute(Event event)
 
 bool AeonusTimeStopAction::isUseful()
 {
-    return AI_VALUE(bool, "time stop active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("time stop active");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 // Handle Aeonus Enrage - increased damage
@@ -267,7 +315,7 @@ bool AeonusEnrageAction::Execute(Event event)
         if (botAI->IsHeal(bot))
         {
             // Focus heal on tank
-            GuidVector members = AI_VALUE(GuidVector, "group members");
+            const GuidVector members = AI_VALUE(GuidVector, "group members");
             for (auto& member : members)
             {
                 Unit* ally = botAI->GetUnit(member);
@@ -317,7 +365,7 @@ bool AvoidTimeLapseAction::Execute(Event event)
     if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_TIME_LAPSE))
     {
         // Spread out to minimize teleport clustering
-        GuidVector members = AI_VALUE(GuidVector, "group members");
+        const GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
         {
             Unit* ally = botAI->GetUnit(member);
@@ -343,7 +391,15 @@ bool AvoidTimeLapseAction::Execute(Event event)
 
 bool AvoidTimeLapseAction::isUseful()
 {
-    return AI_VALUE(bool, "time lapse danger");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("time lapse danger");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool AvoidArcaneDischargeAction::Execute(Event event)
@@ -377,7 +433,15 @@ bool AvoidArcaneDischargeAction::Execute(Event event)
 
 bool AvoidArcaneDischargeAction::isUseful()
 {
-    return AI_VALUE(bool, "arcane discharge danger");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("arcane discharge danger");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool DejaAttractionAction::Execute(Event event)
@@ -390,7 +454,7 @@ bool DejaAttractionAction::Execute(Event event)
     if (bot->HasAura(SPELL_ATTRACTION))
     {
         // Move away from raid to avoid damage
-        GuidVector members = AI_VALUE(GuidVector, "group members");
+        const GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
         {
             Unit* ally = botAI->GetUnit(member);
@@ -454,7 +518,15 @@ bool AvoidWingBuffetAction::Execute(Event event)
 
 bool AvoidWingBuffetAction::isUseful()
 {
-    return AI_VALUE(bool, "wing buffet danger");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("wing buffet danger");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool TemporusMortalWoundAction::Execute(Event event)
@@ -469,7 +541,7 @@ bool TemporusMortalWoundAction::Execute(Event event)
         // Healers should prioritize healing targets with Mortal Wound
         if (botAI->IsHeal(bot))
         {
-            GuidVector members = AI_VALUE(GuidVector, "group members");
+            const GuidVector members = AI_VALUE(GuidVector, "group members");
             for (auto& member : members)
             {
                 Unit* ally = botAI->GetUnit(member);
@@ -489,7 +561,15 @@ bool TemporusMortalWoundAction::Execute(Event event)
 
 bool TemporusMortalWoundAction::isUseful()
 {
-    return AI_VALUE(bool, "mortal wound active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("mortal wound active");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 bool TemporusReflectAction::Execute(Event event)
@@ -518,7 +598,15 @@ bool TemporusReflectAction::Execute(Event event)
 
 bool TemporusReflectAction::isUseful()
 {
-    return AI_VALUE(bool, "temporus reflect active");
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("temporus reflect active");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
 }
 
 // ========== TEMPORUS HASTEN DISPEL ==========

@@ -39,6 +39,11 @@ void MechanarStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "raging flames active",
         NextAction::array(0, new NextAction("flee raging flames", ACTION_EMERGENCY), nullptr)));
     
+    // RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157 - DPS should target elementals
+    triggers.push_back(new TriggerNode(
+        "should target raging flames",
+        NextAction::array(0, new NextAction("target raging flames", ACTION_NORMAL + 8), nullptr)));
+    
     // RESEARCHED: boss_nethermancer_sepethrea.cpp:72 - Dragon's Breath frontal cone
     triggers.push_back(new TriggerNode(
         "dragons breath danger",

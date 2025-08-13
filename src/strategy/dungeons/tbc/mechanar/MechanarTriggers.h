@@ -64,6 +64,13 @@ public:
     bool IsActive() override;
 };
 
+class RagingFlamesTargetTrigger : public Trigger
+{
+public:
+    RagingFlamesTargetTrigger(PlayerbotAI* botAI) : Trigger(botAI, "should target raging flames") {}
+    bool IsActive() override;
+};
+
 // ========== PATHALEON THE CALCULATOR TRIGGERS ==========
 
 class PathaleonEngagedTrigger : public Trigger

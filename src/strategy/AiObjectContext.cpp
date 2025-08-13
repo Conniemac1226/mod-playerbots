@@ -63,6 +63,8 @@
 #include "raids/serpentshrine/SerpentshrineTriggerContext.h"
 #include "raids/tempestkeep/TempestKeepActionContext.h"
 #include "raids/tempestkeep/TempestKeepTriggerContext.h"
+#include "raids/zulaman/ZulAmanActionContext.h"
+#include "raids/zulaman/ZulAmanTriggerContext.h"
 #include "raids/moltencore/RaidMcActionContext.h"
 #include "raids/moltencore/RaidMcTriggerContext.h"
 #include "raids/naxxramas/RaidNaxxActionContext.h"
@@ -143,6 +145,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidBtActionContext());
     actionContexts.Add(new SerpentshrineActionContext());
     actionContexts.Add(new TempestKeepActionContext());
+    actionContexts.Add(new RaidZaActionContext());
     actionContexts.Add(new WotlkDungeonUKActionContext());
     actionContexts.Add(new WotlkDungeonNexActionContext());
     actionContexts.Add(new WotlkDungeonANActionContext());
@@ -187,6 +190,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidBtTriggerContext());
     triggerContexts.Add(new SerpentshrineTriggerContext());
     triggerContexts.Add(new TempestKeepTriggerContext());
+    triggerContexts.Add(new RaidZaTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());
