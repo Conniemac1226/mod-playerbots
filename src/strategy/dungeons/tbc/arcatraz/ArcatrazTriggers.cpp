@@ -257,21 +257,26 @@ bool MellicharAddsActiveTrigger::IsActive()
     if (!bot)
         return false;
         
-    // Check if we're fighting Warden Mellichar (who is immune)
+    // Check if we're fighting Warden Mellichar OR Harbinger Skyriss (final encounter)
     Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
-    if (!warden || !warden->IsInCombat())
+    Unit* skyriss = AI_VALUE2(Unit*, "find target", "harbinger skyriss");
+    
+    if ((!warden || !warden->IsInCombat()) && (!skyriss || !skyriss->IsInCombat()))
         return false;
         
-    // Check for any of Mellichar's adds
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    // WOTLK PATTERN: Use "possible targets" for better add detection
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
     const uint32 mellicharAdds[] = {
-        NPC_TRICKSTER, NPC_PH_HUNTER, 
-        NPC_AKKIRIS, NPC_SULFURON, NPC_TW_DRAK, NPC_BL_DRAK
+        NPC_TRICKSTER, NPC_PH_HUNTER,      // Phase 1 
+        NPC_AKKIRIS, NPC_SULFURON,         // Phase 3
+        NPC_TW_DRAK, NPC_BL_DRAK,          // Phase 4
+        NPC_HARBINGER_SKYRISS               // Phase 5 - Final boss
+        // NOTE: NPC_MILLHOUSE excluded - becomes friendly!
     };
     
-    for (auto& npc : npcs)
+    for (auto& targetGuid : targets)
     {
-        Unit* unit = botAI->GetUnit(npc);
+        Unit* unit = botAI->GetUnit(targetGuid);
         if (!unit || !unit->IsAlive())
             continue;
 
