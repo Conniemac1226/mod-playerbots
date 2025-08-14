@@ -20,6 +20,9 @@ const uint32 SPELL_CHARGE = 35754;
 const uint32 SPELL_FELFIRE = 35769;
 const uint32 SPELL_FELFIRE_SHOCK = 35759;
 
+// Persistent ground effect NPCs
+const uint32 NPC_FELFIRE_GROUND = 20978; // "Wrath-Scryer's Felfire" - persistent ground fire
+
 const uint32 SPELL_FEAR = 39415;
 const uint32 SPELL_MIND_REND = 36924;
 const uint32 SPELL_DOMINATION = 37162;
@@ -90,6 +93,13 @@ class SoccothratesChargeAction : public MovementAction
 {
 public:
     SoccothratesChargeAction(PlayerbotAI* botAI) : MovementAction(botAI, "soccothrates charge") {}
+    bool Execute(Event event) override;
+};
+
+class AvoidFelfireGroundAction : public MovementAction
+{
+public:
+    AvoidFelfireGroundAction(PlayerbotAI* botAI) : MovementAction(botAI, "avoid felfire ground") {}
     bool Execute(Event event) override;
 };
 

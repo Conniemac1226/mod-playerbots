@@ -89,18 +89,20 @@ bool DalliahWhirlwindTrigger::IsActive()
     }
     
     // RESEARCHED: boss_dalliah_the_doomsayer.cpp:100-101 - DoCastAOE(SPELL_WHIRLWIND)
-    // Use casting state for earlier detection (more time to escape)
+    // Expanded trigger range to match successful Drake pattern (15 yard detection)
+    
+    // Priority 1: Detect casting for maximum reaction time
     if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_WHIRLWIND))
     {
         float distance = bot->GetExactDist2d(boss);
-        return distance < 10.0f; // Larger danger zone for earlier escape
+        return distance < 15.0f; // Increased from 10 to 15 yards for earlier detection
     }
     
-    // Fallback: already active whirlwind (emergency escape)
+    // Priority 2: Active whirlwind (emergency escape)
     if (boss->HasAura(SPELL_WHIRLWIND))
     {
         float distance = bot->GetExactDist2d(boss);
-        return distance < 8.0f;
+        return distance < 12.0f; // Increased from 8 to 12 yards
     }
     
     return false;
@@ -160,6 +162,37 @@ bool SoccothratesChargeTrigger::IsActive()
             
             float distance = bot->GetExactDist2d(unit);
             if (distance < 8.0f)
+            {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+bool FelfireGroundTrigger::IsActive()
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "wrath-scryer soccothrates");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    {
+        return false;
+    }
+    
+    // RESEARCHED: NPC ID 20978 "Wrath-Scryer's Felfire" - persistent ground fire effects
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit)
+        {
+            continue;
+        }
+        
+        if (unit->GetEntry() == NPC_FELFIRE_GROUND && unit->IsAlive())
+        {
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < 8.0f) // Stay away from persistent fire zones
             {
                 return true;
             }

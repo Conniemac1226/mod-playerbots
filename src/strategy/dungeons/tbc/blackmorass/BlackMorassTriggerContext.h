@@ -34,68 +34,90 @@ public:
     }
 
 private:
-    // Portal/Add Management (simplified triggers that use AI_VALUE)
+    // Portal/Add Management (safe trigger using Value<>* pattern to prevent crashes)
     static Trigger* portal_add_active(PlayerbotAI* botAI) { 
-        class SimpleTrigger : public Trigger {
+        class SafeTrigger : public Trigger {
         public:
-            SimpleTrigger(PlayerbotAI* ai) : Trigger(ai, "portal add active") {}
-            bool IsActive() override { return AI_VALUE(bool, "portal add active"); }
+            SafeTrigger(PlayerbotAI* ai) : Trigger(ai, "portal add active") {}
+            bool IsActive() override { 
+                // FIXED: Use safe Value<>* pattern to prevent crashes (matches action pattern)
+                Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("portal add active");
+                return boolValue ? boolValue->Get() : false;
+            }
         };
-        return new SimpleTrigger(botAI);
+        return new SafeTrigger(botAI);
     }
     
     static Trigger* medivh_needs_protection(PlayerbotAI* botAI) {
-        class SimpleTrigger : public Trigger {
+        class SafeTrigger : public Trigger {
         public:
-            SimpleTrigger(PlayerbotAI* ai) : Trigger(ai, "medivh needs protection") {}
-            bool IsActive() override { return AI_VALUE(bool, "medivh needs protection"); }
+            SafeTrigger(PlayerbotAI* ai) : Trigger(ai, "medivh needs protection") {}
+            bool IsActive() override { 
+                Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("medivh needs protection");
+                return boolValue ? boolValue->Get() : false;
+            }
         };
-        return new SimpleTrigger(botAI);
+        return new SafeTrigger(botAI);
     }
     
     static Trigger* sand_breath_danger(PlayerbotAI* botAI) {
-        class SimpleTrigger : public Trigger {
+        class SafeTrigger : public Trigger {
         public:
-            SimpleTrigger(PlayerbotAI* ai) : Trigger(ai, "sand breath danger") {}
-            bool IsActive() override { return AI_VALUE(bool, "sand breath danger"); }
+            SafeTrigger(PlayerbotAI* ai) : Trigger(ai, "sand breath danger") {}
+            bool IsActive() override { 
+                Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("sand breath danger");
+                return boolValue ? boolValue->Get() : false;
+            }
         };
-        return new SimpleTrigger(botAI);
+        return new SafeTrigger(botAI);
     }
     
     static Trigger* time_stop_active(PlayerbotAI* botAI) {
-        class SimpleTrigger : public Trigger {
+        class SafeTrigger : public Trigger {
         public:
-            SimpleTrigger(PlayerbotAI* ai) : Trigger(ai, "time stop active") {}
-            bool IsActive() override { return AI_VALUE(bool, "time stop active"); }
+            SafeTrigger(PlayerbotAI* ai) : Trigger(ai, "time stop active") {}
+            bool IsActive() override { 
+                Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("time stop active");
+                return boolValue ? boolValue->Get() : false;
+            }
         };
-        return new SimpleTrigger(botAI);
+        return new SafeTrigger(botAI);
     }
     
     static Trigger* attraction_active(PlayerbotAI* botAI) {
-        class SimpleTrigger : public Trigger {
+        class SafeTrigger : public Trigger {
         public:
-            SimpleTrigger(PlayerbotAI* ai) : Trigger(ai, "attraction active") {}
-            bool IsActive() override { return AI_VALUE(bool, "attraction active"); }
+            SafeTrigger(PlayerbotAI* ai) : Trigger(ai, "attraction active") {}
+            bool IsActive() override { 
+                Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("attraction active");
+                return boolValue ? boolValue->Get() : false;
+            }
         };
-        return new SimpleTrigger(botAI);
+        return new SafeTrigger(botAI);
     }
     
     static Trigger* mortal_wound_active(PlayerbotAI* botAI) {
-        class SimpleTrigger : public Trigger {
+        class SafeTrigger : public Trigger {
         public:
-            SimpleTrigger(PlayerbotAI* ai) : Trigger(ai, "mortal wound active") {}
-            bool IsActive() override { return AI_VALUE(bool, "mortal wound active"); }
+            SafeTrigger(PlayerbotAI* ai) : Trigger(ai, "mortal wound active") {}
+            bool IsActive() override { 
+                Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("mortal wound active");
+                return boolValue ? boolValue->Get() : false;
+            }
         };
-        return new SimpleTrigger(botAI);
+        return new SafeTrigger(botAI);
     }
     
     static Trigger* temporus_reflect_active(PlayerbotAI* botAI) {
-        class SimpleTrigger : public Trigger {
+        class SafeTrigger : public Trigger {
         public:
-            SimpleTrigger(PlayerbotAI* ai) : Trigger(ai, "temporus reflect active") {}
-            bool IsActive() override { return AI_VALUE(bool, "temporus reflect active"); }
+            SafeTrigger(PlayerbotAI* ai) : Trigger(ai, "temporus reflect active") {}
+            bool IsActive() override { 
+                Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("temporus reflect active");
+                return boolValue ? boolValue->Get() : false;
+            }
         };
-        return new SimpleTrigger(botAI);
+        return new SafeTrigger(botAI);
     }
     
     // Aeonus

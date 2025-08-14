@@ -54,6 +54,13 @@ public:
     bool IsActive() override;
 };
 
+class FelfireGroundTrigger : public Trigger
+{
+public:
+    FelfireGroundTrigger(PlayerbotAI* botAI) : Trigger(botAI, "felfire ground") {}
+    bool IsActive() override;
+};
+
 class MellicharAddsActiveTrigger : public Trigger
 {
 public:
