@@ -17,54 +17,48 @@ bool AttackMellicharAddsAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: Warden Mellichar spawns adds in waves while immune to damage
-    // Bots must prioritize adds over the immune warden
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* priorityAdd = nullptr;
-    float closestDistance = 50.0f;
+    // RESEARCHED: Pattern from VioletHoldActions.cpp - use "possible targets" not "nearest hostile npcs"
+    // Warden Mellichar spawns adds in waves while immune to damage
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
-    // Priority order: Phase 1 > Millhouse > Other adds
+    // WOTLK PATTERN: Use possible targets for better add detection
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    
+    // Priority order based on boss script: Phase 1 > Phase 3 > Phase 4 > Phase 5 adds
     const uint32 mellicharAdds[] = {
-        NPC_TRICKSTER, NPC_PH_HUNTER, NPC_MILLHOUSE, 
-        NPC_AKKIRIS, NPC_SULFURON, NPC_TW_DRAK, NPC_BL_DRAK
+        NPC_TRICKSTER, NPC_PH_HUNTER,      // Phase 1 - Highest priority
+        NPC_AKKIRIS, NPC_SULFURON,         // Phase 3 - Medium priority  
+        NPC_TW_DRAK, NPC_BL_DRAK,          // Phase 4 - Lower priority
+        NPC_HARBINGER_SKYRISS               // Phase 5 - Final boss
+        // NOTE: NPC_MILLHOUSE excluded - becomes friendly ally!
     };
     
-    for (auto& npc : npcs)
+    for (auto& targetGuid : targets)
     {
-        Unit* unit = botAI->GetUnit(npc);
+        Unit* unit = botAI->GetUnit(targetGuid);
         if (!unit || !unit->IsAlive())
             continue;
 
-        // Check if this is one of Mellichar's adds
+        // Check if this is one of Mellichar's priority adds
         for (uint32 addId : mellicharAdds)
         {
-            if (unit->GetEntry() == addId && AttackersValue::IsValidTarget(unit, bot))
+            if (unit->GetEntry() == addId)
             {
-                float distance = bot->GetDistance(unit);
-                
-                // Special priority for Millhouse (helpful NPC, protect him)
-                if (addId == NPC_MILLHOUSE)
+                // WOTLK PATTERN: Don't keep swapping between same-type adds
+                // If we're already attacking one add, don't retarget another of same type
+                if (currentTarget && currentTarget->GetEntry() == addId)
                 {
-                    // Don't attack Millhouse - he's friendly
-                    continue;
+                    return false; // Already targeting this add type
                 }
                 
-                if (distance < closestDistance)
-                {
-                    priorityAdd = unit;
-                    closestDistance = distance;
-                }
-                break;
+                // PRIORITY SWITCH: Target the add immediately
+                return Attack(unit);
             }
         }
     }
-
-    if (priorityAdd)
-    {
-        // Switch target to priority add
-        return Attack(priorityAdd);
-    }
     
+    // No priority adds found - this means we should NOT attack immune Warden
+    // Let other actions handle normal targeting
     return false;
 }
 
