@@ -85,28 +85,25 @@ bool RagingFlamesActiveTrigger::IsActive()
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
 
-        if (unit->GetEntry() == NPC_RAGING_FLAMES)
-        {
-            float distance = bot->GetDistance(unit);
+        float distance = bot->GetDistance(flame);
+        
+        // CRITICAL: Inferno casting - extended danger range
+        if (flame->HasUnitState(UNIT_STATE_CASTING) && 
+            flame->FindCurrentSpellBySpellId(SPELL_INFERNO) &&
+            distance < 20.0f) // Increased AoE safety range
+            return true;
             
-            // IMMEDIATE DANGER: Elemental is casting Inferno (AoE)
-            if (unit->HasUnitState(UNIT_STATE_CASTING) && 
-                unit->FindCurrentSpellBySpellId(SPELL_INFERNO) &&
-                distance < 15.0f)
-                return true;
-                
-            // HIGH DANGER: Directly fixated by this elemental
-            if (unit->GetVictim() == bot)
-                return true;
-                
-            // MODERATE DANGER: Elemental nearby and could re-fixate or cast AoE
-            if (distance < 18.0f)
-                return true;
-        }
+        // HIGH: Directly fixated - must kite immediately
+        if (flame->GetVictim() == bot)
+            return true;
+            
+        // MODERATE: Within kiting range - be proactive
+        if (distance < 25.0f) // Increased detection for earlier reaction
+            return true;
     }
     
     return false;
@@ -166,14 +163,22 @@ bool InfernoDangerTrigger::IsActive()
 bool RagingFlamesTargetTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || botAI->IsTank(bot) || botAI->IsHeal(bot))
-        return false; // Only for DPS
+    if (!bot)
+        return false;
+    
+    // FIXED: Since Raging Flames are immune to damage, DPS should target BOSS not flames
+    // This trigger now activates when flames are present so DPS refocuses on boss
     
     // Check if boss is still alive first (prevent post-combat freezing)
     Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
     
+    // Only activate for DPS classes (tanks focus on boss, healers heal)
+    if (botAI->IsTank(bot) || botAI->IsHeal(bot))
+        return false;
+    
+    // Check if any Raging Flames are present - if so, DPS should focus boss
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
@@ -183,25 +188,8 @@ bool RagingFlamesTargetTrigger::IsActive()
 
         if (unit->GetEntry() == NPC_RAGING_FLAMES)
         {
-            // Priority: Target elementals that are most dangerous
-            float distance = bot->GetDistance(unit);
-            bool isCastingInferno = unit->HasUnitState(UNIT_STATE_CASTING) && 
-                                  unit->FindCurrentSpellBySpellId(SPELL_INFERNO);
-            bool fixatingHealer = false;
-            
-            if (unit->GetVictim() && unit->GetVictim()->IsPlayer())
-            {
-                Player* victim = unit->GetVictim()->ToPlayer();
-                fixatingHealer = botAI->IsHeal(victim) || !botAI->IsMelee(victim);
-            }
-            
-            // Should target if: close enough AND (casting Inferno OR fixating healer/caster)
-            if (distance <= 40.0f && (isCastingInferno || fixatingHealer))
-                return true;
-                
-            // Also target if very close (within 25 yards) regardless
-            if (distance <= 25.0f)
-                return true;
+            // Any flames present means DPS should be on boss, not trying to fight immune adds
+            return true;
         }
     }
     
