@@ -93,7 +93,7 @@ bool IkissBlinkCastTrigger::IsActive()
         return false;
 
     Unit* boss = botAI->GetUnit(targetGuid);
-    if (!boss || boss->GetEntry() != NPC_TALON_KING_IKISS)
+    if (!boss || !boss->IsAlive() || boss->GetEntry() != NPC_TALON_KING_IKISS)
         return false;
 
     return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_BLINK_N);
@@ -158,7 +158,7 @@ bool IkissArcaneExplosionEndedTrigger::IsActive()
         return false;
 
     Unit* boss = botAI->GetUnit(targetGuid);
-    if (!boss || boss->GetEntry() != NPC_TALON_KING_IKISS)
+    if (!boss || !boss->IsAlive() || boss->GetEntry() != NPC_TALON_KING_IKISS)
         return false;
 
     // Per-bot bubble state tracking to ensure all bots detect bubble end independently

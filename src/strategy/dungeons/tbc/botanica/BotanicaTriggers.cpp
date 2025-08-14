@@ -10,7 +10,7 @@ bool SarannisResonanceTrigger::IsActive()
 bool SarannisReinforcementsTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "commander sarannis");
-    if (!boss || !boss->IsInCombat())
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
@@ -36,7 +36,7 @@ bool SarannisReinforcementsTrigger::IsActive()
 bool FreywinnFrayersTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "high botanist freywinn");
-    if (!boss || !boss->IsInCombat())
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }

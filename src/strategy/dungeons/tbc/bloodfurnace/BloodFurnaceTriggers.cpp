@@ -108,7 +108,7 @@ bool KelidanShadowmoonChannelerTrigger::IsActive()
 
     // Check if Kelidan encounter is active
     Unit* boss = bot->FindNearestCreature(NPC_KELIDAN, 100.0f);
-    if (!boss || !boss->IsInCombat())
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
     // RESEARCHED: Channelers must be killed first - boss_kelidan_the_breaker.cpp:113
