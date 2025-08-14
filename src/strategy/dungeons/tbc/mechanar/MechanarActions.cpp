@@ -310,44 +310,65 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
 
     if (mostDangerousFlame && highestThreat > 0.0f)
     {
-        // IMPROVED KITING ALGORITHM
-        float currentDistance = bot->GetDistance(mostDangerousFlame);
+        // FIXED: Use proven patterns from successful WotLK kiting implementations
         
-        // Calculate optimal kiting position
-        float flameAngle = bot->GetAngle(mostDangerousFlame);
-        float escapeAngle = flameAngle + M_PI; // Opposite direction
-        
-        // Dynamic distance calculation based on threat level
-        float safeDistance;
         if (needsEmergencyMove)
         {
-            safeDistance = 35.0f; // Far from Inferno AoE
+            // EMERGENCY: Inferno casting - immediate long-range flee (Forge of Souls pattern)
+            return FleePosition(mostDangerousFlame->GetPosition(), 35.0f, 250U);
         }
         else if (mostDangerousFlame->GetVictim() == bot)
         {
-            safeDistance = 22.0f; // Continuous kiting distance
+            // CONTINUOUS KITING: Use Pit of Saron circular kiting for fixated flames
+            // Calculate room center (boss position as reference)
+            Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+            if (!boss) return false;
+            
+            Position roomCenter = boss->GetPosition();
+            float currentDistance = bot->GetDistance(roomCenter);
+            
+            // Maintain 20-yard radius from room center (like Pit of Saron)
+            float targetRadius = 20.0f;
+            
+            if (currentDistance < 35.0f) // Only use circular pattern if in reasonable range
+            {
+                // Calculate vector from center to bot
+                float dx = bot->GetPositionX() - roomCenter.GetPositionX();
+                float dy = bot->GetPositionY() - roomCenter.GetPositionY();
+                
+                // Normalize to target radius
+                float distance = std::sqrt(dx * dx + dy * dy);
+                if (distance > 0.1f)
+                {
+                    dx = (dx / distance) * targetRadius;
+                    dy = (dy / distance) * targetRadius;
+                }
+                
+                // Rotate vector by 45 degrees for circular movement (Pit of Saron pattern)
+                float rotationAngle = M_PI / 4; // 45 degrees
+                float rotatedX = dx * cos(rotationAngle) - dy * sin(rotationAngle);
+                float rotatedY = dx * sin(rotationAngle) + dy * cos(rotationAngle);
+                
+                Position targetPos;
+                targetPos.m_positionX = roomCenter.GetPositionX() + rotatedX;
+                targetPos.m_positionY = roomCenter.GetPositionY() + rotatedY;
+                targetPos.m_positionZ = bot->GetPositionZ();
+                
+                return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY,
+                             targetPos.m_positionZ, false, false, false, true,
+                             MovementPriority::MOVEMENT_COMBAT);
+            }
+            else
+            {
+                // Fallback: Use FleePosition if too far from center
+                return FleePosition(mostDangerousFlame->GetPosition(), 22.0f, 500U);
+            }
         }
         else
         {
-            safeDistance = 18.0f; // Safe proximity
+            // PROXIMITY: Just reposition away from flames (Forge of Souls pattern)
+            return FleePosition(mostDangerousFlame->GetPosition(), 18.0f, 1000U);
         }
-        
-        // Add some randomization to avoid predictable movement patterns
-        float angleVariation = (rand() % 60 - 30) * M_PI / 180.0f; // ±30 degrees
-        escapeAngle += angleVariation;
-        
-        // Calculate destination with obstacle avoidance consideration
-        Position kitePos;
-        kitePos.m_positionX = bot->GetPositionX() + cos(escapeAngle) * safeDistance;
-        kitePos.m_positionY = bot->GetPositionY() + sin(escapeAngle) * safeDistance;
-        kitePos.m_positionZ = bot->GetPositionZ();
-        
-        // Use appropriate movement priority
-        MovementPriority priority = needsEmergencyMove ? 
-            MovementPriority::MOVEMENT_FORCED : MovementPriority::MOVEMENT_NORMAL;
-        
-        return MoveTo(bot->GetMapId(), kitePos.m_positionX, kitePos.m_positionY,
-                     kitePos.m_positionZ, false, false, false, true, priority);
     }
 
     // Clean up old fixation tracking (aligned with 8-13s Inferno cycle)
