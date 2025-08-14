@@ -29,11 +29,12 @@ const uint32 NPC_HARBINGER_ILLUSION = 21466;
 // Warden Mellichar's adds
 const uint32 NPC_TRICKSTER = 20905;
 const uint32 NPC_PH_HUNTER = 20906;
-const uint32 NPC_MILLHOUSE = 20977;
+const uint32 NPC_MILLHOUSE = 20977;      // NOTE: Becomes friendly ally, not hostile!
 const uint32 NPC_AKKIRIS = 20908;
 const uint32 NPC_SULFURON = 20909;
 const uint32 NPC_TW_DRAK = 20910;
 const uint32 NPC_BL_DRAK = 20911;
+const uint32 NPC_HARBINGER_SKYRISS = 20912; // Final boss after adds
 
 class AttackMellicharAddsAction : public AttackAction
 {

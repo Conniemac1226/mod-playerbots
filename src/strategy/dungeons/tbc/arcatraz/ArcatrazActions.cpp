@@ -63,19 +63,24 @@ bool AttackMellicharAddsAction::Execute(Event event)
 bool AttackMellicharAddsAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || botAI->IsHeal(bot))
-        return false; // Healers focus on healing
-        
-    // Check if we're fighting Warden Mellichar (who is immune)
-    Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
-    if (!warden || !warden->IsInCombat())
+    if (!bot)
         return false;
         
-    // Check for any of Mellichar's adds
+    // Check if we're fighting Warden Mellichar (who is immune) OR Harbinger Skyriss
+    Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
+    Unit* skyriss = AI_VALUE2(Unit*, "find target", "harbinger skyriss");
+    
+    if ((!warden || !warden->IsInCombat()) && (!skyriss || !skyriss->IsInCombat()))
+        return false;
+        
+    // RESEARCHED: arcatraz.cpp - Warden releases hostile adds in sequence
+    // NOTE: Millhouse (NPC_MILLHOUSE) is NOT included - he becomes friendly ally!
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     const uint32 mellicharAdds[] = {
-        NPC_TRICKSTER, NPC_PH_HUNTER, 
-        NPC_AKKIRIS, NPC_SULFURON, NPC_TW_DRAK, NPC_BL_DRAK
+        NPC_TRICKSTER, NPC_PH_HUNTER,      // Wave 1: Random
+        NPC_AKKIRIS, NPC_SULFURON,         // Wave 3: Random  
+        NPC_TW_DRAK, NPC_BL_DRAK,          // Wave 4: Random
+        NPC_HARBINGER_SKYRISS               // Wave 5: Final boss
     };
     
     for (auto& npc : npcs)
@@ -208,20 +213,31 @@ bool SeedOfCorruptionDispelAction::Execute(Event event)
 
 bool DalliahWhirlwindAction::Execute(Event event)
 {
-    Unit* boss = AI_VALUE2(Unit*, "find target", "dalliah the doomsayer");
-    if (!boss)
-    {
+    Player* bot = botAI->GetBot();
+    if (!bot)
         return false;
-    }
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "dalliah the doomsayer");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
     
-    if (boss->HasAura(SPELL_WHIRLWIND) || boss->FindCurrentSpellBySpellId(SPELL_WHIRLWIND))
+    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:100-101 - Whirlwind is AoE spell
+    // Match trigger logic exactly for consistency
+    if ((boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_WHIRLWIND)) ||
+        boss->HasAura(SPELL_WHIRLWIND))
     {
-        float safeDistance = 8.0f;
-        float currentDist = bot->GetExactDist2d(boss);
-        
-        if (currentDist < safeDistance)
+        float distance = bot->GetDistance(boss);
+        if (distance < 10.0f) // Safe distance from whirlwind AoE
         {
-            return MoveAway(boss, safeDistance - currentDist + 2.0f);
+            // EMERGENCY: Direct movement away from whirlwind (more reliable than MoveAway)
+            float angle = bot->GetAngle(boss) + M_PI; // Opposite direction
+            float escapeDistance = 12.0f; // Move to 12 yards for safety
+            float x = bot->GetPositionX() + cos(angle) * escapeDistance;
+            float y = bot->GetPositionY() + sin(angle) * escapeDistance;
+            float z = bot->GetPositionZ();
+            
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
         }
     }
     

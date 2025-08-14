@@ -88,7 +88,16 @@ bool DalliahWhirlwindTrigger::IsActive()
         return false;
     }
     
-    if (boss->HasAura(SPELL_WHIRLWIND) || boss->FindCurrentSpellBySpellId(SPELL_WHIRLWIND))
+    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:100-101 - DoCastAOE(SPELL_WHIRLWIND)
+    // Use casting state for earlier detection (more time to escape)
+    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_WHIRLWIND))
+    {
+        float distance = bot->GetExactDist2d(boss);
+        return distance < 10.0f; // Larger danger zone for earlier escape
+    }
+    
+    // Fallback: already active whirlwind (emergency escape)
+    if (boss->HasAura(SPELL_WHIRLWIND))
     {
         float distance = bot->GetExactDist2d(boss);
         return distance < 8.0f;
@@ -163,7 +172,7 @@ bool SoccothratesChargeTrigger::IsActive()
 bool SkyrissIllusionTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "harbinger skyriss");
-    if (!boss || !boss->IsInCombat())
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
