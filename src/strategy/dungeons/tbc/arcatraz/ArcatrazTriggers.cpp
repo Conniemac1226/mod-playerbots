@@ -88,21 +88,22 @@ bool DalliahWhirlwindTrigger::IsActive()
         return false;
     }
     
-    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:100-101 - DoCastAOE(SPELL_WHIRLWIND)
-    // Expanded trigger range to match successful Drake pattern (15 yard detection)
+    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:101 - DoCastAOE(SPELL_WHIRLWIND) - instant AoE cast!
+    // Whirlwind is an INSTANT AoE ability, not channeled - check for aura instead of casting state
     
-    // Priority 1: Detect casting for maximum reaction time
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_WHIRLWIND))
-    {
-        float distance = bot->GetExactDist2d(boss);
-        return distance < 15.0f; // Increased from 10 to 15 yards for earlier detection
-    }
+    float distance = bot->GetExactDist2d(boss);
     
-    // Priority 2: Active whirlwind (emergency escape)
+    // Check if boss has whirlwind aura (the spinning effect)
     if (boss->HasAura(SPELL_WHIRLWIND))
     {
-        float distance = bot->GetExactDist2d(boss);
-        return distance < 12.0f; // Increased from 8 to 12 yards
+        return distance < 15.0f; // Increased safety range - whirlwind hits everything in melee range
+    }
+    
+    // Also check if boss just said the whirlwind emote (backup detection)
+    // This provides earlier warning since emote happens before the actual cast
+    if (boss->HasUnitState(UNIT_STATE_CASTING))
+    {
+        return distance < 12.0f; // Move early if casting anything while close
     }
     
     return false;
