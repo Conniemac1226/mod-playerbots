@@ -15,7 +15,7 @@ void ArcatrazStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     
     // Dalliah the Doomsayer
     triggers.push_back(new TriggerNode("dalliah whirlwind",
-        NextAction::array(0, new NextAction("dalliah whirlwind", ACTION_MOVE + 5), nullptr)));
+        NextAction::array(0, new NextAction("dalliah whirlwind", ACTION_EMERGENCY + 2), nullptr)));
     
     triggers.push_back(new TriggerNode("dalliah heal",
         NextAction::array(0, new NextAction("dalliah heal interrupt", ACTION_INTERRUPT), nullptr)));
@@ -26,6 +26,9 @@ void ArcatrazStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     
     triggers.push_back(new TriggerNode("soccothrates charge",
         NextAction::array(0, new NextAction("soccothrates charge", ACTION_MOVE + 4), nullptr)));
+    
+    triggers.push_back(new TriggerNode("felfire ground",
+        NextAction::array(0, new NextAction("avoid felfire ground", ACTION_EMERGENCY + 1), nullptr)));
     
     // Warden Mellichar
     triggers.push_back(new TriggerNode("mellichar adds active",

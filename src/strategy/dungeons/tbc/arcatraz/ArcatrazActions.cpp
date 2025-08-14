@@ -3,6 +3,14 @@
 #include "ArcatrazStrategy.h"
 #include "AttackersValue.h"
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+// Per-bot state management for Dalliah whirlwind avoidance (matches successful Drake pattern)
+static std::map<ObjectGuid, uint32> g_dalliah_lastMoveTime;
+static std::map<ObjectGuid, bool> g_dalliah_inSafePosition;
+
 bool AttackMellicharAddsAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
@@ -221,24 +229,63 @@ bool DalliahWhirlwindAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
     
-    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:100-101 - Whirlwind is AoE spell
-    // Match trigger logic exactly for consistency
-    if ((boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_WHIRLWIND)) ||
-        boss->HasAura(SPELL_WHIRLWIND))
+    // Per-bot state management (RESEARCHED: Successful Drake pattern)
+    uint32 currentTime = getMSTime();
+    ObjectGuid botGuid = bot->GetGUID();
+    
+    // Check if Dalliah is casting or has whirlwind active  
+    bool isWhirlwinding = false;
+    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_WHIRLWIND))
+        isWhirlwinding = true;
+    if (boss->HasAura(SPELL_WHIRLWIND))
+        isWhirlwinding = true;
+    
+    // Check if we're already in a safe position during this whirlwind
+    if (g_dalliah_inSafePosition[botGuid] && isWhirlwinding)
     {
-        float distance = bot->GetDistance(boss);
-        if (distance < 10.0f) // Safe distance from whirlwind AoE
+        // Check if this is a new whirlwind phase (10+ seconds since last move)
+        if ((currentTime - g_dalliah_lastMoveTime[botGuid]) > 10000)
         {
-            // EMERGENCY: Direct movement away from whirlwind (more reliable than MoveAway)
-            float angle = bot->GetAngle(boss) + M_PI; // Opposite direction
-            float escapeDistance = 12.0f; // Move to 12 yards for safety
-            float x = bot->GetPositionX() + cos(angle) * escapeDistance;
-            float y = bot->GetPositionY() + sin(angle) * escapeDistance;
-            float z = bot->GetPositionZ();
-            
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                        MovementPriority::MOVEMENT_FORCED);
+            g_dalliah_inSafePosition[botGuid] = false;
+            g_dalliah_lastMoveTime[botGuid] = 0;
         }
+        else
+        {
+            return false; // Already safe, don't move again
+        }
+    }
+    
+    // Reset state if whirlwind ended
+    if (!isWhirlwinding)
+    {
+        g_dalliah_inSafePosition[botGuid] = false;
+        g_dalliah_lastMoveTime[botGuid] = 0;
+        return false;
+    }
+    
+    float distance = bot->GetDistance(boss);
+    if (distance < 12.0f) // Increased trigger range for earlier escape
+    {
+        // Calculate unique safe position for this bot (RESEARCHED: Drake successful pattern)
+        float baseAngle = (botGuid.GetCounter() % 8) * (M_PI / 4.0f); // Distribute bots in 8 directions
+        float angle = baseAngle + frand(-0.2f, 0.2f); // Add small random variation
+        float safeDistance = 15.0f; // Increased from 12 to 15 yards for better safety
+        
+        float targetX = boss->GetPositionX() + cos(angle) * safeDistance;
+        float targetY = boss->GetPositionY() + sin(angle) * safeDistance;
+        float targetZ = boss->GetPositionZ();
+        
+        // EMERGENCY: Move to safe position using FORCED priority for critical escape
+        bool result = MoveTo(bot->GetMapId(), targetX, targetY, targetZ, 
+                            false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        
+        if (result)
+        {
+            g_dalliah_lastMoveTime[botGuid] = currentTime;
+            g_dalliah_inSafePosition[botGuid] = true;
+        }
+        
+        return result;
     }
     
     return false;
@@ -334,6 +381,57 @@ bool SoccothratesChargeAction::Execute(Event event)
                 return MoveAway(unit, 10.0f - distance);
             }
         }
+    }
+    
+    return false;
+}
+
+bool AvoidFelfireGroundAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "wrath-scryer soccothrates");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+    
+    // RESEARCHED: NPC ID 20978 "Wrath-Scryer's Felfire" - persistent ground fire effects
+    // Similar to Void Zone avoidance but for Soccothrates' Felfire ground effects
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* closestFelfire = nullptr;
+    float closestDistance = 50.0f;
+    
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit)
+        {
+            continue;
+        }
+        
+        if (unit->GetEntry() == NPC_FELFIRE_GROUND && unit->IsAlive())
+        {
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < closestDistance)
+            {
+                closestFelfire = unit;
+                closestDistance = distance;
+            }
+        }
+    }
+    
+    if (closestFelfire && closestDistance < 10.0f) // Move if too close to any Felfire
+    {
+        // EMERGENCY: Move away from Felfire ground effect (similar to Void Zone pattern)
+        float angle = bot->GetAngle(closestFelfire) + M_PI; // Opposite direction
+        float escapeDistance = 12.0f - closestDistance; // Move to 12+ yards for safety
+        float x = bot->GetPositionX() + cos(angle) * escapeDistance;
+        float y = bot->GetPositionY() + sin(angle) * escapeDistance;
+        float z = bot->GetPositionZ();
+        
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                    MovementPriority::MOVEMENT_FORCED);
     }
     
     return false;
