@@ -153,7 +153,7 @@ bool ShirrakReturnPositionAction::Execute(Event event)
     g_shirrak_inSafePosition[botGuid] = false;
 
     Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
-    if (!boss)
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
     // Return to optimal range based on class and Inhibit Magic stacks
@@ -192,7 +192,7 @@ bool ShirrakReturnPositionAction::isUseful()
         return false;
 
     Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
-    if (!boss)
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
     ObjectGuid botGuid = bot->GetGUID();
@@ -228,7 +228,7 @@ bool MaladaarSoulScreamAction::Execute(Event event)
         return false;
 
     Unit* boss = AI_VALUE2(Unit*, "find target", "exarch maladaar");
-    if (!boss)
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
     
     // RESEARCHED: Soul Scream - boss_exarch_maladaar.cpp:96-99
@@ -266,7 +266,7 @@ bool MaladaarSoulScreamAction::Execute(Event event)
 bool MaladaarStolenSoulAction::Execute(Event event)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "exarch maladaar");
-    if (!boss || !boss->IsInCombat())
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
     
     // RESEARCHED: Stolen Soul - boss_exarch_maladaar.cpp:104-119
@@ -306,7 +306,7 @@ bool MaladaarStolenSoulAction::isUseful()
 bool MaladaarAvatarAction::Execute(Event event)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "exarch maladaar");
-    if (!boss || !boss->IsInCombat())
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
     
     // RESEARCHED: Avatar summoned at 25% - boss_exarch_maladaar.cpp:73-78

@@ -55,7 +55,7 @@ bool BlackheartWarStompTrigger::IsActive()
 bool VorpilVoidTravelerTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!boss || !boss->IsInCombat())
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }

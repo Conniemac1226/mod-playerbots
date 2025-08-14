@@ -35,7 +35,7 @@ bool ShirrakFocusFireSpawnedTrigger::IsActive()
     
     // FALLBACK: Check if boss is casting Focus Cast (happens after creature spawn)
     Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
-    if (boss && boss->IsAlive())
+    if (boss && boss->IsAlive() && boss->IsInCombat())
     {
         if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_FOCUS_CAST))
         {
@@ -60,7 +60,7 @@ bool ShirrakAttractMagicTrigger::IsActive()
 
     // Check for Attract Magic cast
     Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
-    if (!boss)
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
     // Check if boss is casting Attract Magic

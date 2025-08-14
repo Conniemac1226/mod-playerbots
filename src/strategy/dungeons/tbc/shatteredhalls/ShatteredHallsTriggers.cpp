@@ -129,7 +129,7 @@ bool KargathBladeDanceTrigger::IsActive()
 bool KargathAssassinsTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "warchief kargath bladefist");
-    if (!boss || !boss->IsInCombat())
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
