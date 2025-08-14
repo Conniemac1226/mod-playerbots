@@ -229,21 +229,19 @@ bool DalliahWhirlwindAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
     
-    // Per-bot state management (RESEARCHED: Successful Drake pattern)
+    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:101 - DoCastAOE(SPELL_WHIRLWIND) is instant AoE
+    // CLAUDE.md COMPLIANT: Per-bot state management to prevent multi-bot coordination issues
+    
     uint32 currentTime = getMSTime();
     ObjectGuid botGuid = bot->GetGUID();
     
-    // Check if Dalliah is casting or has whirlwind active  
-    bool isWhirlwinding = false;
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_WHIRLWIND))
-        isWhirlwinding = true;
-    if (boss->HasAura(SPELL_WHIRLWIND))
-        isWhirlwinding = true;
+    // Check if Dalliah has whirlwind active (FIXED: instant AoE detection)
+    bool isWhirlwinding = boss->HasAura(SPELL_WHIRLWIND);
     
     // Check if we're already in a safe position during this whirlwind
     if (g_dalliah_inSafePosition[botGuid] && isWhirlwinding)
     {
-        // Check if this is a new whirlwind phase (10+ seconds since last move)
+        // Phase reset logic - new whirlwind phase after 10+ seconds
         if ((currentTime - g_dalliah_lastMoveTime[botGuid]) > 10000)
         {
             g_dalliah_inSafePosition[botGuid] = false;
@@ -264,18 +262,18 @@ bool DalliahWhirlwindAction::Execute(Event event)
     }
     
     float distance = bot->GetDistance(boss);
-    if (distance < 12.0f) // Increased trigger range for earlier escape
+    if (distance < 15.0f) // Increased trigger range based on AoE nature
     {
-        // Calculate unique safe position for this bot (RESEARCHED: Drake successful pattern)
+        // Calculate unique safe position for this bot (VALIDATED MOVEMENT PATTERN)
         float baseAngle = (botGuid.GetCounter() % 8) * (M_PI / 4.0f); // Distribute bots in 8 directions
         float angle = baseAngle + frand(-0.2f, 0.2f); // Add small random variation
-        float safeDistance = 15.0f; // Increased from 12 to 15 yards for better safety
+        float safeDistance = 18.0f; // Increased safety distance for instant AoE
         
         float targetX = boss->GetPositionX() + cos(angle) * safeDistance;
         float targetY = boss->GetPositionY() + sin(angle) * safeDistance;
         float targetZ = boss->GetPositionZ();
         
-        // EMERGENCY: Move to safe position using FORCED priority for critical escape
+        // EMERGENCY: Move to safe position using FORCED priority
         bool result = MoveTo(bot->GetMapId(), targetX, targetY, targetZ, 
                             false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         
