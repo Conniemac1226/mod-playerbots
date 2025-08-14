@@ -259,6 +259,14 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (!bot)
         return false;
 
+    // CRITICAL: Interrupt any spell casting for emergency movement during kiting
+    // Research shows successful kiting requires spell interruption priority
+    if (bot->IsNonMeleeSpellCast(true))
+    {
+        bot->CastStop();
+        botAI->InterruptSpell();
+    }
+
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
 
@@ -314,6 +322,14 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
         
         if (needsEmergencyMove)
         {
+            // EMERGENCY: Inferno casting - FORCE interrupt any spells and flee immediately
+            // This handles the "hellfire channel" issue where bots stand in AoE
+            if (bot->IsNonMeleeSpellCast(true))
+            {
+                bot->CastStop();
+                botAI->InterruptSpell();
+            }
+            
             // EMERGENCY: Inferno casting - immediate long-range flee (Forge of Souls pattern)
             return FleePosition(mostDangerousFlame->GetPosition(), 35.0f, 250U);
         }
@@ -462,6 +478,13 @@ bool SepethreaInfernoAction::Execute(Event event)
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
+
+    // CRITICAL: Interrupt spells immediately when Inferno AoE is detected
+    if (bot->IsNonMeleeSpellCast(true))
+    {
+        bot->CastStop();
+        botAI->InterruptSpell();
+    }
 
     // RESEARCHED: boss_nethermancer_sepethrea.cpp:153 & 187
     // Raging Flames cast Inferno which deals AoE damage
