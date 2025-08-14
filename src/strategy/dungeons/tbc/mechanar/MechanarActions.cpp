@@ -268,8 +268,9 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* dangerousElement = nullptr;
-    float closestDanger = 100.0f;
+    float highestDanger = 0.0f;
     bool isDirectlyFixated = false;
+    bool isInfernoThreat = false;
     
     for (auto& npc : npcs)
     {
@@ -283,31 +284,36 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
             bool isCastingInferno = unit->HasUnitState(UNIT_STATE_CASTING) && 
                                   unit->FindCurrentSpellBySpellId(SPELL_INFERNO);
             
-            // CRITICAL: Move away from Inferno casting (immediate AoE danger)
+            // Calculate danger level (higher = more dangerous)
+            float dangerLevel = 0.0f;
+            
+            // CRITICAL: Inferno casting within AoE range
             if (isCastingInferno && distance < 15.0f)
             {
-                dangerousElement = unit;
-                closestDanger = distance;
-                break; // Immediate action needed
+                dangerLevel = 1000.0f; // Maximum priority
+                isInfernoThreat = true;
             }
-            
-            // HIGH PRIORITY: Directly fixated by this elemental
-            if (unit->GetVictim() == bot)
+            // HIGH PRIORITY: Directly fixated
+            else if (unit->GetVictim() == bot)
             {
-                dangerousElement = unit;
-                closestDanger = distance;
+                dangerLevel = 500.0f + (30.0f - distance); // Closer = more dangerous
                 isDirectlyFixated = true;
-                g_sepethrea_targetedByFlames[botGuid] = unit->GetGUID();
-                g_sepethrea_lastFlamesTime[botGuid] = currentTime;
+            }
+            // MODERATE: Just too close for safety
+            else if (distance < 18.0f)
+            {
+                dangerLevel = 100.0f + (18.0f - distance);
             }
             
-            // MODERATE PRIORITY: Close enough to be dangerous
-            else if (!dangerousElement && distance < 18.0f)
+            if (dangerLevel > highestDanger)
             {
-                if (distance < closestDanger)
+                dangerousElement = unit;
+                highestDanger = dangerLevel;
+                
+                if (isDirectlyFixated)
                 {
-                    dangerousElement = unit;
-                    closestDanger = distance;
+                    g_sepethrea_targetedByFlames[botGuid] = unit->GetGUID();
+                    g_sepethrea_lastFlamesTime[botGuid] = currentTime;
                 }
             }
         }
@@ -317,9 +323,14 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     {
         // Calculate safe escape position
         float angle = bot->GetAngle(dangerousElement) + M_PI; // Opposite direction
-        float escapeDistance = isDirectlyFixated ? 25.0f : 20.0f; // Kite further if fixated
+        float escapeDistance = 25.0f; // Always use maximum safe distance
         
-        // Try to move towards raid area if possible, otherwise just away
+        // For Inferno, move even further
+        if (isInfernoThreat)
+        {
+            escapeDistance = 30.0f;
+        }
+        
         Position safePos;
         safePos.m_positionX = bot->GetPositionX() + cos(angle) * escapeDistance;
         safePos.m_positionY = bot->GetPositionY() + sin(angle) * escapeDistance;
@@ -366,17 +377,33 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
         return false;
 
     // RESEARCHED: boss_nethermancer_sepethrea.cpp:72
-    // Dragon's Breath is a frontal cone
+    // Dragon's Breath is a frontal cone - IMMEDIATE reaction needed
     if (boss->HasUnitState(UNIT_STATE_CASTING) && 
         boss->FindCurrentSpellBySpellId(SPELL_DRAGONS_BREATH))
     {
-        if (boss->HasInArc(M_PI / 3, bot) && !botAI->IsTank(bot))
+        // Check if we're in danger zone (frontal cone)
+        if (boss->HasInArc(M_PI / 2, bot) && !botAI->IsTank(bot)) // Wider check for safety
         {
-            // Move to the side
-            float angle = boss->GetOrientation() + (M_PI / 2);
-            Position safePos = boss->GetPosition();
-            safePos.m_positionX += cos(angle) * 10.0f;
-            safePos.m_positionY += sin(angle) * 10.0f;
+            // Calculate perpendicular escape direction (to the sides)
+            float bossOrientation = boss->GetOrientation();
+            float botAngleToBoss = boss->GetAngle(bot);
+            
+            // Determine which side is safer (left or right)
+            float leftAngle = bossOrientation - (M_PI / 2);
+            float rightAngle = bossOrientation + (M_PI / 2);
+            
+            // Choose the side that's closer to our current position
+            float angleDiffLeft = fabs(botAngleToBoss - leftAngle);
+            float angleDiffRight = fabs(botAngleToBoss - rightAngle);
+            
+            float escapeAngle = (angleDiffLeft < angleDiffRight) ? leftAngle : rightAngle;
+            
+            // Move to a safe position at the boss's side
+            float escapeDistance = 15.0f; // Safe distance from boss
+            Position safePos;
+            safePos.m_positionX = boss->GetPositionX() + cos(escapeAngle) * escapeDistance;
+            safePos.m_positionY = boss->GetPositionY() + sin(escapeAngle) * escapeDistance;
+            safePos.m_positionZ = boss->GetPositionZ();
             
             return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
                          safePos.m_positionZ, false, false, false, true,
@@ -508,7 +535,7 @@ bool SepethreaTargetElementalAction::Execute(Event event)
     
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* priorityElemental = nullptr;
-    float closestDistance = 100.0f;
+    float highestPriority = -1000.0f; // Changed to use highest score
     
     for (auto& npc : npcs)
     {
@@ -519,11 +546,13 @@ bool SepethreaTargetElementalAction::Execute(Event event)
         if (unit->GetEntry() == NPC_RAGING_FLAMES)
         {
             float distance = bot->GetDistance(unit);
+            if (distance > 40.0f) // Skip if too far
+                continue;
             
             // Prioritize elementals that are:
             // 1. Casting Inferno (most dangerous)
-            // 2. Closest to raid members
-            // 3. Fixated on healers/casters (protect them)
+            // 2. Fixated on healers/casters (protect them)
+            // 3. Closest to bot (easier to kill)
             
             bool isCastingInferno = unit->HasUnitState(UNIT_STATE_CASTING) && 
                                   unit->FindCurrentSpellBySpellId(SPELL_INFERNO);
@@ -535,27 +564,31 @@ bool SepethreaTargetElementalAction::Execute(Event event)
                 fixatingHealer = botAI->IsHeal(victim) || !botAI->IsMelee(victim);
             }
             
-            // Calculate priority score (lower = higher priority)
-            float priority = distance;
-            if (isCastingInferno) priority -= 50.0f; // Highest priority
-            if (fixatingHealer) priority -= 20.0f;   // Protect healers/casters
+            // Calculate priority score (higher = higher priority)
+            float priority = 0.0f;
+            if (isCastingInferno) priority += 100.0f; // Highest priority - STOP INFERNO
+            if (fixatingHealer) priority += 50.0f;   // Protect healers/casters
+            if (unit->GetVictim() == bot) priority += 30.0f; // Target what's attacking us
+            priority += (40.0f - distance); // Closer = higher priority
             
-            if (priority < closestDistance && distance <= 40.0f)
+            if (priority > highestPriority)
             {
                 priorityElemental = unit;
-                closestDistance = priority;
+                highestPriority = priority;
             }
         }
     }
 
     if (priorityElemental)
     {
-        // Switch target to the priority elemental
+        // Switch target to the priority elemental immediately
         Value<Unit*>* currentTargetValue = botAI->GetAiObjectContext()->GetValue<Unit*>("current target");
-        if (currentTargetValue && currentTargetValue->Get() != priorityElemental)
+        if (currentTargetValue)
         {
             currentTargetValue->Set(priorityElemental);
         }
+        
+        // Force attack the elemental
         return Attack(priorityElemental);
     }
 
