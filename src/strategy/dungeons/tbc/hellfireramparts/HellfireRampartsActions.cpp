@@ -298,13 +298,13 @@ bool OmorRangedPositionAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Omor has no movement - boss_omor_the_unscarred.cpp:44
-    // Melee should not try to tank him in melee range
-    if (!botAI->IsRanged(bot) && !botAI->IsTank(bot))
+    // Only force ranged positioning if bot has Treacherous Aura (dangerous to be in melee)
+    if (!botAI->IsRanged(bot) && !botAI->IsTank(bot) && bot->HasAura(SPELL_TREACHEROUS_AURA))
     {
         float distance = bot->GetDistance(boss);
         if (distance < 8.0f)
         {
-            // Non-tanks should stay at range
+            // Cursed melee should stay at range to avoid spreading damage
             return MoveAway(boss, 10.0f - distance);
         }
     }
@@ -322,8 +322,9 @@ bool OmorRangedPositionAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Only melee non-tanks need to adjust
-    return !botAI->IsRanged(bot) && !botAI->IsTank(bot) && bot->GetDistance(boss) < 8.0f;
+    // Only melee non-tanks with Treacherous Aura need to stay at range
+    return !botAI->IsRanged(bot) && !botAI->IsTank(bot) && bot->HasAura(SPELL_TREACHEROUS_AURA) && 
+           bot->GetDistance(boss) < 8.0f;
 }
 
 // Nazan & Vazruden - Avoid Liquid Fire
@@ -640,11 +641,7 @@ bool OmorTreacherySpreadAction::Execute(Event event)
         float newY = bot->GetPositionY() + sin(angle) * moveDistance;
         float newZ = bot->GetPositionZ();
         
-        // Stop attacks if we have the aura to focus on positioning
-        if (botHasAura)
-        {
-            bot->AttackStop();
-        }
+        // Note: Don't stop attacks permanently - bots should resume after positioning
         
         return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, true, 
                      MovementPriority::MOVEMENT_FORCED);
