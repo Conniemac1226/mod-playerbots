@@ -111,7 +111,7 @@ public:
 
 // ========== NETHERMANCER SEPETHREA ACTIONS ==========
 
-// RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157 - Raging Flames fixate random targets
+// FIXED: Raging Flames are IMMUNE - must be KITED continuously, not fought
 class SepethreaRagingFlamesAction : public MovementAction
 {
 public:
@@ -147,7 +147,7 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157 - Raging Flames priority targeting for DPS
+// FIXED: Raging Flames are IMMUNE to damage - DPS should target boss while kiting
 class SepethreaTargetElementalAction : public AttackAction
 {
 public:

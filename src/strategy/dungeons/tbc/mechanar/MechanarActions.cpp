@@ -262,89 +262,98 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
 
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157
-    // Raging Flames fixate on random targets and re-fixate every 15-25s during Inferno
-    // ALL players must move away from elementals to avoid AoE damage
+    // RESEARCHED: Raging Flames are IMMUNE to damage and must be KITED
+    // They fixate on random targets and re-target every 8-13 seconds during Inferno
+    // Strategy: Continuous kiting, maintain safe distance, avoid Inferno AoE
     
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* dangerousElement = nullptr;
-    float highestDanger = 0.0f;
-    bool isDirectlyFixated = false;
-    bool isInfernoThreat = false;
+    Unit* mostDangerousFlame = nullptr;
+    float highestThreat = -1.0f;
+    bool needsEmergencyMove = false;
     
     for (auto& npc : npcs)
     {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
 
-        if (unit->GetEntry() == NPC_RAGING_FLAMES)
+        float distance = bot->GetDistance(flame);
+        float threatLevel = 0.0f;
+        
+        // CRITICAL: Inferno is casting - EMERGENCY EVACUATION
+        bool isCastingInferno = flame->HasUnitState(UNIT_STATE_CASTING) && 
+                               flame->FindCurrentSpellBySpellId(SPELL_INFERNO);
+        if (isCastingInferno && distance < 20.0f) // Increased AoE safety range
         {
-            float distance = bot->GetDistance(unit);
-            bool isCastingInferno = unit->HasUnitState(UNIT_STATE_CASTING) && 
-                                  unit->FindCurrentSpellBySpellId(SPELL_INFERNO);
-            
-            // Calculate danger level (higher = more dangerous)
-            float dangerLevel = 0.0f;
-            
-            // CRITICAL: Inferno casting within AoE range
-            if (isCastingInferno && distance < 15.0f)
-            {
-                dangerLevel = 1000.0f; // Maximum priority
-                isInfernoThreat = true;
-            }
-            // HIGH PRIORITY: Directly fixated
-            else if (unit->GetVictim() == bot)
-            {
-                dangerLevel = 500.0f + (30.0f - distance); // Closer = more dangerous
-                isDirectlyFixated = true;
-            }
-            // MODERATE: Just too close for safety
-            else if (distance < 18.0f)
-            {
-                dangerLevel = 100.0f + (18.0f - distance);
-            }
-            
-            if (dangerLevel > highestDanger)
-            {
-                dangerousElement = unit;
-                highestDanger = dangerLevel;
-                
-                if (isDirectlyFixated)
-                {
-                    g_sepethrea_targetedByFlames[botGuid] = unit->GetGUID();
-                    g_sepethrea_lastFlamesTime[botGuid] = currentTime;
-                }
-            }
+            threatLevel = 1000.0f + (20.0f - distance) * 10.0f; // Closer = more urgent
+            needsEmergencyMove = true;
+        }
+        // HIGH: Flame is fixated on this bot
+        else if (flame->GetVictim() == bot)
+        {
+            threatLevel = 500.0f + (35.0f - distance); // Extended threat range
+            g_sepethrea_targetedByFlames[botGuid] = flame->GetGUID();
+            g_sepethrea_lastFlamesTime[botGuid] = currentTime;
+        }
+        // MODERATE: Flame is too close for comfort (extended detection)
+        else if (distance < 25.0f) // Increased detection range
+        {
+            threatLevel = 100.0f + (25.0f - distance);
+        }
+        
+        if (threatLevel > highestThreat)
+        {
+            mostDangerousFlame = flame;
+            highestThreat = threatLevel;
         }
     }
 
-    if (dangerousElement)
+    if (mostDangerousFlame && highestThreat > 0.0f)
     {
-        // Calculate safe escape position
-        float angle = bot->GetAngle(dangerousElement) + M_PI; // Opposite direction
-        float escapeDistance = 25.0f; // Always use maximum safe distance
+        // IMPROVED KITING ALGORITHM
+        float currentDistance = bot->GetDistance(mostDangerousFlame);
         
-        // For Inferno, move even further
-        if (isInfernoThreat)
+        // Calculate optimal kiting position
+        float flameAngle = bot->GetAngle(mostDangerousFlame);
+        float escapeAngle = flameAngle + M_PI; // Opposite direction
+        
+        // Dynamic distance calculation based on threat level
+        float safeDistance;
+        if (needsEmergencyMove)
         {
-            escapeDistance = 30.0f;
+            safeDistance = 35.0f; // Far from Inferno AoE
+        }
+        else if (mostDangerousFlame->GetVictim() == bot)
+        {
+            safeDistance = 22.0f; // Continuous kiting distance
+        }
+        else
+        {
+            safeDistance = 18.0f; // Safe proximity
         }
         
-        Position safePos;
-        safePos.m_positionX = bot->GetPositionX() + cos(angle) * escapeDistance;
-        safePos.m_positionY = bot->GetPositionY() + sin(angle) * escapeDistance;
-        safePos.m_positionZ = bot->GetPositionZ();
+        // Add some randomization to avoid predictable movement patterns
+        float angleVariation = (rand() % 60 - 30) * M_PI / 180.0f; // ±30 degrees
+        escapeAngle += angleVariation;
         
-        return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
-                     safePos.m_positionZ, false, false, false, true,
-                     MovementPriority::MOVEMENT_FORCED);
+        // Calculate destination with obstacle avoidance consideration
+        Position kitePos;
+        kitePos.m_positionX = bot->GetPositionX() + cos(escapeAngle) * safeDistance;
+        kitePos.m_positionY = bot->GetPositionY() + sin(escapeAngle) * safeDistance;
+        kitePos.m_positionZ = bot->GetPositionZ();
+        
+        // Use appropriate movement priority
+        MovementPriority priority = needsEmergencyMove ? 
+            MovementPriority::MOVEMENT_FORCED : MovementPriority::MOVEMENT_NORMAL;
+        
+        return MoveTo(bot->GetMapId(), kitePos.m_positionX, kitePos.m_positionY,
+                     kitePos.m_positionZ, false, false, false, true, priority);
     }
 
-    // Clear targeting if flames despawned or retargeted
+    // Clean up old fixation tracking (aligned with 8-13s Inferno cycle)
     if (g_sepethrea_targetedByFlames[botGuid])
     {
-        if ((currentTime - g_sepethrea_lastFlamesTime[botGuid]) > 10000)
+        if ((currentTime - g_sepethrea_lastFlamesTime[botGuid]) > 15000) // 15s timeout
         {
             g_sepethrea_targetedByFlames[botGuid].Clear();
         }
@@ -525,74 +534,27 @@ bool SepethreaArcaneBlastAction::isUseful()
 
 bool SepethreaTargetElementalAction::Execute(Event event)
 {
+    // CRITICAL FIX: Raging Flames are IMMUNE to player damage!
+    // This action should NOT try to attack them - they must be kited only
+    // Removing all DPS targeting logic for Raging Flames
+    
+    // Instead, focus DPS back on the boss while flames are being kited
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157
-    // Raging Flames must be killed quickly to reduce raid damage
-    // DPS should prioritize elementals over boss
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
     
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* priorityElemental = nullptr;
-    float highestPriority = -1000.0f; // Changed to use highest score
+    // Ensure we're targeting the boss instead of trying to fight immune flames
+    Value<Unit*>* currentTargetValue = botAI->GetAiObjectContext()->GetValue<Unit*>("current target");
+    if (currentTargetValue && currentTargetValue->Get() != boss)
+    {
+        currentTargetValue->Set(boss);
+    }
     
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_RAGING_FLAMES)
-        {
-            float distance = bot->GetDistance(unit);
-            if (distance > 40.0f) // Skip if too far
-                continue;
-            
-            // Prioritize elementals that are:
-            // 1. Casting Inferno (most dangerous)
-            // 2. Fixated on healers/casters (protect them)
-            // 3. Closest to bot (easier to kill)
-            
-            bool isCastingInferno = unit->HasUnitState(UNIT_STATE_CASTING) && 
-                                  unit->FindCurrentSpellBySpellId(SPELL_INFERNO);
-            bool fixatingHealer = false;
-            
-            if (unit->GetVictim() && unit->GetVictim()->IsPlayer())
-            {
-                Player* victim = unit->GetVictim()->ToPlayer();
-                fixatingHealer = botAI->IsHeal(victim) || !botAI->IsMelee(victim);
-            }
-            
-            // Calculate priority score (higher = higher priority)
-            float priority = 0.0f;
-            if (isCastingInferno) priority += 100.0f; // Highest priority - STOP INFERNO
-            if (fixatingHealer) priority += 50.0f;   // Protect healers/casters
-            if (unit->GetVictim() == bot) priority += 30.0f; // Target what's attacking us
-            priority += (40.0f - distance); // Closer = higher priority
-            
-            if (priority > highestPriority)
-            {
-                priorityElemental = unit;
-                highestPriority = priority;
-            }
-        }
-    }
-
-    if (priorityElemental)
-    {
-        // Switch target to the priority elemental immediately
-        Value<Unit*>* currentTargetValue = botAI->GetAiObjectContext()->GetValue<Unit*>("current target");
-        if (currentTargetValue)
-        {
-            currentTargetValue->Set(priorityElemental);
-        }
-        
-        // Force attack the elemental
-        return Attack(priorityElemental);
-    }
-
-    return false;
+    return Attack(boss);
 }
 
 bool SepethreaTargetElementalAction::isUseful()
