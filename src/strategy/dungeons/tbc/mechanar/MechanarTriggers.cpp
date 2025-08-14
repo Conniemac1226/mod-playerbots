@@ -65,13 +65,21 @@ bool NetherChargeActiveTrigger::IsActive()
 bool SepethreaEngagedTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
-    return boss && boss->IsAlive() && boss->IsInCombat();
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+        
+    return true;
 }
 
 bool RagingFlamesActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
+        return false;
+
+    // Check if boss is still alive first (prevent post-combat freezing)
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
@@ -118,8 +126,8 @@ bool DragonsBreathDangerTrigger::IsActive()
     if (boss->HasUnitState(UNIT_STATE_CASTING) && 
         boss->FindCurrentSpellBySpellId(SPELL_DRAGONS_BREATH))
     {
-        // Check if we're in the frontal cone
-        return boss->HasInArc(M_PI / 3, bot) && !botAI->IsTank(bot);
+        // Check if we're in the frontal cone (wider detection for safety)
+        return boss->HasInArc(M_PI / 2, bot) && !botAI->IsTank(bot);
     }
 
     return false;
@@ -161,6 +169,11 @@ bool RagingFlamesTargetTrigger::IsActive()
     if (!bot || botAI->IsTank(bot) || botAI->IsHeal(bot))
         return false; // Only for DPS
     
+    // Check if boss is still alive first (prevent post-combat freezing)
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+    
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
@@ -170,8 +183,24 @@ bool RagingFlamesTargetTrigger::IsActive()
 
         if (unit->GetEntry() == NPC_RAGING_FLAMES)
         {
-            // Should target elementals if they exist and we're in range
-            if (bot->GetDistance(unit) <= 40.0f)
+            // Priority: Target elementals that are most dangerous
+            float distance = bot->GetDistance(unit);
+            bool isCastingInferno = unit->HasUnitState(UNIT_STATE_CASTING) && 
+                                  unit->FindCurrentSpellBySpellId(SPELL_INFERNO);
+            bool fixatingHealer = false;
+            
+            if (unit->GetVictim() && unit->GetVictim()->IsPlayer())
+            {
+                Player* victim = unit->GetVictim()->ToPlayer();
+                fixatingHealer = botAI->IsHeal(victim) || !botAI->IsMelee(victim);
+            }
+            
+            // Should target if: close enough AND (casting Inferno OR fixating healer/caster)
+            if (distance <= 40.0f && (isCastingInferno || fixatingHealer))
+                return true;
+                
+            // Also target if very close (within 25 yards) regardless
+            if (distance <= 25.0f)
                 return true;
         }
     }
