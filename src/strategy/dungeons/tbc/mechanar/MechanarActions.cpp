@@ -259,13 +259,8 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // CRITICAL: Interrupt any spell casting for emergency movement during kiting
-    // Research shows successful kiting requires spell interruption priority
-    if (bot->IsNonMeleeSpellCast(true))
-    {
-        bot->CastStop();
-        botAI->InterruptSpell();
-    }
+    // REAL ICC PATTERN: Reset AI state before kiting (like ICC worm/zombie kiting)
+    // This interrupts spells and clears AI state for movement
 
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
@@ -322,62 +317,18 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
         
         if (needsEmergencyMove)
         {
-            // EMERGENCY: Inferno casting - FORCE interrupt any spells and flee immediately
-            // This handles the "hellfire channel" issue where bots stand in AoE
-            if (bot->IsNonMeleeSpellCast(true))
-            {
-                bot->CastStop();
-                botAI->InterruptSpell();
-            }
-            
-            // EMERGENCY: Inferno casting - immediate long-range flee (Forge of Souls pattern)
+            // REAL ICC PATTERN: Reset AI then flee (like ICC zombie kiting at line 5015-5019)
+            botAI->Reset();
             return FleePosition(mostDangerousFlame->GetPosition(), 35.0f, 250U);
         }
         else if (mostDangerousFlame->GetVictim() == bot)
         {
-            // CONTINUOUS KITING: Use Pit of Saron circular kiting for fixated flames
-            // Calculate room center (boss position as reference)
-            Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
-            if (!boss) return false;
-            
-            Position roomCenter = boss->GetPosition();
-            float currentDistance = bot->GetDistance(roomCenter);
-            
-            // Maintain 20-yard radius from room center (like Pit of Saron)
-            float targetRadius = 20.0f;
-            
-            if (currentDistance < 35.0f) // Only use circular pattern if in reasonable range
+            // REAL ICC PATTERN: Use ICC worm kiting pattern (line 5009-5013)
+            // "if (worm && worm->IsAlive() && worm->GetVictim() == bot && !botAI->IsTank(bot))"
+            if (!botAI->IsTank(bot))
             {
-                // Calculate vector from center to bot
-                float dx = bot->GetPositionX() - roomCenter.GetPositionX();
-                float dy = bot->GetPositionY() - roomCenter.GetPositionY();
-                
-                // Normalize to target radius
-                float distance = std::sqrt(dx * dx + dy * dy);
-                if (distance > 0.1f)
-                {
-                    dx = (dx / distance) * targetRadius;
-                    dy = (dy / distance) * targetRadius;
-                }
-                
-                // Rotate vector by 45 degrees for circular movement (Pit of Saron pattern)
-                float rotationAngle = M_PI / 4; // 45 degrees
-                float rotatedX = dx * cos(rotationAngle) - dy * sin(rotationAngle);
-                float rotatedY = dx * sin(rotationAngle) + dy * cos(rotationAngle);
-                
-                Position targetPos;
-                targetPos.m_positionX = roomCenter.GetPositionX() + rotatedX;
-                targetPos.m_positionY = roomCenter.GetPositionY() + rotatedY;
-                targetPos.m_positionZ = bot->GetPositionZ();
-                
-                return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY,
-                             targetPos.m_positionZ, false, false, false, true,
-                             MovementPriority::MOVEMENT_COMBAT);
-            }
-            else
-            {
-                // Fallback: Use FleePosition if too far from center
-                return FleePosition(mostDangerousFlame->GetPosition(), 22.0f, 500U);
+                botAI->Reset();
+                return FleePosition(mostDangerousFlame->GetPosition(), 22.0f, 250U);
             }
         }
         else
@@ -479,12 +430,7 @@ bool SepethreaInfernoAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // CRITICAL: Interrupt spells immediately when Inferno AoE is detected
-    if (bot->IsNonMeleeSpellCast(true))
-    {
-        bot->CastStop();
-        botAI->InterruptSpell();
-    }
+    // REAL ICC PATTERN: Reset AI when dangerous AoE detected
 
     // RESEARCHED: boss_nethermancer_sepethrea.cpp:153 & 187
     // Raging Flames cast Inferno which deals AoE damage
@@ -505,13 +451,9 @@ bool SepethreaInfernoAction::Execute(Event event)
                 float distance = bot->GetDistance(unit);
                 if (distance < 15.0f)
                 {
-                    // EMERGENCY: Move away from Inferno AoE
-                    float angle = bot->GetAngle(unit) + M_PI;
-                    float x = bot->GetPositionX() + cos(angle) * 20.0f;
-                    float y = bot->GetPositionY() + sin(angle) * 20.0f;
-                    float z = bot->GetPositionZ();
-                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                                MovementPriority::MOVEMENT_FORCED);
+                    // REAL ICC PATTERN: Reset AI then flee from AoE (like ICC mana void at line 4994-4997)
+                    botAI->Reset();
+                    return FleePosition(unit->GetPosition(), 20.0f, 250U);
                 }
             }
         }
