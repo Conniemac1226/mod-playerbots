@@ -82,7 +82,9 @@ bool RagingFlamesActiveTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
+    // Use standard AI_VALUE pattern for detection
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    
     for (auto& npc : npcs)
     {
         Unit* flame = botAI->GetUnit(npc);
@@ -136,7 +138,7 @@ bool InfernoDangerTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check for Inferno from Raging Flames
+    // Check for Inferno from Raging Flames using standard AI_VALUE pattern
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
@@ -178,8 +180,9 @@ bool RagingFlamesTargetTrigger::IsActive()
     if (botAI->IsTank(bot) || botAI->IsHeal(bot))
         return false;
     
-    // Check if any Raging Flames are present - if so, DPS should focus boss
+    // Check if any Raging Flames are present using standard AI_VALUE pattern
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
