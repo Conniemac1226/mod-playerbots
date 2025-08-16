@@ -18,7 +18,6 @@ public:
         creators["raging flames active"] = &MechanarTriggerContext::raging_flames_active;
         creators["should target raging flames"] = &MechanarTriggerContext::should_target_raging_flames;
         creators["dragons breath danger"] = &MechanarTriggerContext::dragons_breath_danger;
-        creators["inferno danger"] = &MechanarTriggerContext::inferno_danger;
         
         // Pathaleon the Calculator
         creators["pathaleon engaged"] = &MechanarTriggerContext::pathaleon_engaged;
@@ -42,7 +41,6 @@ private:
     static Trigger* raging_flames_active(PlayerbotAI* botAI) { return new RagingFlamesActiveTrigger(botAI); }
     static Trigger* should_target_raging_flames(PlayerbotAI* botAI) { return new RagingFlamesTargetTrigger(botAI); }
     static Trigger* dragons_breath_danger(PlayerbotAI* botAI) { return new DragonsBreathDangerTrigger(botAI); }
-    static Trigger* inferno_danger(PlayerbotAI* botAI) { return new InfernoDangerTrigger(botAI); }
     
     // Pathaleon the Calculator
     static Trigger* pathaleon_engaged(PlayerbotAI* botAI) { return new PathaleonEngagedTrigger(botAI); }

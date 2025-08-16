@@ -1,7 +1,6 @@
 #include "MechanarStrategy.h"
 #include "MechanarActions.h"
 #include "MechanarTriggers.h"
-#include "MechanarTriggers.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 
@@ -50,10 +49,6 @@ void MechanarStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "dragons breath danger",
         NextAction::array(0, new NextAction("avoid dragons breath", ACTION_MOVE + 4), nullptr)));
     
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:153 - Inferno AoE
-    triggers.push_back(new TriggerNode(
-        "inferno danger",
-        NextAction::array(0, new NextAction("avoid inferno", ACTION_MOVE + 3), nullptr)));
     
     // RESEARCHED: boss_nethermancer_sepethrea.cpp:63-68 - Arcane Blast threat reduction
     triggers.push_back(new TriggerNode(

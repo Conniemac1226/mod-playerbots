@@ -68,10 +68,6 @@ extern std::map<ObjectGuid, uint32> g_capacitus_lastPolarityTime;
 extern std::map<ObjectGuid, bool> g_capacitus_hasPositive;
 extern std::map<ObjectGuid, bool> g_capacitus_hasNegative;
 
-// Per-bot state for Raging Flames
-extern std::map<ObjectGuid, ObjectGuid> g_sepethrea_targetedByFlames;
-extern std::map<ObjectGuid, uint32> g_sepethrea_lastFlamesTime;
-
 // ========== MECHANO LORD CAPACITUS ACTIONS ==========
 
 // RESEARCHED: boss_mechano_lord_capacitus.cpp:89-96 - Reflective shields on Normal
@@ -130,14 +126,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_nethermancer_sepethrea.cpp:153 - Inferno AoE from Raging Flames
-class SepethreaInfernoAction : public MovementAction
-{
-public:
-    SepethreaInfernoAction(PlayerbotAI* ai) : MovementAction(ai, "avoid inferno") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
 
 // RESEARCHED: boss_nethermancer_sepethrea.cpp:63-68 - Arcane Blast with threat reduction
 class SepethreaArcaneBlastAction : public Action

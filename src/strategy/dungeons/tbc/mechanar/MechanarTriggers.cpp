@@ -77,12 +77,10 @@ bool RagingFlamesActiveTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if boss is still alive first (prevent post-combat freezing)
     Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Use standard AI_VALUE pattern for detection
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
@@ -91,20 +89,7 @@ bool RagingFlamesActiveTrigger::IsActive()
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
 
-        float distance = bot->GetDistance(flame);
-        
-        // CRITICAL: Inferno casting - extended danger range
-        if (flame->HasUnitState(UNIT_STATE_CASTING) && 
-            flame->FindCurrentSpellBySpellId(SPELL_INFERNO) &&
-            distance < 20.0f) // Increased AoE safety range
-            return true;
-            
-        // HIGH: Directly fixated - must kite immediately
-        if (flame->GetVictim() == bot)
-            return true;
-            
-        // MODERATE: Within kiting range - be proactive
-        if (distance < 25.0f) // Increased detection for earlier reaction
+        if (bot->GetDistance(flame) < 30.0f)
             return true;
     }
     
@@ -132,35 +117,6 @@ bool DragonsBreathDangerTrigger::IsActive()
     return false;
 }
 
-bool InfernoDangerTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    // Check for Inferno from Raging Flames using standard AI_VALUE pattern
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_RAGING_FLAMES)
-        {
-            if ((unit->HasAura(SPELL_INFERNO) || 
-                (unit->HasUnitState(UNIT_STATE_CASTING) && 
-                 unit->FindCurrentSpellBySpellId(SPELL_INFERNO))) &&
-                bot->GetDistance(unit) < 15.0f)
-            {
-                return true;
-            }
-        }
-    }
-    
-    return false;
-}
 
 bool RagingFlamesTargetTrigger::IsActive()
 {
@@ -168,19 +124,13 @@ bool RagingFlamesTargetTrigger::IsActive()
     if (!bot)
         return false;
     
-    // FIXED: Since Raging Flames are immune to damage, DPS should target BOSS not flames
-    // This trigger now activates when flames are present so DPS refocuses on boss
-    
-    // Check if boss is still alive first (prevent post-combat freezing)
     Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
     
-    // Only activate for DPS classes (tanks focus on boss, healers heal)
     if (botAI->IsTank(bot) || botAI->IsHeal(bot))
         return false;
     
-    // Check if any Raging Flames are present using standard AI_VALUE pattern
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
@@ -190,10 +140,7 @@ bool RagingFlamesTargetTrigger::IsActive()
             continue;
 
         if (unit->GetEntry() == NPC_RAGING_FLAMES)
-        {
-            // Any flames present means DPS should be on boss, not trying to fight immune adds
             return true;
-        }
     }
     
     return false;

@@ -8,9 +8,6 @@ std::map<ObjectGuid, uint32> g_capacitus_lastPolarityTime;
 std::map<ObjectGuid, bool> g_capacitus_hasPositive;
 std::map<ObjectGuid, bool> g_capacitus_hasNegative;
 
-std::map<ObjectGuid, ObjectGuid> g_sepethrea_targetedByFlames;
-std::map<ObjectGuid, uint32> g_sepethrea_lastFlamesTime;
-
 // ========== MECHANO LORD CAPACITUS ACTIONS ==========
 
 bool CapacitusReflectiveShieldAction::Execute(Event event)
@@ -259,11 +256,9 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // IMPROVED: Use proven playerbot AI_VALUE pattern with enhanced movement logic
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* closestFlame = nullptr;
-    float closestDistance = 25.0f;
-    bool isCastingInferno = false;
+    float closestDistance = 30.0f;
 
     for (auto& npc : npcs)
     {
@@ -272,28 +267,7 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
             continue;
 
         float distance = bot->GetDistance(unit);
-        
-        // CRITICAL: Check for Inferno casting - highest priority
-        if (unit->HasUnitState(UNIT_STATE_CASTING) && 
-            unit->FindCurrentSpellBySpellId(SPELL_INFERNO))
-        {
-            isCastingInferno = true;
-            if (distance < 20.0f)
-            {
-                closestFlame = unit;
-                closestDistance = distance;
-                break; // Immediate emergency
-            }
-        }
-        
-        // PRIORITY: Flame targeting this bot
-        if (unit->GetVictim() == bot && distance < closestDistance)
-        {
-            closestFlame = unit;
-            closestDistance = distance;
-        }
-        // PROXIMITY: Any nearby flame within detection range
-        else if (distance < closestDistance)
+        if (distance < closestDistance)
         {
             closestFlame = unit;
             closestDistance = distance;
@@ -303,18 +277,7 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (!closestFlame)
         return false;
 
-    // SETHEKK HALLS INSPIRED: Calculate escape angle directly opposite from flame
-    float angle = bot->GetAngle(closestFlame) + M_PI;
-    float escapeDistance = isCastingInferno ? 25.0f : 20.0f;
-    
-    // ICC KINETIC BOMB INSPIRED: Proper ground Z calculation for smooth movement
-    float x = bot->GetPositionX() + cos(angle) * escapeDistance;
-    float y = bot->GetPositionY() + sin(angle) * escapeDistance;
-    float z = bot->GetPositionZ();
-    bot->UpdateAllowedPositionZ(x, y, z); // Ground height adjustment
-    
-    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                MovementPriority::MOVEMENT_FORCED);
+    return FleePosition(closestFlame->GetPosition(), 20.0f, 250U);
 }
 
 bool SepethreaRagingFlamesAction::isUseful()
@@ -323,7 +286,6 @@ bool SepethreaRagingFlamesAction::isUseful()
     if (!bot)
         return false;
 
-    // Check for dangerous flames within range using standard AI_VALUE pattern
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
@@ -332,7 +294,7 @@ bool SepethreaRagingFlamesAction::isUseful()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_RAGING_FLAMES && bot->GetDistance(unit) < 25.0f)
+        if (unit->GetEntry() == NPC_RAGING_FLAMES && bot->GetDistance(unit) < 30.0f)
             return true;
     }
     
@@ -400,56 +362,6 @@ bool SepethreaDragonsBreathAction::isUseful()
     return breathValue->Get();
 }
 
-bool SepethreaInfernoAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    // REAL ICC PATTERN: Reset AI when dangerous AoE detected
-
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:153 & 187
-    // Raging Flames cast Inferno which deals AoE damage
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_RAGING_FLAMES)
-        {
-            if (unit->HasAura(SPELL_INFERNO) || 
-                (unit->HasUnitState(UNIT_STATE_CASTING) && 
-                 unit->FindCurrentSpellBySpellId(SPELL_INFERNO)))
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < 15.0f)
-                {
-                    // REAL ICC PATTERN: Reset AI then flee from AoE (like ICC mana void at line 4994-4997)
-                    botAI->Reset();
-                    return FleePosition(unit->GetPosition(), 20.0f, 250U);
-                }
-            }
-        }
-    }
-
-    return false;
-}
-
-bool SepethreaInfernoAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
-    Value<bool>* infernoValue = botAI->GetAiObjectContext()->GetValue<bool>("inferno danger");
-    if (!infernoValue)
-        return false;
-    
-    return infernoValue->Get();
-}
 
 bool SepethreaArcaneBlastAction::Execute(Event event)
 {
