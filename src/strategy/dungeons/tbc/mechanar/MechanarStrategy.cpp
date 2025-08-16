@@ -1,6 +1,7 @@
 #include "MechanarStrategy.h"
 #include "MechanarActions.h"
 #include "MechanarTriggers.h"
+#include "MechanarTriggers.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 
