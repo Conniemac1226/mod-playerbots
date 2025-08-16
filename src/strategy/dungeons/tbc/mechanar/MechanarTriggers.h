@@ -57,12 +57,6 @@ public:
     bool IsActive() override;
 };
 
-class InfernoDangerTrigger : public Trigger
-{
-public:
-    InfernoDangerTrigger(PlayerbotAI* botAI) : Trigger(botAI, "inferno danger") {}
-    bool IsActive() override;
-};
 
 class RagingFlamesTargetTrigger : public Trigger
 {

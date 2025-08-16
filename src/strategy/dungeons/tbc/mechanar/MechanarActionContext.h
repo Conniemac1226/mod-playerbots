@@ -17,7 +17,6 @@ public:
         creators["flee raging flames"] = &MechanarActionContext::flee_raging_flames;
         creators["target raging flames"] = &MechanarActionContext::target_raging_flames;
         creators["avoid dragons breath"] = &MechanarActionContext::avoid_dragons_breath;
-        creators["avoid inferno"] = &MechanarActionContext::avoid_inferno;
         creators["handle arcane blast"] = &MechanarActionContext::handle_arcane_blast;
         
         // Pathaleon the Calculator
@@ -40,7 +39,6 @@ private:
     static Action* flee_raging_flames(PlayerbotAI* botAI) { return new SepethreaRagingFlamesAction(botAI); }
     static Action* target_raging_flames(PlayerbotAI* botAI) { return new SepethreaTargetElementalAction(botAI); }
     static Action* avoid_dragons_breath(PlayerbotAI* botAI) { return new SepethreaDragonsBreathAction(botAI); }
-    static Action* avoid_inferno(PlayerbotAI* botAI) { return new SepethreaInfernoAction(botAI); }
     static Action* handle_arcane_blast(PlayerbotAI* botAI) { return new SepethreaArcaneBlastAction(botAI); }
     
     // Pathaleon the Calculator
