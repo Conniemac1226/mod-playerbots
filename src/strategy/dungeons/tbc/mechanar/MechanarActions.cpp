@@ -259,108 +259,84 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // REAL ICC PATTERN: Reset AI state before kiting (like ICC worm/zombie kiting)
-    // This interrupts spells and clears AI state for movement
-
-    ObjectGuid botGuid = bot->GetGUID();
-    uint32 currentTime = getMSTime();
-
-    // RESEARCHED: Raging Flames are IMMUNE to damage and must be KITED
-    // They fixate on random targets and re-target every 8-13 seconds during Inferno
-    // Strategy: Continuous kiting, maintain safe distance, avoid Inferno AoE
-    
+    // IMPROVED: Use proven playerbot AI_VALUE pattern with enhanced movement logic
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* mostDangerousFlame = nullptr;
-    float highestThreat = -1.0f;
-    bool needsEmergencyMove = false;
-    
+    Unit* closestFlame = nullptr;
+    float closestDistance = 25.0f;
+    bool isCastingInferno = false;
+
     for (auto& npc : npcs)
     {
-        Unit* flame = botAI->GetUnit(npc);
-        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_RAGING_FLAMES)
             continue;
 
-        float distance = bot->GetDistance(flame);
-        float threatLevel = 0.0f;
+        float distance = bot->GetDistance(unit);
         
-        // CRITICAL: Inferno is casting - EMERGENCY EVACUATION
-        bool isCastingInferno = flame->HasUnitState(UNIT_STATE_CASTING) && 
-                               flame->FindCurrentSpellBySpellId(SPELL_INFERNO);
-        if (isCastingInferno && distance < 20.0f) // Increased AoE safety range
+        // CRITICAL: Check for Inferno casting - highest priority
+        if (unit->HasUnitState(UNIT_STATE_CASTING) && 
+            unit->FindCurrentSpellBySpellId(SPELL_INFERNO))
         {
-            threatLevel = 1000.0f + (20.0f - distance) * 10.0f; // Closer = more urgent
-            needsEmergencyMove = true;
-        }
-        // HIGH: Flame is fixated on this bot
-        else if (flame->GetVictim() == bot)
-        {
-            threatLevel = 500.0f + (35.0f - distance); // Extended threat range
-            g_sepethrea_targetedByFlames[botGuid] = flame->GetGUID();
-            g_sepethrea_lastFlamesTime[botGuid] = currentTime;
-        }
-        // MODERATE: Flame is too close for comfort (extended detection)
-        else if (distance < 25.0f) // Increased detection range
-        {
-            threatLevel = 100.0f + (25.0f - distance);
-        }
-        
-        if (threatLevel > highestThreat)
-        {
-            mostDangerousFlame = flame;
-            highestThreat = threatLevel;
-        }
-    }
-
-    if (mostDangerousFlame && highestThreat > 0.0f)
-    {
-        // FIXED: Use proven patterns from successful WotLK kiting implementations
-        
-        if (needsEmergencyMove)
-        {
-            // REAL ICC PATTERN: Reset AI then flee (like ICC zombie kiting at line 5015-5019)
-            botAI->Reset();
-            return FleePosition(mostDangerousFlame->GetPosition(), 35.0f, 250U);
-        }
-        else if (mostDangerousFlame->GetVictim() == bot)
-        {
-            // REAL ICC PATTERN: Use ICC worm kiting pattern (line 5009-5013)
-            // "if (worm && worm->IsAlive() && worm->GetVictim() == bot && !botAI->IsTank(bot))"
-            if (!botAI->IsTank(bot))
+            isCastingInferno = true;
+            if (distance < 20.0f)
             {
-                botAI->Reset();
-                return FleePosition(mostDangerousFlame->GetPosition(), 22.0f, 250U);
+                closestFlame = unit;
+                closestDistance = distance;
+                break; // Immediate emergency
             }
         }
-        else
+        
+        // PRIORITY: Flame targeting this bot
+        if (unit->GetVictim() == bot && distance < closestDistance)
         {
-            // PROXIMITY: Just reposition away from flames (Forge of Souls pattern)
-            return FleePosition(mostDangerousFlame->GetPosition(), 18.0f, 1000U);
+            closestFlame = unit;
+            closestDistance = distance;
+        }
+        // PROXIMITY: Any nearby flame within detection range
+        else if (distance < closestDistance)
+        {
+            closestFlame = unit;
+            closestDistance = distance;
         }
     }
 
-    // Clean up old fixation tracking (aligned with 8-13s Inferno cycle)
-    if (g_sepethrea_targetedByFlames[botGuid])
-    {
-        if ((currentTime - g_sepethrea_lastFlamesTime[botGuid]) > 15000) // 15s timeout
-        {
-            g_sepethrea_targetedByFlames[botGuid].Clear();
-        }
-    }
+    if (!closestFlame)
+        return false;
 
-    return false;
+    // SETHEKK HALLS INSPIRED: Calculate escape angle directly opposite from flame
+    float angle = bot->GetAngle(closestFlame) + M_PI;
+    float escapeDistance = isCastingInferno ? 25.0f : 20.0f;
+    
+    // ICC KINETIC BOMB INSPIRED: Proper ground Z calculation for smooth movement
+    float x = bot->GetPositionX() + cos(angle) * escapeDistance;
+    float y = bot->GetPositionY() + sin(angle) * escapeDistance;
+    float z = bot->GetPositionZ();
+    bot->UpdateAllowedPositionZ(x, y, z); // Ground height adjustment
+    
+    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                MovementPriority::MOVEMENT_FORCED);
 }
 
 bool SepethreaRagingFlamesAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot)
         return false;
 
-    Value<bool>* flamesValue = botAI->GetAiObjectContext()->GetValue<bool>("raging flames active");
-    if (!flamesValue)
-        return false;
+    // Check for dangerous flames within range using standard AI_VALUE pattern
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
-    return flamesValue->Get();
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_RAGING_FLAMES && bot->GetDistance(unit) < 25.0f)
+            return true;
+    }
+    
+    return false;
 }
 
 bool SepethreaDragonsBreathAction::Execute(Event event)
@@ -520,11 +496,6 @@ bool SepethreaArcaneBlastAction::isUseful()
 
 bool SepethreaTargetElementalAction::Execute(Event event)
 {
-    // CRITICAL FIX: Raging Flames are IMMUNE to player damage!
-    // This action should NOT try to attack them - they must be kited only
-    // Removing all DPS targeting logic for Raging Flames
-    
-    // Instead, focus DPS back on the boss while flames are being kited
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
@@ -532,15 +503,13 @@ bool SepethreaTargetElementalAction::Execute(Event event)
     Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
-    
-    // Ensure we're targeting the boss instead of trying to fight immune flames
-    Value<Unit*>* currentTargetValue = botAI->GetAiObjectContext()->GetValue<Unit*>("current target");
-    if (currentTargetValue && currentTargetValue->Get() != boss)
+
+    if (bot->GetSelectedUnit() != boss)
     {
-        currentTargetValue->Set(boss);
+        bot->SetSelection(boss->GetGUID());
     }
-    
-    return Attack(boss);
+
+    return true;
 }
 
 bool SepethreaTargetElementalAction::isUseful()
@@ -548,12 +517,15 @@ bool SepethreaTargetElementalAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot || botAI->IsTank(bot) || botAI->IsHeal(bot))
         return false; // Only for DPS
-    
-    Value<bool>* flamesValue = botAI->GetAiObjectContext()->GetValue<bool>("raging flames active");
-    if (!flamesValue)
+
+    if (!AI_VALUE(bool, "raging flames active"))
         return false;
-    
-    return flamesValue->Get();
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    if (!boss)
+        return false;
+
+    return bot->GetSelectedUnit() != boss;
 }
 
 // ========== PATHALEON THE CALCULATOR ACTIONS ==========

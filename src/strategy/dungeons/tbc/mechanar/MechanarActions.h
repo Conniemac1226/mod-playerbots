@@ -3,6 +3,7 @@
 
 #include "Action.h"
 #include "AttackAction.h"
+#include "../actions/ChangeTargetAction.h"
 #include "MovementActions.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
@@ -148,10 +149,10 @@ public:
 };
 
 // FIXED: Raging Flames are IMMUNE to damage - DPS should target boss while kiting
-class SepethreaTargetElementalAction : public AttackAction
+class SepethreaTargetElementalAction : public ai::ChangeTargetAction
 {
 public:
-    SepethreaTargetElementalAction(PlayerbotAI* ai) : AttackAction(ai, "target raging flames") {}
+    SepethreaTargetElementalAction(PlayerbotAI* ai) : ChangeTargetAction(ai, "target raging flames") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
