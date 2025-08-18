@@ -257,7 +257,7 @@ bool ThorngrinSacrificeAction::Execute(Event event)
             if (!unit || !unit->IsAlive())
                 continue;
             
-            if (unit->HasAura(SPELL_SACRIFICE))
+            if (unit->HasAura(BOT_SPELL_SACRIFICE))
             {
                 // Emergency heal on sacrificed target
                 Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "heal");
@@ -291,7 +291,7 @@ bool ThorngrinHellfireAction::Execute(Event event)
     // RESEARCHED: Hellfire - boss_thorngrin_the_tender.cpp:87
     // AoE spell that damages all nearby targets
     // Move when cast starts to avoid damage!
-    if (boss->FindCurrentSpellBySpellId(SPELL_HELLFIRE))
+    if (boss->FindCurrentSpellBySpellId(BOT_SPELL_HELLFIRE))
     {
         float safeDistance = 15.0f; // Hellfire has 15 yard radius per spell data
         float currentDist = bot->GetExactDist2d(boss);
@@ -323,7 +323,7 @@ bool WarpSplinterWarStompAction::Execute(Event event)
         return false;
     }
     
-    if (boss->FindCurrentSpellBySpellId(SPELL_WAR_STOMP))
+    if (boss->FindCurrentSpellBySpellId(BOT_SPELL_WAR_STOMP))
     {
         float safeDistance = 15.0f;
         float currentDist = bot->GetExactDist2d(boss);

@@ -38,7 +38,7 @@ bool AvoidShadowFissureAction::Execute(Event event)
         }
     }
     
-    if (boss->HasAura(SPELL_SHADOW_FISSURE) || boss->FindCurrentSpellBySpellId(SPELL_SHADOW_FISSURE))
+    if (boss->HasAura(SH_SPELL_SHADOW_FISSURE) || boss->FindCurrentSpellBySpellId(SH_SPELL_SHADOW_FISSURE))
     {
         float currentDist = bot->GetExactDist2d(boss);
         if (currentDist < safeDistance)
@@ -127,7 +127,7 @@ bool AvoidBurningMaulAction::Execute(Event event)
         return false;
     }
     
-    if (boss->FindCurrentSpellBySpellId(SPELL_FEAR))
+    if (boss->FindCurrentSpellBySpellId(SH_SPELL_FEAR))
     {
         return false;
     }

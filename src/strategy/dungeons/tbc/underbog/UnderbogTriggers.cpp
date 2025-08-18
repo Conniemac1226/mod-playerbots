@@ -33,7 +33,7 @@ bool HungarfenFoulSporesTrigger::IsActive()
         return false;
 
     // RESEARCHED: Foul Spores at 20% health - boss_hungarfen.cpp:59
-    return boss->GetHealthPct() <= 20.0f && boss->HasAura(SPELL_FOUL_SPORES);
+    return boss->GetHealthPct() <= 20.0f && boss->HasAura(UB_SPELL_FOUL_SPORES);
 }
 
 // Ghazan - Acid Breath frontal cone
@@ -48,7 +48,7 @@ bool GhazanAcidBreathTrigger::IsActive()
         return false;
 
     // RESEARCHED: Acid Breath frontal check - boss_ghazan.cpp:69
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_ACID_BREATH) && 
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_ACID_BREATH) && 
            boss->HasInArc(M_PI / 3, bot);
 }
 
@@ -90,7 +90,7 @@ bool MuselekFreezingTrapTrigger::IsActive()
         return false;
 
     // RESEARCHED: Freezing trap cast check - boss_swamplord_muselek.cpp:138
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_THROW_FREEZING_TRAP);
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_THROW_FREEZING_TRAP);
 }
 
 // Hunter's Mark debuff
@@ -101,7 +101,7 @@ bool MuselekHuntersMarkTrigger::IsActive()
         return false;
 
     // RESEARCHED: Hunter's Mark debuff check - boss_swamplord_muselek.cpp:155
-    return bot->HasAura(SPELL_HUNTERS_MARK);
+    return bot->HasAura(UB_SPELL_HUNTERS_MARK);
 }
 
 // The Black Stalker - Levitate mechanic
@@ -112,7 +112,7 @@ bool BlackStalkerLevitateTrigger::IsActive()
         return false;
 
     // RESEARCHED: Levitate sequence check - boss_the_black_stalker.cpp:25-35
-    return bot->HasAura(SPELL_LEVITATE) || bot->HasAura(SPELL_SUSPENSION);
+    return bot->HasAura(UB_SPELL_LEVITATE) || bot->HasAura(SPELL_SUSPENSION);
 }
 
 // Spore Striders spawned
@@ -138,5 +138,5 @@ bool BlackStalkerChainLightningTrigger::IsActive()
         return false;
 
     // RESEARCHED: Chain Lightning cast check - boss_the_black_stalker.cpp:72
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_CHAIN_LIGHTNING);
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING);
 }

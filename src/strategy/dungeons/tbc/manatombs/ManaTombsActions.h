@@ -39,12 +39,12 @@ enum TavarokSpells
 // RESEARCHED FROM: boss_nexusprince_shaffar.cpp:32-44
 enum ShaffarSpells
 {
-    SPELL_BLINK                     = 34605,
-    SPELL_FROSTBOLT                 = 32364,
-    SPELL_FIREBALL                  = 32363,
-    SPELL_FROSTNOVA                 = 32365,
-    SPELL_ETHEREAL_BEACON           = 32371,
-    SPELL_ETHEREAL_BEACON_VISUAL    = 32368
+    MT_SPELL_BLINK                     = 34605,
+    MT_SPELL_FROSTBOLT                 = 32364,
+    MT_SPELL_FIREBALL                  = 32363,
+    MT_SPELL_FROSTNOVA                 = 32365,
+    MT_SPELL_ETHEREAL_BEACON           = 32371,
+    MT_SPELL_ETHEREAL_BEACON_VISUAL    = 32368
 };
 
 // RESEARCHED FROM: boss_nexusprince_shaffar.cpp:43-44 (Yor spells)

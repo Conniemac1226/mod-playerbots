@@ -23,30 +23,30 @@ enum SlavePensNpcs
 // RESEARCHED FROM: boss_mennu_the_betrayer.cpp:22-28
 enum MennuSpells
 {
-    SPELL_LIGHTNING_BOLT        = 35010,
-    SPELL_HEALING_WARD          = 34980,
-    SPELL_EARTHGRAB_TOTEM       = 31981,
-    SPELL_STONESKIN_TOTEM       = 31985,
-    SPELL_NOVA_TOTEM            = 31991
+    SP_SPELL_LIGHTNING_BOLT        = 35010,
+    SP_SPELL_HEALING_WARD          = 34980,
+    SP_SPELL_EARTHGRAB_TOTEM       = 31981,
+    SP_SPELL_STONESKIN_TOTEM       = 31985,
+    SP_SPELL_NOVA_TOTEM            = 31991
 };
 
 // RESEARCHED FROM: boss_rokmar_the_crackler.cpp:22-28
 enum RokmarSpells
 {
-    SPELL_ENSNARING_MOSS        = 31948,
-    SPELL_FRENZY                = 34970,
-    SPELL_GRIEVOUS_WOUND_N      = 31956,
-    SPELL_GRIEVOUS_WOUND_H      = 38801,
-    SPELL_WATER_SPIT            = 35008
+    SP_SPELL_ENSNARING_MOSS        = 31948,
+    SP_SPELL_FRENZY                = 34970,
+    SP_SPELL_GRIEVOUS_WOUND_N      = 31956,
+    SP_SPELL_GRIEVOUS_WOUND_H      = 38801,
+    SP_SPELL_WATER_SPIT            = 35008
 };
 
 // RESEARCHED FROM: boss_quagmirran.cpp:22-27
 enum QuagmirranSpells
 {
-    SPELL_ACID_SPRAY            = 38153,
-    SPELL_CLEAVE                = 40504,
-    SPELL_POISON_BOLT_VOLLEY    = 34780,
-    SPELL_UPPERCUT              = 32055
+    SP_SPELL_ACID_SPRAY            = 38153,
+    SP_SPELL_CLEAVE                = 40504,
+    SP_SPELL_POISON_BOLT_VOLLEY    = 34780,
+    SP_SPELL_UPPERCUT              = 32055
 };
 
 // Mennu the Betrayer Actions

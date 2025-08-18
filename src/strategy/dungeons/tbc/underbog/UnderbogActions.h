@@ -22,46 +22,46 @@ enum UnderbogNpcs
 // RESEARCHED FROM: boss_hungarfen.cpp:26-37
 enum HungarfenSpells
 {
-    SPELL_SPAWN_MUSHROOMS   = 31692,
-    SPELL_DESPAWN_MUSHROOMS = 34874,
-    SPELL_FOUL_SPORES       = 31673,
-    SPELL_ACID_GEYSER       = 38739,
-    SPELL_SHRINK            = 31691,
-    SPELL_GROW              = 31698,
-    SPELL_SPORE_CLOUD       = 34168
+    UB_SPELL_SPAWN_MUSHROOMS   = 31692,
+    UB_SPELL_DESPAWN_MUSHROOMS = 34874,
+    UB_SPELL_FOUL_SPORES       = 31673,
+    UB_SPELL_ACID_GEYSER       = 38739,
+    UB_SPELL_SHRINK            = 31691,
+    UB_SPELL_GROW              = 31698,
+    UB_SPELL_SPORE_CLOUD       = 34168
 };
 
 // RESEARCHED FROM: boss_ghazan.cpp:27-30
 enum GhazanSpells
 {
-    SPELL_ACID_BREATH       = 34268,
-    SPELL_ACID_SPIT         = 34290,
-    SPELL_TAIL_SWEEP        = 34267,
-    SPELL_ENRAGE            = 15716
+    UB_SPELL_ACID_BREATH       = 34268,
+    UB_SPELL_ACID_SPIT         = 34290,
+    UB_SPELL_TAIL_SWEEP        = 34267,
+    UB_SPELL_ENRAGE            = 15716
 };
 
 // RESEARCHED FROM: boss_swamplord_muselek.cpp:23-31
 enum SwamplordSpells
 {
-    SPELL_SHOOT               = 22907,
-    SPELL_KNOCKAWAY           = 18813,
-    SPELL_RAPTOR_STRIKE       = 31566,
-    SPELL_MULTISHOT           = 34974,
-    SPELL_THROW_FREEZING_TRAP = 31946,
-    SPELL_AIMED_SHOT          = 31623,
-    SPELL_HUNTERS_MARK        = 31615
+    UB_SPELL_SHOOT               = 22907,
+    UB_SPELL_KNOCKAWAY           = 18813,
+    UB_SPELL_RAPTOR_STRIKE       = 31566,
+    UB_SPELL_MULTISHOT           = 34974,
+    UB_SPELL_THROW_FREEZING_TRAP = 31946,
+    UB_SPELL_AIMED_SHOT          = 31623,
+    UB_SPELL_HUNTERS_MARK        = 31615
 };
 
 // RESEARCHED FROM: boss_the_black_stalker.cpp:40-49
 enum BlackStalkerSpells
 {
-    SPELL_LEVITATE                  = 31704,
-    SPELL_CHAIN_LIGHTNING           = 31717,
-    SPELL_STATIC_CHARGE             = 31715,
-    SPELL_SUMMON_SPORE_STRIDER      = 38755,
-    SPELL_LEVITATION_PULSE          = 31701,
-    SPELL_SOMEONE_GRAB_ME           = 31702,
-    SPELL_MAGNETIC_PULL             = 31703,
+    UB_SPELL_LEVITATE                  = 31704,
+    UB_SPELL_CHAIN_LIGHTNING           = 31717,
+    UB_SPELL_STATIC_CHARGE             = 31715,
+    UB_SPELL_SUMMON_SPORE_STRIDER      = 38755,
+    UB_SPELL_LEVITATION_PULSE          = 31701,
+    UB_SPELL_SOMEONE_GRAB_ME           = 31702,
+    UB_SPELL_MAGNETIC_PULL             = 31703,
     SPELL_SUSPENSION_PRIMER         = 31720,
     SPELL_SUSPENSION                = 31719
 };

@@ -119,7 +119,7 @@ bool LajTeleportTrigger::IsActive()
 
 bool ThorngrinSacrificeTrigger::IsActive()
 {
-    return bot->HasAura(SPELL_SACRIFICE);
+    return bot->HasAura(BOT_SPELL_SACRIFICE);
 }
 
 bool ThorngrinHellfireTrigger::IsActive()
@@ -130,7 +130,7 @@ bool ThorngrinHellfireTrigger::IsActive()
         return false;
     }
     
-    if (boss->HasAura(SPELL_HELLFIRE) || boss->FindCurrentSpellBySpellId(SPELL_HELLFIRE))
+    if (boss->HasAura(BOT_SPELL_HELLFIRE) || boss->FindCurrentSpellBySpellId(BOT_SPELL_HELLFIRE))
     {
         float distance = bot->GetExactDist2d(boss);
         return distance < 10.0f;
@@ -147,7 +147,7 @@ bool WarpSplinterWarStompTrigger::IsActive()
         return false;
     }
     
-    if (boss->FindCurrentSpellBySpellId(SPELL_WAR_STOMP))
+    if (boss->FindCurrentSpellBySpellId(BOT_SPELL_WAR_STOMP))
     {
         float distance = bot->GetExactDist2d(boss);
         return distance < 15.0f;

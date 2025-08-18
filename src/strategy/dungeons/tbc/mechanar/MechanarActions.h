@@ -47,20 +47,20 @@ enum MechanarSpells
     
     // Nethermancer Sepethrea
     SPELL_FROST_ATTACK              = 45196,
-    SPELL_ARCANE_BLAST              = 35314,
-    SPELL_DRAGONS_BREATH            = 35250,
+    MECH_SPELL_ARCANE_BLAST         = 35314,
+    MECH_SPELL_DRAGONS_BREATH       = 35250,
     SPELL_RAGING_FLAMES_AREA_AURA   = 35281,
     SPELL_INFERNO                   = 35268,
     SPELL_INFERNO_DAMAGE            = 35283,
     
     // Pathaleon the Calculator
-    SPELL_ARCANE_EXPLOSION          = 15453,
-    SPELL_DISGRUNTLED_ANGER         = 35289,
-    SPELL_ARCANE_TORRENT            = 36022,
-    SPELL_MANA_TAP                  = 36021,
-    SPELL_DOMINATION                = 35280,
-    SPELL_FRENZY                    = 36992,
-    SPELL_SUICIDE                   = 35301
+    MECH_SPELL_ARCANE_EXPLOSION     = 15453,
+    MECH_SPELL_DISGRUNTLED_ANGER    = 35289,
+    MECH_SPELL_ARCANE_TORRENT       = 36022,
+    MECH_SPELL_MANA_TAP             = 36021,
+    MECH_SPELL_DOMINATION           = 35280,
+    MECH_SPELL_FRENZY               = 36992,
+    MECH_SPELL_SUICIDE              = 35301
 };
 
 // Per-bot state management for Polarity Shift
@@ -113,6 +113,24 @@ class SepethreaRagingFlamesAction : public MovementAction
 {
 public:
     SepethreaRagingFlamesAction(PlayerbotAI* ai) : MovementAction(ai, "flee raging flames") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+// RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157 - Raging Flames cast Inferno AoE
+class SepethreaInfernoAvoidanceAction : public MovementAction
+{
+public:
+    SepethreaInfernoAvoidanceAction(PlayerbotAI* ai) : MovementAction(ai, "avoid raging flames inferno") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+// RESEARCHED: Pattern from WOTLK Halls of Stone AvoidLightningRingAction
+class SepethreaFireTrailAvoidanceAction : public MovementAction
+{
+public:
+    SepethreaFireTrailAvoidanceAction(PlayerbotAI* ai) : MovementAction(ai, "avoid raging flames fire trail") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

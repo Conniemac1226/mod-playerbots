@@ -13,7 +13,7 @@ float NethekurseMultiplier::GetValue(Action* action)
     
     if (dynamic_cast<AvoidShadowFissureAction*>(action))
     {
-        if (boss->HasAura(SPELL_SHADOW_FISSURE) || boss->FindCurrentSpellBySpellId(SPELL_SHADOW_FISSURE))
+        if (boss->HasAura(SH_SPELL_SHADOW_FISSURE) || boss->FindCurrentSpellBySpellId(SH_SPELL_SHADOW_FISSURE))
         {
             return 1.0f;
         }

@@ -65,6 +65,22 @@ public:
     bool IsActive() override;
 };
 
+// RESEARCHED: Pattern from WOTLK Oculus UromArcaneExplosionTrigger
+class RagingFlamesInfernoTrigger : public Trigger
+{
+public:
+    RagingFlamesInfernoTrigger(PlayerbotAI* botAI) : Trigger(botAI, "raging flames inferno") {}
+    bool IsActive() override;
+};
+
+// RESEARCHED: Pattern from WOTLK Halls of Stone KrystallusGroundSlamTrigger
+class RagingFlamesFireTrailTrigger : public Trigger
+{
+public:
+    RagingFlamesFireTrailTrigger(PlayerbotAI* botAI) : Trigger(botAI, "raging flames fire trail") {}
+    bool IsActive() override;
+};
+
 // ========== PATHALEON THE CALCULATOR TRIGGERS ==========
 
 class PathaleonEngagedTrigger : public Trigger

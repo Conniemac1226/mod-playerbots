@@ -22,7 +22,7 @@ float HellmawMultiplier::GetValue(Action* action)
     
     if (dynamic_cast<HellmawFearReactAction*>(action))
     {
-        if (boss->FindCurrentSpellBySpellId(SPELL_FEAR))
+        if (boss->FindCurrentSpellBySpellId(SL_SPELL_FEAR))
         {
             return 1.0f;
         }
@@ -51,7 +51,7 @@ float BlackheartMultiplier::GetValue(Action* action)
     
     if (dynamic_cast<AvoidWarStompAction*>(action))
     {
-        if (boss->FindCurrentSpellBySpellId(SPELL_WAR_STOMP))
+        if (boss->FindCurrentSpellBySpellId(SL_SPELL_WAR_STOMP))
         {
             float distance = bot->GetExactDist2d(boss);
             if (distance < 10.0f)
@@ -150,7 +150,7 @@ float MurmurMultiplier::GetValue(Action* action)
     
     if (dynamic_cast<MurmurMagneticPullAction*>(action))
     {
-        if (bot->HasAura(SPELL_MAGNETIC_PULL))
+        if (bot->HasAura(SL_SPELL_MAGNETIC_PULL))
         {
             return 1.0f;
         }

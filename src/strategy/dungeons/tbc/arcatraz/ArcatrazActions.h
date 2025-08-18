@@ -7,25 +7,25 @@
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 
-const uint32 SPELL_VOID_ZONE = 36119;
-const uint32 SPELL_SHADOW_NOVA = 36127;
+const uint32 ARC_SPELL_VOID_ZONE = 36119;
+const uint32 ARC_SPELL_SHADOW_NOVA = 36127;
 const uint32 SPELL_SEED_OF_CORRUPTION = 36123;
 
-const uint32 SPELL_WHIRLWIND = 36142;
+const uint32 ARC_SPELL_WHIRLWIND = 36142;
 const uint32 SPELL_GIFT_OF_THE_DOOMSAYER = 36173;
-const uint32 SPELL_HEAL = 36144;
+const uint32 ARC_SPELL_HEAL = 36144;
 
-const uint32 SPELL_KNOCK_AWAY = 36512;
-const uint32 SPELL_CHARGE = 35754;
+const uint32 ARC_SPELL_KNOCK_AWAY = 36512;
+const uint32 ARC_SPELL_CHARGE = 35754;
 const uint32 SPELL_FELFIRE = 35769;
 const uint32 SPELL_FELFIRE_SHOCK = 35759;
 
 // Persistent ground effect NPCs
 const uint32 NPC_FELFIRE_GROUND = 20978; // "Wrath-Scryer's Felfire" - persistent ground fire
 
-const uint32 SPELL_FEAR = 39415;
+const uint32 ARC_SPELL_FEAR = 39415;
 const uint32 SPELL_MIND_REND = 36924;
-const uint32 SPELL_DOMINATION = 37162;
+const uint32 ARC_SPELL_DOMINATION = 37162;
 
 const uint32 NPC_HARBINGER_ILLUSION = 21466;
 

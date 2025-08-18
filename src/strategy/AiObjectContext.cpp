@@ -46,6 +46,22 @@
 #include "dungeons/tbc/hellfireramparts/HellfireRampartsTriggerContext.h"
 #include "dungeons/tbc/bloodfurnace/BloodFurnaceActionContext.h"
 #include "dungeons/tbc/bloodfurnace/BloodFurnaceTriggerContext.h"
+#include "dungeons/tbc/slavepens/SlavePensActionContext.h"
+#include "dungeons/tbc/slavepens/SlavePensTriggerContext.h"
+#include "dungeons/tbc/underbog/UnderbogActionContext.h"
+#include "dungeons/tbc/underbog/UnderbogTriggerContext.h"
+#include "dungeons/tbc/manatombs/ManaTombsActionContext.h"
+#include "dungeons/tbc/manatombs/ManaTombsTriggerContext.h"
+#include "dungeons/tbc/shatteredhalls/ShatteredHallsActionContext.h"
+#include "dungeons/tbc/shatteredhalls/ShatteredHallsTriggerContext.h"
+#include "dungeons/tbc/shadowlabyrinth/ShadowLabyrinthActionContext.h"
+#include "dungeons/tbc/shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
+#include "dungeons/tbc/arcatraz/ArcatrazActionContext.h"
+#include "dungeons/tbc/arcatraz/ArcatrazTriggerContext.h"
+#include "dungeons/tbc/botanica/BotanicaActionContext.h"
+#include "dungeons/tbc/botanica/BotanicaTriggerContext.h"
+#include "dungeons/tbc/mechanar/MechanarActionContext.h"
+#include "dungeons/tbc/mechanar/MechanarTriggerContext.h"
 #include "raids/RaidStrategyContext.h"
 #include "raids/aq20/RaidAq20ActionContext.h"
 #include "raids/aq20/RaidAq20TriggerContext.h"
@@ -169,6 +185,14 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new SteamvaultActionContext());
     actionContexts.Add(new HellfireRampartsActionContext());
     actionContexts.Add(new BloodFurnaceActionContext());
+    actionContexts.Add(new SlavePensActionContext());
+    actionContexts.Add(new UnderbogActionContext());
+    actionContexts.Add(new ManaTombsActionContext());
+    actionContexts.Add(new ShatteredHallsActionContext());
+    actionContexts.Add(new ShadowLabyrinthActionContext());
+    actionContexts.Add(new ArcatrazActionContext());
+    actionContexts.Add(new BotanicaActionContext());
+    actionContexts.Add(new MechanarActionContext());
 }
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
@@ -214,6 +238,14 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new SteamvaultTriggerContext());
     triggerContexts.Add(new HellfireRampartsTriggerContext());
     triggerContexts.Add(new BloodFurnaceTriggerContext());
+    triggerContexts.Add(new SlavePensTriggerContext());
+    triggerContexts.Add(new UnderbogTriggerContext());
+    triggerContexts.Add(new ManaTombsTriggerContext());
+    triggerContexts.Add(new ShatteredHallsTriggerContext());
+    triggerContexts.Add(new ShadowLabyrinthTriggerContext());
+    triggerContexts.Add(new ArcatrazTriggerContext());
+    triggerContexts.Add(new BotanicaTriggerContext());
+    triggerContexts.Add(new MechanarTriggerContext());
 }
 
 void AiObjectContext::BuildSharedValueContexts(SharedNamedObjectContextList<UntypedValue>& valueContexts)

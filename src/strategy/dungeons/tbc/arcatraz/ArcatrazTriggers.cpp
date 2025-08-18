@@ -40,7 +40,7 @@ bool ZerekethShadowNovaTrigger::IsActive()
         return false;
     }
     
-    if (boss->FindCurrentSpellBySpellId(SPELL_SHADOW_NOVA))
+    if (boss->FindCurrentSpellBySpellId(ARC_SPELL_SHADOW_NOVA))
     {
         float distance = bot->GetExactDist2d(boss);
         return distance < 20.0f;
@@ -88,13 +88,13 @@ bool DalliahWhirlwindTrigger::IsActive()
         return false;
     }
     
-    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:101 - DoCastAOE(SPELL_WHIRLWIND) - instant AoE cast!
+    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:101 - DoCastAOE(ARC_SPELL_WHIRLWIND) - instant AoE cast!
     // Whirlwind is an INSTANT AoE ability, not channeled - check for aura instead of casting state
     
     float distance = bot->GetExactDist2d(boss);
     
     // Check if boss has whirlwind aura (the spinning effect)
-    if (boss->HasAura(SPELL_WHIRLWIND))
+    if (boss->HasAura(ARC_SPELL_WHIRLWIND))
     {
         return distance < 15.0f; // Increased safety range - whirlwind hits everything in melee range
     }
@@ -117,7 +117,7 @@ bool DalliahHealTrigger::IsActive()
         return false;
     }
     
-    return boss->FindCurrentSpellBySpellId(SPELL_HEAL);
+    return boss->FindCurrentSpellBySpellId(ARC_SPELL_HEAL);
 }
 
 bool SoccothratesKnockAwayTrigger::IsActive()
@@ -128,7 +128,7 @@ bool SoccothratesKnockAwayTrigger::IsActive()
         return false;
     }
     
-    if (boss->FindCurrentSpellBySpellId(SPELL_KNOCK_AWAY))
+    if (boss->FindCurrentSpellBySpellId(ARC_SPELL_KNOCK_AWAY))
     {
         float distance = bot->GetExactDist2d(boss);
         return distance < 15.0f;
@@ -145,7 +145,7 @@ bool SoccothratesChargeTrigger::IsActive()
         return false;
     }
     
-    if (boss->HasAura(SPELL_FELFIRE) || boss->FindCurrentSpellBySpellId(SPELL_CHARGE))
+    if (boss->HasAura(SPELL_FELFIRE) || boss->FindCurrentSpellBySpellId(ARC_SPELL_CHARGE))
     {
         GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
@@ -237,7 +237,7 @@ bool SkyrissFearTrigger::IsActive()
         return false;
     }
     
-    return boss->FindCurrentSpellBySpellId(SPELL_FEAR);
+    return boss->FindCurrentSpellBySpellId(ARC_SPELL_FEAR);
 }
 
 bool SkyrissDominationTrigger::IsActive()
@@ -248,7 +248,7 @@ bool SkyrissDominationTrigger::IsActive()
         return false;
     }
     
-    return boss->FindCurrentSpellBySpellId(SPELL_DOMINATION) || bot->HasAura(SPELL_DOMINATION);
+    return boss->FindCurrentSpellBySpellId(ARC_SPELL_DOMINATION) || bot->HasAura(ARC_SPELL_DOMINATION);
 }
 
 bool MellicharAddsActiveTrigger::IsActive()
