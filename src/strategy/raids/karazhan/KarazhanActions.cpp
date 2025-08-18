@@ -1272,14 +1272,14 @@ bool ChessEventMoveAction::Execute(Event event)
     uint32 pieceEntry = vehicle->GetEntry();
     bool isRanged = (pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_ORC_WARLOCK ||
                      pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_ORC_NECROLYTE);
-    bool isKing = (pieceEntry == NPC_KING_LLANE || pieceEntry == NPC_WARCHIEF_BLACKHAND);
+    bool isKing = (pieceEntry == NPC_CHESS_KING_LLANE || pieceEntry == NPC_WARCHIEF_BLACKHAND);
     
     // Find enemy king
     Unit* enemyKing = nullptr;
     if (pieceEntry <= NPC_HUMAN_CLERIC) // Human side
         enemyKing = bot->FindNearestCreature(NPC_WARCHIEF_BLACKHAND, 100.0f);
     else // Orc side
-        enemyKing = bot->FindNearestCreature(NPC_KING_LLANE, 100.0f);
+        enemyKing = bot->FindNearestCreature(NPC_CHESS_KING_LLANE, 100.0f);
         
     if (!enemyKing)
         return false;
@@ -1378,7 +1378,7 @@ bool ChessEventAbilityAction::Execute(Event event)
             }
             break;
             
-        case NPC_KING_LLANE:
+        case NPC_CHESS_KING_LLANE:
         case NPC_WARCHIEF_BLACKHAND:
             // Sweep / Cleave
             if (Unit* target = vehicle->GetVictim())

@@ -55,7 +55,7 @@ enum KarazhanNPCs
     
     // Chess Event
     NPC_ECHO_OF_MEDIVH         = 16816,
-    NPC_KING_LLANE             = 21684,
+    NPC_CHESS_KING_LLANE       = 21684,
     NPC_WARCHIEF_BLACKHAND     = 21752,
     NPC_HUMAN_FOOTMAN          = 17211,
     NPC_ORC_GRUNT              = 17469,
