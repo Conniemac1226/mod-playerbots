@@ -16,6 +16,8 @@ public:
         // Nethermancer Sepethrea
         creators["sepethrea engaged"] = &MechanarTriggerContext::sepethrea_engaged;
         creators["raging flames active"] = &MechanarTriggerContext::raging_flames_active;
+        creators["raging flames inferno"] = &MechanarTriggerContext::raging_flames_inferno;
+        creators["raging flames fire trail"] = &MechanarTriggerContext::raging_flames_fire_trail;
         creators["should target raging flames"] = &MechanarTriggerContext::should_target_raging_flames;
         creators["dragons breath danger"] = &MechanarTriggerContext::dragons_breath_danger;
         
@@ -39,6 +41,8 @@ private:
     // Nethermancer Sepethrea
     static Trigger* sepethrea_engaged(PlayerbotAI* botAI) { return new SepethreaEngagedTrigger(botAI); }
     static Trigger* raging_flames_active(PlayerbotAI* botAI) { return new RagingFlamesActiveTrigger(botAI); }
+    static Trigger* raging_flames_inferno(PlayerbotAI* botAI) { return new RagingFlamesInfernoTrigger(botAI); }
+    static Trigger* raging_flames_fire_trail(PlayerbotAI* botAI) { return new RagingFlamesFireTrailTrigger(botAI); }
     static Trigger* should_target_raging_flames(PlayerbotAI* botAI) { return new RagingFlamesTargetTrigger(botAI); }
     static Trigger* dragons_breath_danger(PlayerbotAI* botAI) { return new DragonsBreathDangerTrigger(botAI); }
     

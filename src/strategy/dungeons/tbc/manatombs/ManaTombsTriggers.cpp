@@ -123,7 +123,7 @@ bool ShaffarFrostNovaTrigger::IsActive()
         return false;
 
     // RESEARCHED: Frost Nova range check - boss_nexusprince_shaffar.cpp:100
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_FROSTNOVA) && 
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(MT_SPELL_FROSTNOVA) && 
            bot->GetDistance(boss) < 15.0f;
 }
 

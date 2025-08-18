@@ -16,5 +16,6 @@
 #include "shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
 #include "arcatraz/ArcatrazTriggerContext.h"
 #include "botanica/BotanicaTriggerContext.h"
+#include "mechanar/MechanarTriggerContext.h"
 
 #endif

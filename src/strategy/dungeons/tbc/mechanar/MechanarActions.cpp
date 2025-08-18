@@ -8,7 +8,7 @@ std::map<ObjectGuid, uint32> g_capacitus_lastPolarityTime;
 std::map<ObjectGuid, bool> g_capacitus_hasPositive;
 std::map<ObjectGuid, bool> g_capacitus_hasNegative;
 
-// ========== MECHANO LORD CAPACITUS ACTIONS ==========
+// Mechano Lord Capacitus
 
 bool CapacitusReflectiveShieldAction::Execute(Event event)
 {
@@ -20,8 +20,7 @@ bool CapacitusReflectiveShieldAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: boss_mechano_lord_capacitus.cpp:89-96
-    // Normal mode: alternates between magic and damage shields
+    // Reflective shields - alternates between magic and damage shields
     if (boss->HasAura(SPELL_REFLECTIVE_MAGIC_SHIELD))
     {
         // Stop casting spells during magic shield
@@ -66,9 +65,7 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
 
-    // RESEARCHED: boss_mechano_lord_capacitus.cpp:78-82 & 135-217
-    // Polarity Shift gives players positive or negative charge
-    // Players with same charge need to stack, opposite charges must spread
+    // Polarity Shift - players with same charge stack, opposite charges spread
     
     bool hasPositive = bot->HasAura(SPELL_POSITIVE_POLARITY);
     bool hasNegative = bot->HasAura(SPELL_NEGATIVE_POLARITY);
@@ -116,7 +113,7 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
             float distance = bot->GetDistance(ally);
             if (distance < 10.0f)
             {
-                // EMERGENCY: Move away from opposite polarity
+                // Move away from opposite polarity
                 float angle = bot->GetAngle(ally) + M_PI;
                 float x = bot->GetPositionX() + cos(angle) * 15.0f;
                 float y = bot->GetPositionY() + sin(angle) * 15.0f;
@@ -152,8 +149,7 @@ bool CapacitusNetherChargeAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: boss_mechano_lord_capacitus.cpp:64-70
-    // Nether Charges spawn and move randomly
+    // Nether Charges - priority targets for ranged DPS
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* nearestCharge = nullptr;
     float closestDistance = 100.0f;
@@ -210,7 +206,7 @@ bool CapacitusPositionAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Standard positioning - spread for charges
+    // Spread positioning for Nether Charges
     const GuidVector members = AI_VALUE(GuidVector, "group members");
     
     for (auto& member : members)
@@ -250,34 +246,210 @@ bool CapacitusPositionAction::isUseful()
 
 // ========== NETHERMANCER SEPETHREA ACTIONS ==========
 
+// Per-bot state maps for persistent kiting
+static std::map<ObjectGuid, uint32> g_flame_lastMoveTime;
+static std::map<ObjectGuid, bool> g_flame_inSafePosition;
+
+// Room boundaries for safe movement (expanded for safety)
+const Position MECHANAR_SEPETHREA_CENTER = {290.52f, 11.492f, 25.39f, 0.0f};
+const float MECHANAR_ROOM_MIN_X = 272.0f;
+const float MECHANAR_ROOM_MAX_X = 308.0f;
+const float MECHANAR_ROOM_MIN_Y = -8.0f;
+const float MECHANAR_ROOM_MAX_Y = 31.0f;
+const float MECHANAR_ROOM_MIN_Z = 23.0f;
+const float MECHANAR_ROOM_MAX_Z = 28.0f;
+
+// Boundary validation to prevent out-of-bounds movement
+bool IsPositionSafe(const Position& pos)
+{
+    return pos.m_positionX >= MECHANAR_ROOM_MIN_X && pos.m_positionX <= MECHANAR_ROOM_MAX_X &&
+           pos.m_positionY >= MECHANAR_ROOM_MIN_Y && pos.m_positionY <= MECHANAR_ROOM_MAX_Y &&
+           pos.m_positionZ >= MECHANAR_ROOM_MIN_Z && pos.m_positionZ <= MECHANAR_ROOM_MAX_Z;
+}
+
 bool SepethreaRagingFlamesAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* closestFlame = nullptr;
-    float closestDistance = 30.0f;
+    ObjectGuid botGuid = bot->GetGUID();
+    uint32 currentTime = getMSTime();
 
+    // Find Raging Flames targeting this bot
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* targetingFlame = nullptr;
+    
     for (auto& npc : npcs)
     {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_RAGING_FLAMES)
+        if (!botAI)
             continue;
-
-        float distance = bot->GetDistance(unit);
-        if (distance < closestDistance)
+            
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive() || !flame->IsInWorld())
+            continue;
+            
+        if (flame->GetEntry() != NPC_RAGING_FLAMES)
+            continue;
+            
+        Unit* victim = flame->GetVictim();
+        if (victim && victim == bot)
         {
-            closestFlame = unit;
-            closestDistance = distance;
+            targetingFlame = flame;
+            break;
         }
     }
-
-    if (!closestFlame)
+    
+    if (!targetingFlame)
+    {
+        // Reset state when no flame is targeting
+        g_flame_inSafePosition[botGuid] = false;
         return false;
+    }
 
-    return FleePosition(closestFlame->GetPosition(), 20.0f, 250U);
+    // Validate flame is still valid before using
+    if (!targetingFlame->IsAlive() || !targetingFlame->IsInWorld())
+    {
+        g_flame_inSafePosition[botGuid] = false;
+        return false;
+    }
+
+    float flameDistance = bot->GetDistance(targetingFlame);
+    
+    // Stop spellcasting when kiting flames
+    if (bot->IsNonMeleeSpellCast(false))
+    {
+        if (botAI)
+        {
+            botAI->InterruptSpell();
+        }
+    }
+    
+    // Emergency escape from fire trail
+    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA))
+    {
+        if (botAI)
+        {
+            botAI->Reset();
+        }
+        return FleePosition(bot->GetPosition(), 8.0f, 200U);
+    }
+    
+    // Kite Raging Flames at safe distance
+    if (flameDistance < 18.0f)
+    {
+        if (botAI)
+        {
+            botAI->Reset();
+        }
+        
+        // Wall collision detection
+        Position botPos = bot->GetPosition();
+        bool nearWall = !IsPositionSafe(Position(botPos.m_positionX + 3.0f, botPos.m_positionY, botPos.m_positionZ, 0.0f)) ||
+                       !IsPositionSafe(Position(botPos.m_positionX - 3.0f, botPos.m_positionY, botPos.m_positionZ, 0.0f)) ||
+                       !IsPositionSafe(Position(botPos.m_positionX, botPos.m_positionY + 3.0f, botPos.m_positionZ, 0.0f)) ||
+                       !IsPositionSafe(Position(botPos.m_positionX, botPos.m_positionY - 3.0f, botPos.m_positionZ, 0.0f));
+        
+        // Check proximity to room boundaries
+        bool veryNearWall = (botPos.m_positionX <= MECHANAR_ROOM_MIN_X + 2.0f) ||
+                           (botPos.m_positionX >= MECHANAR_ROOM_MAX_X - 2.0f) ||
+                           (botPos.m_positionY <= MECHANAR_ROOM_MIN_Y + 2.0f) ||
+                           (botPos.m_positionY >= MECHANAR_ROOM_MAX_Y - 2.0f);
+        
+        // Stuck detection
+        bool wasStuck = false;
+        if (g_flame_lastMoveTime.count(botGuid) && 
+            (currentTime - g_flame_lastMoveTime[botGuid]) > 1500 &&
+            !g_flame_inSafePosition[botGuid])
+        {
+            wasStuck = true;
+        }
+        
+        g_flame_lastMoveTime[botGuid] = currentTime;
+        g_flame_inSafePosition[botGuid] = false;
+        
+        // Alternative movement for wall collision or stuck state
+        if (nearWall || veryNearWall || wasStuck)
+        {
+            // Calculate escape direction away from flame
+            float flameAngle = targetingFlame->GetAngle(bot);
+            const Position centerPos = MECHANAR_SEPETHREA_CENTER;
+            
+            // Try positions in arc away from flame
+            for (int attempt = 0; attempt < 8; ++attempt)
+            {
+                // Calculate escape angle with variation
+                float angleVariation = (attempt - 4) * (M_PI / 12.0f);
+                float escapeAngle = flameAngle + angleVariation;
+                
+                // Project escape position from room center
+                float escapeDistance = 10.0f + (attempt * 1.5f);
+                
+                float x = centerPos.GetPositionX() + cos(escapeAngle) * escapeDistance;
+                float y = centerPos.GetPositionY() + sin(escapeAngle) * escapeDistance;
+                float z = bot->GetPositionZ();
+                
+                Position testPos(x, y, z, 0.0f);
+                
+                // Validate escape position
+                if (IsPositionSafe(testPos) && 
+                    testPos.GetExactDist2d(targetingFlame->GetPosition()) > 15.0f &&
+                    testPos.GetExactDist2d(botPos) > 5.0f &&
+                    !bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA))
+                {
+                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                                 MovementPriority::MOVEMENT_FORCED);
+                }
+            }
+            
+            // Fallback: move along east-west axis
+            if (veryNearWall || wasStuck)
+            {
+                // Move east or west based on flame position
+                float flameX = targetingFlame->GetPositionX();
+                float botX = botPos.m_positionX;
+                
+                // Calculate east-west movement
+                float targetX, targetY;
+                if (flameX > botX)
+                {
+                    // Flame is east, move west
+                    targetX = botX - 8.0f;
+                }
+                else
+                {
+                    // Flame is west, move east  
+                    targetX = botX + 8.0f;
+                }
+                
+                // Adjust Y position toward center if needed
+                targetY = botPos.m_positionY;
+                if (botPos.m_positionY < centerPos.GetPositionY() - 3.0f)
+                    targetY += 2.0f;
+                else if (botPos.m_positionY > centerPos.GetPositionY() + 3.0f)
+                    targetY -= 2.0f;
+                
+                Position movePos(targetX, targetY, bot->GetPositionZ(), 0.0f);
+                if (IsPositionSafe(movePos) && 
+                    movePos.GetExactDist2d(targetingFlame->GetPosition()) > 12.0f)
+                {
+                    return MoveTo(bot->GetMapId(), targetX, targetY, bot->GetPositionZ(),
+                                 false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                }
+            }
+        }
+        
+        // Default flame kiting
+        return FleePosition(targetingFlame->GetPosition(), 15.0f, 500U);
+    }
+    else if (flameDistance > 22.0f)
+    {
+        // Safe distance reached
+        g_flame_inSafePosition[botGuid] = true;
+        g_flame_lastMoveTime[botGuid] = currentTime;
+    }
+
+    return false;
 }
 
 bool SepethreaRagingFlamesAction::isUseful()
@@ -286,15 +458,16 @@ bool SepethreaRagingFlamesAction::isUseful()
     if (!bot)
         return false;
 
+    // Use direct GUID search for flame detection
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
     {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
-
-        if (unit->GetEntry() == NPC_RAGING_FLAMES && bot->GetDistance(unit) < 30.0f)
+            
+        if (flame->GetVictim() == bot)
             return true;
     }
     
@@ -311,30 +484,29 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:72
-    // Dragon's Breath is a frontal cone - IMMEDIATE reaction needed
+    // Dragon's Breath - frontal cone attack
     if (boss->HasUnitState(UNIT_STATE_CASTING) && 
-        boss->FindCurrentSpellBySpellId(SPELL_DRAGONS_BREATH))
+        boss->FindCurrentSpellBySpellId(MECH_SPELL_DRAGONS_BREATH))
     {
-        // Check if we're in danger zone (frontal cone)
-        if (boss->HasInArc(M_PI / 2, bot) && !botAI->IsTank(bot)) // Wider check for safety
+        // Check if in frontal cone
+        if (boss->HasInArc(M_PI / 2, bot) && !botAI->IsTank(bot))
         {
-            // Calculate perpendicular escape direction (to the sides)
+            // Calculate side escape direction
             float bossOrientation = boss->GetOrientation();
             float botAngleToBoss = boss->GetAngle(bot);
             
-            // Determine which side is safer (left or right)
+            // Choose left or right side
             float leftAngle = bossOrientation - (M_PI / 2);
             float rightAngle = bossOrientation + (M_PI / 2);
             
-            // Choose the side that's closer to our current position
+            // Choose closer side
             float angleDiffLeft = fabs(botAngleToBoss - leftAngle);
             float angleDiffRight = fabs(botAngleToBoss - rightAngle);
             
             float escapeAngle = (angleDiffLeft < angleDiffRight) ? leftAngle : rightAngle;
             
-            // Move to a safe position at the boss's side
-            float escapeDistance = 15.0f; // Safe distance from boss
+            // Move to safe position at boss side
+            float escapeDistance = 15.0f;
             Position safePos;
             safePos.m_positionX = boss->GetPositionX() + cos(escapeAngle) * escapeDistance;
             safePos.m_positionY = boss->GetPositionY() + sin(escapeAngle) * escapeDistance;
@@ -373,18 +545,16 @@ bool SepethreaArcaneBlastAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:63-68
-    // Arcane Blast reduces threat by 50% on current target
-    // Tanks need to be ready to taunt back
+    // Arcane Blast - threat reduction, tanks need to taunt back
     if (botAI->IsTank(bot))
     {
         if (boss->GetVictim() && boss->GetVictim() != bot)
         {
-            // Check if boss just cast Arcane Blast
+            // Check for Arcane Blast cast
             if (boss->HasUnitState(UNIT_STATE_CASTING) && 
-                boss->FindCurrentSpellBySpellId(SPELL_ARCANE_BLAST))
+                boss->FindCurrentSpellBySpellId(MECH_SPELL_ARCANE_BLAST))
             {
-                // Be ready to taunt after cast
+                // Taunt after cast
                 return botAI->CastSpell("taunt", boss);
             }
         }
@@ -428,16 +598,135 @@ bool SepethreaTargetElementalAction::isUseful()
 {
     Player* bot = botAI->GetBot();
     if (!bot || botAI->IsTank(bot) || botAI->IsHeal(bot))
-        return false; // Only for DPS
-
-    if (!AI_VALUE(bool, "raging flames active"))
         return false;
 
+    // Check for Raging Flames targeting bot
     Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
     if (!boss)
         return false;
 
+    // Check for Raging Flames
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    bool hasFlameTargetingBot = false;
+    
+    for (auto& npc : npcs)
+    {
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive())
+            continue;
+            
+        if (flame->GetEntry() == NPC_RAGING_FLAMES && flame->GetVictim() == bot)
+        {
+            hasFlameTargetingBot = true;
+            break;
+        }
+    }
+    
+    if (!hasFlameTargetingBot)
+        return false;
+
+    // Only trigger if not already targeting boss
     return bot->GetSelectedUnit() != boss;
+}
+
+bool SepethreaInfernoAvoidanceAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* infernoFlame = nullptr;
+    float closestDistance = 20.0f;
+
+    // Find closest Raging Flame casting Inferno
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_RAGING_FLAMES)
+            continue;
+
+        if (unit->FindCurrentSpellBySpellId(SPELL_INFERNO))
+        {
+            float distance = bot->GetDistance(unit);
+            if (distance < closestDistance)
+            {
+                infernoFlame = unit;
+                closestDistance = distance;
+            }
+        }
+    }
+
+    if (!infernoFlame)
+        return false;
+
+    // Flee from Inferno
+    return FleePosition(infernoFlame->GetPosition(), 18.0f, 300U);
+}
+
+bool SepethreaInfernoAvoidanceAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_RAGING_FLAMES)
+            continue;
+
+        // Check for Inferno casting
+        if (unit->FindCurrentSpellBySpellId(SPELL_INFERNO) && bot->GetDistance(unit) < 18.0f)
+            return true;
+    }
+    
+    return false;
+}
+
+// Fire trail avoidance for all bots
+bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Stop spellcasting and movement
+    if (bot->IsNonMeleeSpellCast(false))
+    {
+        if (botAI)
+        {
+            botAI->InterruptSpell();
+        }
+    }
+
+    if (botAI)
+    {
+        botAI->Reset();
+    }
+
+    // Flee from fire trail
+    return FleePosition(bot->GetPosition(), 12.0f, 200U);
+}
+
+bool SepethreaFireTrailAvoidanceAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Check if standing in fire trail aura
+    return bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA);
 }
 
 // ========== PATHALEON THE CALCULATOR ACTIONS ==========
@@ -448,7 +737,6 @@ bool PathaleonDominationAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:117-122
     // Domination is mind control - affected players need to be CC'd
     const GuidVector members = AI_VALUE(GuidVector, "group members");
     
@@ -458,7 +746,7 @@ bool PathaleonDominationAction::Execute(Event event)
         if (!ally || ally == bot || !ally->IsAlive())
             continue;
 
-        if (ally->HasAura(SPELL_DOMINATION))
+        if (ally->HasAura(MECH_SPELL_DOMINATION))
         {
             // CC the mind controlled ally
             if (bot->getClass() == CLASS_MAGE)
@@ -477,7 +765,7 @@ bool PathaleonDominationAction::Execute(Event event)
     }
 
     // If we are dominated, can't do anything
-    if (bot->HasAura(SPELL_DOMINATION))
+    if (bot->HasAura(MECH_SPELL_DOMINATION))
     {
         return true;
     }
@@ -504,7 +792,6 @@ bool PathaleonNetherWraithAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:96-101
     // Summons 3-4 Nether Wraiths that need to be killed quickly
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* nearestWraith = nullptr;
@@ -558,15 +845,14 @@ bool PathaleonArcaneTorrentAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:113-115
     // Arcane Torrent is an AoE around the boss
     if (boss->HasUnitState(UNIT_STATE_CASTING) && 
-        boss->FindCurrentSpellBySpellId(SPELL_ARCANE_TORRENT))
+        boss->FindCurrentSpellBySpellId(MECH_SPELL_ARCANE_TORRENT))
     {
         float distance = bot->GetDistance(boss);
         if (distance < 20.0f && !botAI->IsMelee(bot))
         {
-            // EMERGENCY: Move out of Arcane Torrent range
+            // Move out of Arcane Torrent range
             float angle = bot->GetAngle(boss) + M_PI;
             float x = bot->GetPositionX() + cos(angle) * 25.0f;
             float y = bot->GetPositionY() + sin(angle) * 25.0f;
@@ -602,15 +888,13 @@ bool PathaleonEnrageAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:84-90
     // At 20% health: Frenzy + Suicide (explodes on death)
-    if (boss->HasAura(SPELL_FRENZY))
+    if (boss->HasAura(MECH_SPELL_FRENZY))
     {
         // Boss will explode on death - prepare to run
         if (boss->GetHealthPct() < 5.0f)
         {
-            // Get ready to flee when he dies
-            // EMERGENCY: Get ready to flee when he dies (suicide explosion)
+            // Get ready to flee when he dies (suicide explosion)
             float angle = bot->GetAngle(boss) + M_PI;
             float x = bot->GetPositionX() + cos(angle) * 30.0f;
             float y = bot->GetPositionY() + sin(angle) * 30.0f;
@@ -649,7 +933,7 @@ bool PathaleonEnrageAction::Execute(Event event)
 bool PathaleonEnrageAction::isUseful()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "pathaleon the calculator");
-    return boss && boss->HasAura(SPELL_FRENZY);
+    return boss && boss->HasAura(MECH_SPELL_FRENZY);
 }
 
 bool PathaleonArcaneExplosionAction::Execute(Event event)
@@ -662,15 +946,14 @@ bool PathaleonArcaneExplosionAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:131-135
     // Arcane Explosion on Heroic - AoE around boss
     if (boss->HasUnitState(UNIT_STATE_CASTING) && 
-        boss->FindCurrentSpellBySpellId(SPELL_ARCANE_EXPLOSION))
+        boss->FindCurrentSpellBySpellId(MECH_SPELL_ARCANE_EXPLOSION))
     {
         float distance = bot->GetDistance(boss);
         if (distance < 10.0f && !botAI->IsMelee(bot))
         {
-            // EMERGENCY: Move out of Arcane Explosion range
+            // Move out of Arcane Explosion range
             float angle = bot->GetAngle(boss) + M_PI;
             float x = bot->GetPositionX() + cos(angle) * 15.0f;
             float y = bot->GetPositionY() + sin(angle) * 15.0f;
@@ -702,9 +985,8 @@ bool PathaleonManaTapAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:104-109
     // Mana Tap drains mana from a random player
-    if (bot->HasAura(SPELL_MANA_TAP))
+    if (bot->HasAura(MECH_SPELL_MANA_TAP))
     {
         // Affected player should use mana efficiently
         // Healers prioritize emergency heals only
@@ -728,5 +1010,5 @@ bool PathaleonManaTapAction::Execute(Event event)
 bool PathaleonManaTapAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    return bot && bot->getPowerType() == POWER_MANA && bot->HasAura(SPELL_MANA_TAP);
+    return bot && bot->getPowerType() == POWER_MANA && bot->HasAura(MECH_SPELL_MANA_TAP);
 }

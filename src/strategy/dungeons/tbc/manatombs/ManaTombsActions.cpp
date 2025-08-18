@@ -328,7 +328,7 @@ bool ShaffarFrostNovaAction::Execute(Event event)
 
     // RESEARCHED: Frost Nova followed by Blink - boss_nexusprince_shaffar.cpp:98-106
     // Move out BEFORE cast completes
-    if (boss->FindCurrentSpellBySpellId(SPELL_FROSTNOVA))
+    if (boss->FindCurrentSpellBySpellId(MT_SPELL_FROSTNOVA))
     {
         float distance = bot->GetExactDist2d(boss);
         if (distance < 20.0f) // Frost Nova has ~10 yard range, be safe
@@ -356,7 +356,7 @@ bool ShaffarFrostNovaAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->FindCurrentSpellBySpellId(SPELL_FROSTNOVA) && bot->GetExactDist2d(boss) < 20.0f;
+    return boss->FindCurrentSpellBySpellId(MT_SPELL_FROSTNOVA) && bot->GetExactDist2d(boss) < 20.0f;
 }
 
 // Reposition after Shaffar blinks

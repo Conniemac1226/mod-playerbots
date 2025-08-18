@@ -7,4 +7,5 @@ public:
     MechanarStrategy(PlayerbotAI* botAI);
     std::string const getName() override { return "mechanar"; }
     void InitTriggers(std::vector<TriggerNode*>& triggers) override;
+    void InitMultipliers(std::vector<Multiplier*>& multipliers) override;
 };

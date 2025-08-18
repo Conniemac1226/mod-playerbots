@@ -1,6 +1,7 @@
 #include "MechanarStrategy.h"
 #include "MechanarActions.h"
 #include "MechanarTriggers.h"
+#include "MechanarMultipliers.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 
@@ -12,17 +13,17 @@ void MechanarStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     // ========== MECHANO LORD CAPACITUS ==========
     
-    // RESEARCHED: boss_mechano_lord_capacitus.cpp:89-96 - Reflective shields (Normal)
+    // Reflective shields (Normal mode)
     triggers.push_back(new TriggerNode(
         "reflective shield active",
         NextAction::array(0, new NextAction("handle reflective shield", ACTION_INTERRUPT + 1), nullptr)));
     
-    // RESEARCHED: boss_mechano_lord_capacitus.cpp:78-82 - Polarity Shift (Heroic)
+    // Polarity Shift (Heroic mode)
     triggers.push_back(new TriggerNode(
         "polarity shift active",
         NextAction::array(0, new NextAction("handle polarity shift", ACTION_EMERGENCY), nullptr)));
     
-    // RESEARCHED: boss_mechano_lord_capacitus.cpp:64-70 - Nether Charges
+    // Nether Charges
     triggers.push_back(new TriggerNode(
         "nether charge active",
         NextAction::array(0, new NextAction("attack nether charge", ACTION_NORMAL + 5), nullptr)));
@@ -34,56 +35,72 @@ void MechanarStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     
     // ========== NETHERMANCER SEPETHREA ==========
     
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157 - Raging Flames fixate
+    // Universal fire trail avoidance
+    triggers.push_back(new TriggerNode(
+        "raging flames fire trail",
+        NextAction::array(0, new NextAction("avoid raging flames fire trail", ACTION_EMERGENCY + 5), nullptr)));
+    
+    // Raging Flames fixate
     triggers.push_back(new TriggerNode(
         "raging flames active",
-        NextAction::array(0, new NextAction("flee raging flames", ACTION_EMERGENCY), nullptr)));
+        NextAction::array(0, new NextAction("flee raging flames", ACTION_EMERGENCY + 2), nullptr)));
+        
+    // Inferno AoE avoidance
+    triggers.push_back(new TriggerNode(
+        "raging flames inferno",
+        NextAction::array(0, new NextAction("avoid raging flames inferno", ACTION_EMERGENCY + 4), nullptr)));
     
-    // FIXED: Raging Flames are immune - DPS should focus boss while kiting
+    // Raging Flames targeting
     triggers.push_back(new TriggerNode(
         "should target raging flames",
         NextAction::array(0, new NextAction("target raging flames", ACTION_NORMAL + 8), nullptr)));
     
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:72 - Dragon's Breath frontal cone
+    // Dragon's Breath frontal cone
     triggers.push_back(new TriggerNode(
         "dragons breath danger",
         NextAction::array(0, new NextAction("avoid dragons breath", ACTION_MOVE + 4), nullptr)));
     
     
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:63-68 - Arcane Blast threat reduction
+    // Arcane Blast threat reduction
     triggers.push_back(new TriggerNode(
         "sepethrea engaged",
         NextAction::array(0, new NextAction("handle arcane blast", ACTION_NORMAL + 2), nullptr)));
     
     // ========== PATHALEON THE CALCULATOR ==========
     
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:117-122 - Mind Control
+    // Mind Control
     triggers.push_back(new TriggerNode(
         "domination active",
         NextAction::array(0, new NextAction("handle domination", ACTION_INTERRUPT + 2), nullptr)));
     
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:96-101 - Nether Wraith adds
+    // Nether Wraith adds
     triggers.push_back(new TriggerNode(
         "nether wraith active",
         NextAction::array(0, new NextAction("attack nether wraith", ACTION_NORMAL + 6), nullptr)));
     
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:113-115 - Arcane Torrent AoE
+    // Arcane Torrent AoE
     triggers.push_back(new TriggerNode(
         "arcane torrent danger",
         NextAction::array(0, new NextAction("avoid arcane torrent", ACTION_MOVE + 2), nullptr)));
     
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:84-90 - Enrage at 20%
+    // Enrage at 20%
     triggers.push_back(new TriggerNode(
         "pathaleon enraged",
         NextAction::array(0, new NextAction("handle pathaleon enrage", ACTION_EMERGENCY - 1), nullptr)));
     
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:131-135 - Arcane Explosion (Heroic)
+    // Arcane Explosion (Heroic mode)
     triggers.push_back(new TriggerNode(
         "arcane explosion danger",
         NextAction::array(0, new NextAction("avoid arcane explosion", ACTION_MOVE + 3), nullptr)));
     
-    // RESEARCHED: boss_pathaleon_the_calculator.cpp:104-109 - Mana Tap
+    // Mana Tap
     triggers.push_back(new TriggerNode(
         "mana tap active",
         NextAction::array(0, new NextAction("handle mana tap", ACTION_NORMAL + 1), nullptr)));
+}
+
+void MechanarStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
+{
+    // Block spellcasting during Raging Flames kiting
+    multipliers.push_back(new MechanarMultiplier(botAI));
 }

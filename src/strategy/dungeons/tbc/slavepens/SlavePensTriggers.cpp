@@ -34,7 +34,7 @@ bool MennuLightningBoltCastTrigger::IsActive()
         return false;
 
     // RESEARCHED: Lightning Bolt cast check - boss_mennu_the_betrayer.cpp:69
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_BOLT);
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SP_SPELL_LIGHTNING_BOLT);
 }
 
 // Nova Totem nearby
@@ -56,7 +56,7 @@ bool RokmarEnsnaringMossTrigger::IsActive()
         return false;
 
     // RESEARCHED: Ensnaring Moss root - boss_rokmar_the_crackler.cpp:60
-    return bot->HasAura(SPELL_ENSNARING_MOSS);
+    return bot->HasAura(SP_SPELL_ENSNARING_MOSS);
 }
 
 // Grievous Wound needs healing
@@ -67,7 +67,7 @@ bool RokmarGrievousWoundTrigger::IsActive()
         return false;
 
     // RESEARCHED: Grievous Wound check - boss_rokmar_the_crackler.cpp:56
-    return (bot->HasAura(SPELL_GRIEVOUS_WOUND_N) || bot->HasAura(SPELL_GRIEVOUS_WOUND_H)) && bot->GetHealthPct() < 90.0f;
+    return (bot->HasAura(SP_SPELL_GRIEVOUS_WOUND_N) || bot->HasAura(SP_SPELL_GRIEVOUS_WOUND_H)) && bot->GetHealthPct() < 90.0f;
 }
 
 // Water Spit at low health
@@ -97,7 +97,7 @@ bool QuagmirranAcidSprayTrigger::IsActive()
         return false;
 
     // RESEARCHED: Acid Spray frontal check - boss_quagmirran.cpp:54
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_ACID_SPRAY) && 
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SP_SPELL_ACID_SPRAY) && 
            boss->HasInArc(M_PI / 3, bot);
 }
 
@@ -113,7 +113,7 @@ bool QuagmirranPoisonBoltVolleyTrigger::IsActive()
         return false;
 
     // RESEARCHED: Poison Bolt Volley check - boss_quagmirran.cpp:58
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_POISON_BOLT_VOLLEY);
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SP_SPELL_POISON_BOLT_VOLLEY);
 }
 
 // Tank positioning for Uppercut
@@ -146,5 +146,5 @@ bool QuagmirranCleavePositionTrigger::IsActive()
 
     // RESEARCHED: Cleave frontal check - boss_quagmirran.cpp:44-47
     return (botAI->IsMelee(bot) && boss->HasInArc(M_PI / 2, bot)) ||
-           (boss->FindCurrentSpellBySpellId(SPELL_CLEAVE) && boss->HasInArc(M_PI / 3, bot) && bot->GetExactDist(boss) < 10.0f);
+           (boss->FindCurrentSpellBySpellId(SP_SPELL_CLEAVE) && boss->HasInArc(M_PI / 3, bot) && bot->GetExactDist(boss) < 10.0f);
 }

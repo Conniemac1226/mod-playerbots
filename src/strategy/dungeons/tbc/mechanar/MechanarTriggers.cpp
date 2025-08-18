@@ -9,7 +9,7 @@
 
 bool CapacitusEngagedTrigger::IsActive()
 {
-    // Using proven WotLK pattern
+    // Check if boss is engaged
     Unit* boss = AI_VALUE2(Unit*, "find target", "mechano lord capacitus");
     return boss && boss->IsAlive() && boss->IsInCombat();
 }
@@ -44,7 +44,7 @@ bool NetherChargeActiveTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check for Nether Charges using proven WotLK pattern
+    // Check for Nether Charges
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
@@ -65,10 +65,7 @@ bool NetherChargeActiveTrigger::IsActive()
 bool SepethreaEngagedTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-        
-    return true;
+    return boss && boss->IsAlive() && boss->IsInCombat();
 }
 
 bool RagingFlamesActiveTrigger::IsActive()
@@ -77,20 +74,22 @@ bool RagingFlamesActiveTrigger::IsActive()
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
+    // Use direct GUID search for flame detection
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
     {
         Unit* flame = botAI->GetUnit(npc);
-        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
+        if (!flame || !flame->IsAlive())
             continue;
-
-        if (bot->GetDistance(flame) < 30.0f)
-            return true;
+            
+        if (flame->GetEntry() == NPC_RAGING_FLAMES)
+        {
+            if (flame->GetVictim() == bot)
+            {
+                return true;
+            }
+        }
     }
     
     return false;
@@ -108,7 +107,7 @@ bool DragonsBreathDangerTrigger::IsActive()
 
     // Check if boss is casting Dragon's Breath
     if (boss->HasUnitState(UNIT_STATE_CASTING) && 
-        boss->FindCurrentSpellBySpellId(SPELL_DRAGONS_BREATH))
+        boss->FindCurrentSpellBySpellId(MECH_SPELL_DRAGONS_BREATH))
     {
         // Check if we're in the frontal cone (wider detection for safety)
         return boss->HasInArc(M_PI / 2, bot) && !botAI->IsTank(bot);
@@ -146,6 +145,48 @@ bool RagingFlamesTargetTrigger::IsActive()
     return false;
 }
 
+// Raging Flames Inferno detection
+bool RagingFlamesInfernoTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+    
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    
+    for (auto& npc : npcs)
+    {
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
+            continue;
+
+        // Check if flame is casting Inferno
+        if (flame->FindCurrentSpellBySpellId(SPELL_INFERNO))
+            return true;
+    }
+    
+    return false;
+}
+
+// Fire trail detection for all bots
+bool RagingFlamesFireTrailTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+    
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Check if bot is standing in fire trail
+    return bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA);
+}
+
 // ========== PATHALEON THE CALCULATOR TRIGGERS ==========
 
 bool PathaleonEngagedTrigger::IsActive()
@@ -161,7 +202,7 @@ bool DominationActiveTrigger::IsActive()
         return false;
 
     // Check if we're dominated
-    if (bot->HasAura(SPELL_DOMINATION))
+    if (bot->HasAura(MECH_SPELL_DOMINATION))
         return true;
 
     // Check if any ally is dominated (need to CC them)
@@ -172,7 +213,7 @@ bool DominationActiveTrigger::IsActive()
         if (!ally || ally == bot || !ally->IsAlive())
             continue;
 
-        if (ally->HasAura(SPELL_DOMINATION))
+        if (ally->HasAura(MECH_SPELL_DOMINATION))
             return true;
     }
 
@@ -213,7 +254,7 @@ bool ArcaneTorrentDangerTrigger::IsActive()
 
     // Check if boss is casting Arcane Torrent
     if (boss->HasUnitState(UNIT_STATE_CASTING) && 
-        boss->FindCurrentSpellBySpellId(SPELL_ARCANE_TORRENT))
+        boss->FindCurrentSpellBySpellId(MECH_SPELL_ARCANE_TORRENT))
     {
         return bot->GetDistance(boss) < 20.0f && !botAI->IsMelee(bot);
     }
@@ -224,7 +265,7 @@ bool ArcaneTorrentDangerTrigger::IsActive()
 bool PathaleonEnragedTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "pathaleon the calculator");
-    return boss && boss->HasAura(SPELL_FRENZY);
+    return boss && boss->HasAura(MECH_SPELL_FRENZY);
 }
 
 bool ArcaneExplosionDangerTrigger::IsActive()
@@ -239,7 +280,7 @@ bool ArcaneExplosionDangerTrigger::IsActive()
 
     // Check if boss is casting Arcane Explosion
     if (boss->HasUnitState(UNIT_STATE_CASTING) && 
-        boss->FindCurrentSpellBySpellId(SPELL_ARCANE_EXPLOSION))
+        boss->FindCurrentSpellBySpellId(MECH_SPELL_ARCANE_EXPLOSION))
     {
         return bot->GetDistance(boss) < 10.0f && !botAI->IsMelee(bot);
     }
@@ -250,5 +291,5 @@ bool ArcaneExplosionDangerTrigger::IsActive()
 bool ManaTapActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    return bot && bot->getPowerType() == POWER_MANA && bot->HasAura(SPELL_MANA_TAP);
+    return bot && bot->getPowerType() == POWER_MANA && bot->HasAura(MECH_SPELL_MANA_TAP);
 }

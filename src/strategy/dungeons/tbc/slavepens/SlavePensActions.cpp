@@ -68,7 +68,7 @@ bool MennuLightningBoltInterruptAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Lightning Bolt every 7-10s - boss_mennu_the_betrayer.cpp:67-70
-    if (boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_BOLT))
+    if (boss->FindCurrentSpellBySpellId(SP_SPELL_LIGHTNING_BOLT))
     {
         // Interrupt immediately to prevent damage
         if (bot->IsWithinMeleeRange(boss))
@@ -106,7 +106,7 @@ bool MennuLightningBoltInterruptAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_BOLT);
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SP_SPELL_LIGHTNING_BOLT);
 }
 
 // Move away from Nova Totem explosion
@@ -163,7 +163,7 @@ bool RokmarEnsnaringMossAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Ensnaring Moss - boss_rokmar_the_crackler.cpp:60
-    if (bot->HasAura(SPELL_ENSNARING_MOSS))
+    if (bot->HasAura(SP_SPELL_ENSNARING_MOSS))
     {
         // Try to dispel the root effect - SAFE PATTERN from HellfireRampartsActions.cpp:219-231
         Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
@@ -190,7 +190,7 @@ bool RokmarEnsnaringMossAction::isUseful()
     if (!bot)
         return false;
 
-    return bot->HasAura(SPELL_ENSNARING_MOSS);
+    return bot->HasAura(SP_SPELL_ENSNARING_MOSS);
 }
 
 // Heal Grievous Wound
@@ -210,7 +210,7 @@ bool RokmarGrievousWoundAction::Execute(Event event)
             Player* member = ref->GetSource();
             if (member && member->IsAlive())
             {
-                if ((member->HasAura(SPELL_GRIEVOUS_WOUND_N) || member->HasAura(SPELL_GRIEVOUS_WOUND_H)) 
+                if ((member->HasAura(SP_SPELL_GRIEVOUS_WOUND_N) || member->HasAura(SP_SPELL_GRIEVOUS_WOUND_H)) 
                     && member->GetHealthPct() < 90.0f)
                 {
                     // Priority heal wounded targets
@@ -239,7 +239,7 @@ bool RokmarGrievousWoundAction::Execute(Event event)
     }
     
     // Self heal if wounded
-    if ((bot->HasAura(SPELL_GRIEVOUS_WOUND_N) || bot->HasAura(SPELL_GRIEVOUS_WOUND_H)) 
+    if ((bot->HasAura(SP_SPELL_GRIEVOUS_WOUND_N) || bot->HasAura(SP_SPELL_GRIEVOUS_WOUND_H)) 
         && bot->GetHealthPct() < 90.0f)
     {
         Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "heal");
@@ -266,7 +266,7 @@ bool RokmarGrievousWoundAction::isUseful()
     if (!bot)
         return false;
 
-    return (bot->HasAura(SPELL_GRIEVOUS_WOUND_N) || bot->HasAura(SPELL_GRIEVOUS_WOUND_H)) && bot->GetHealthPct() < 90.0f;
+    return (bot->HasAura(SP_SPELL_GRIEVOUS_WOUND_N) || bot->HasAura(SP_SPELL_GRIEVOUS_WOUND_H)) && bot->GetHealthPct() < 90.0f;
 }
 
 // Move away from Water Spit
@@ -282,7 +282,7 @@ bool RokmarWaterSpitAction::Execute(Event event)
 
     // RESEARCHED: Water Spit AoE damage - boss_rokmar_the_crackler.cpp:62-65
     // It's AoE centered on boss, spread out!
-    if (boss->FindCurrentSpellBySpellId(SPELL_WATER_SPIT))
+    if (boss->FindCurrentSpellBySpellId(SP_SPELL_WATER_SPIT))
     {
         float safeDistance = 20.0f; // Water Spit has large AoE
         float currentDist = bot->GetExactDist(boss);
@@ -313,7 +313,7 @@ bool RokmarWaterSpitAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->FindCurrentSpellBySpellId(SPELL_WATER_SPIT) && bot->GetExactDist(boss) < 20.0f;
+    return boss->FindCurrentSpellBySpellId(SP_SPELL_WATER_SPIT) && bot->GetExactDist(boss) < 20.0f;
 }
 
 // Quagmirran - Avoid Acid Spray cone
@@ -330,7 +330,7 @@ bool QuagmirranAcidSprayAction::Execute(Event event)
     // RESEARCHED: Acid Spray frontal cone - boss_quagmirran.cpp:52-55
     // Random target, cast every 25 seconds
     // Use FindCurrentSpellBySpellId for IMMEDIATE detection
-    if (boss->FindCurrentSpellBySpellId(SPELL_ACID_SPRAY))
+    if (boss->FindCurrentSpellBySpellId(SP_SPELL_ACID_SPRAY))
     {
         // Check if we're in front arc (wider safety margin)
         if (boss->HasInArc(M_PI / 2, bot)) // 90 degree cone for safety
@@ -358,7 +358,7 @@ bool QuagmirranAcidSprayAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->FindCurrentSpellBySpellId(SPELL_ACID_SPRAY) && 
+    return boss->FindCurrentSpellBySpellId(SP_SPELL_ACID_SPRAY) && 
            boss->HasInArc(M_PI / 2, bot);
 }
 
@@ -375,7 +375,7 @@ bool QuagmirranPoisonBoltVolleyAction::Execute(Event event)
 
     // RESEARCHED: Poison Bolt Volley AoE - boss_quagmirran.cpp:56-59
     // Cast every 24.4 seconds, MUST interrupt immediately
-    if (boss->FindCurrentSpellBySpellId(SPELL_POISON_BOLT_VOLLEY))
+    if (boss->FindCurrentSpellBySpellId(SP_SPELL_POISON_BOLT_VOLLEY))
     {
         // Melee interrupt if in range
         if (bot->IsWithinMeleeRange(boss))
@@ -413,7 +413,7 @@ bool QuagmirranPoisonBoltVolleyAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->FindCurrentSpellBySpellId(SPELL_POISON_BOLT_VOLLEY);
+    return boss->FindCurrentSpellBySpellId(SP_SPELL_POISON_BOLT_VOLLEY);
 }
 
 // Tank positioning for Uppercut
@@ -434,7 +434,7 @@ bool QuagmirranUppercutAction::Execute(Event event)
     // RESEARCHED: Uppercut knockback - boss_quagmirran.cpp:48-51
     // Cast every 21.8 seconds on tank - position with back to wall
     // CRITICAL: Detect when Uppercut is coming and prepare positioning
-    if (boss->FindCurrentSpellBySpellId(SPELL_UPPERCUT))
+    if (boss->FindCurrentSpellBySpellId(SP_SPELL_UPPERCUT))
     {
         // Uppercut about to happen - ensure we have room behind us
         // This is a knockback, so having a wall behind helps
@@ -505,7 +505,7 @@ bool QuagmirranCleavePositionAction::Execute(Event event)
     }
     
     // Also move if cleave is being cast RIGHT NOW
-    if (boss->FindCurrentSpellBySpellId(SPELL_CLEAVE))
+    if (boss->FindCurrentSpellBySpellId(SP_SPELL_CLEAVE))
     {
         if (boss->HasInArc(M_PI / 3, bot) && bot->GetExactDist(boss) < 10.0f)
         {
@@ -536,5 +536,5 @@ bool QuagmirranCleavePositionAction::isUseful()
 
     // Useful if melee and in front, or if cleave is being cast
     return (botAI->IsMelee(bot) && boss->HasInArc(M_PI / 2, bot)) ||
-           (boss->FindCurrentSpellBySpellId(SPELL_CLEAVE) && boss->HasInArc(M_PI / 3, bot) && bot->GetExactDist(boss) < 10.0f);
+           (boss->FindCurrentSpellBySpellId(SP_SPELL_CLEAVE) && boss->HasInArc(M_PI / 3, bot) && bot->GetExactDist(boss) < 10.0f);
 }

@@ -21,7 +21,7 @@ bool HellmawFearTrigger::IsActive()
         return false;
     }
     
-    return boss->FindCurrentSpellBySpellId(SPELL_FEAR);
+    return boss->FindCurrentSpellBySpellId(SL_SPELL_FEAR);
 }
 
 bool BlackheartInciteChaosTrigger::IsActive()
@@ -43,7 +43,7 @@ bool BlackheartWarStompTrigger::IsActive()
         return false;
     }
     
-    if (boss->FindCurrentSpellBySpellId(SPELL_WAR_STOMP))
+    if (boss->FindCurrentSpellBySpellId(SL_SPELL_WAR_STOMP))
     {
         float distance = bot->GetExactDist2d(boss);
         return distance < 10.0f;
@@ -143,7 +143,7 @@ bool MurmurMagneticPullTrigger::IsActive()
         return false;
     }
     
-    return bot->HasAura(SPELL_MAGNETIC_PULL);
+    return bot->HasAura(SL_SPELL_MAGNETIC_PULL);
 }
 
 bool MurmurThunderingStormTrigger::IsActive()

@@ -16,5 +16,6 @@
 #include "shadowlabyrinth/ShadowLabyrinthActionContext.h"
 #include "arcatraz/ArcatrazActionContext.h"
 #include "botanica/BotanicaActionContext.h"
+#include "mechanar/MechanarActionContext.h"
 
 #endif

@@ -59,7 +59,7 @@ bool HungarfenFoulSporesAction::Execute(Event event)
     // RESEARCHED: Foul Spores at 20% health - boss_hungarfen.cpp:59
     // Boss roots himself and channels for 11 seconds - evacuate immediately!
     if (boss->GetHealthPct() <= 20.0f && 
-        (boss->FindCurrentSpellBySpellId(SPELL_FOUL_SPORES) || boss->HasAura(SPELL_FOUL_SPORES)))
+        (boss->FindCurrentSpellBySpellId(UB_SPELL_FOUL_SPORES) || boss->HasAura(UB_SPELL_FOUL_SPORES)))
     {
         float distance = bot->GetDistance(boss);
         if (distance < 25.0f) // Foul Spores has large radius - stay far!
@@ -88,7 +88,7 @@ bool HungarfenFoulSporesAction::isUseful()
         return false;
 
     return boss->GetHealthPct() <= 20.0f && 
-           (boss->FindCurrentSpellBySpellId(SPELL_FOUL_SPORES) || boss->HasAura(SPELL_FOUL_SPORES)) && 
+           (boss->FindCurrentSpellBySpellId(UB_SPELL_FOUL_SPORES) || boss->HasAura(UB_SPELL_FOUL_SPORES)) && 
            bot->GetDistance(boss) < 25.0f;
 }
 
@@ -105,7 +105,7 @@ bool GhazanAcidBreathAction::Execute(Event event)
 
     // RESEARCHED: Acid Breath frontal cone - boss_ghazan.cpp:69
     // Use immediate detection for faster response
-    if (boss->FindCurrentSpellBySpellId(SPELL_ACID_BREATH))
+    if (boss->FindCurrentSpellBySpellId(UB_SPELL_ACID_BREATH))
     {
         // Check if we're in front arc (60 degree cone)
         if (boss->HasInArc(M_PI / 3, bot))
@@ -133,7 +133,7 @@ bool GhazanAcidBreathAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->FindCurrentSpellBySpellId(SPELL_ACID_BREATH) && 
+    return boss->FindCurrentSpellBySpellId(UB_SPELL_ACID_BREATH) && 
            boss->HasInArc(M_PI / 3, bot);
 }
 
@@ -150,7 +150,7 @@ bool GhazanTailSweepAction::Execute(Event event)
 
     // RESEARCHED: Tail Sweep behind - boss_ghazan.cpp:77
     // Tail Sweep hits BEHIND the boss - move if we're behind!
-    if (boss->FindCurrentSpellBySpellId(SPELL_TAIL_SWEEP))
+    if (boss->FindCurrentSpellBySpellId(UB_SPELL_TAIL_SWEEP))
     {
         // Check if we're behind boss (180 degree arc behind)
         float angle_diff = fabs(bot->GetRelativeAngle(boss));
@@ -181,7 +181,7 @@ bool GhazanTailSweepAction::isUseful()
 
     // Only useful if we're behind the boss where tail sweep hits
     float angle_diff = fabs(bot->GetRelativeAngle(boss));
-    return boss->FindCurrentSpellBySpellId(SPELL_TAIL_SWEEP) && 
+    return boss->FindCurrentSpellBySpellId(UB_SPELL_TAIL_SWEEP) && 
            (angle_diff > M_PI * 2.0f / 3.0f); // Behind = more than 120 degrees from front
 }
 
@@ -224,7 +224,7 @@ bool MuselekFreezingTrapAction::Execute(Event event)
 
     // RESEARCHED: Freezing trap throw - boss_swamplord_muselek.cpp:138
     // Trap is thrown at player's current location - MOVE IMMEDIATELY!
-    if (boss->FindCurrentSpellBySpellId(SPELL_THROW_FREEZING_TRAP))
+    if (boss->FindCurrentSpellBySpellId(UB_SPELL_THROW_FREEZING_TRAP))
     {
         // Check if we're the target
         if (boss->GetTarget() == bot->GetGUID() || boss->GetVictim() == bot)
@@ -252,7 +252,7 @@ bool MuselekFreezingTrapAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_THROW_FREEZING_TRAP);
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_THROW_FREEZING_TRAP);
 }
 
 // Dispel Hunter's Mark
@@ -263,7 +263,7 @@ bool MuselekHuntersMarkAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Hunter's Mark debuff - boss_swamplord_muselek.cpp:155
-    if (bot->HasAura(SPELL_HUNTERS_MARK))
+    if (bot->HasAura(UB_SPELL_HUNTERS_MARK))
     {
         // Try to dispel the mark - SAFE PATTERN
         Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
@@ -290,7 +290,7 @@ bool MuselekHuntersMarkAction::isUseful()
     if (!bot)
         return false;
 
-    return bot->HasAura(SPELL_HUNTERS_MARK);
+    return bot->HasAura(UB_SPELL_HUNTERS_MARK);
 }
 
 // The Black Stalker - Position for levitate mechanic
@@ -301,7 +301,7 @@ bool BlackStalkerLevitateAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Levitate pulls players - boss_the_black_stalker.cpp:25-35
-    if (bot->HasAura(SPELL_LEVITATE) || bot->HasAura(SPELL_SUSPENSION))
+    if (bot->HasAura(UB_SPELL_LEVITATE) || bot->HasAura(SPELL_SUSPENSION))
     {
         // Try to position near ground to minimize fall damage
         // Move towards a wall or lower ground if possible
@@ -325,7 +325,7 @@ bool BlackStalkerLevitateAction::isUseful()
     if (!bot)
         return false;
 
-    return bot->HasAura(SPELL_LEVITATE) || bot->HasAura(SPELL_SUSPENSION);
+    return bot->HasAura(UB_SPELL_LEVITATE) || bot->HasAura(SPELL_SUSPENSION);
 }
 
 // Attack Spore Striders
@@ -366,7 +366,7 @@ bool BlackStalkerChainLightningAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Chain Lightning cast - boss_the_black_stalker.cpp:72
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_CHAIN_LIGHTNING))
+    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING))
     {
         // RESEARCHED: Pattern from HellfireRampartsActions.cpp:138-145 - SAFE PATTERN
         Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
@@ -397,5 +397,5 @@ bool BlackStalkerChainLightningAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_CHAIN_LIGHTNING);
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING);
 }

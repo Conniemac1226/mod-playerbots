@@ -49,7 +49,7 @@ bool HellmawFearReactAction::Execute(Event event)
     }
     
     // Check if boss is casting Fear (33547) and spread preemptively
-    if (boss->FindCurrentSpellBySpellId(SPELL_FEAR))
+    if (boss->FindCurrentSpellBySpellId(SL_SPELL_FEAR))
     {
         // Spread out to minimize fear chains
         Group* group = bot->GetGroup();
@@ -379,7 +379,7 @@ bool MurmurMagneticPullAction::Execute(Event event)
     
     // Magnetic Pull brings a player to Murmur, followed by Murmur's Touch
     // The touched player needs to move away from others to avoid spread
-    if (bot->HasAura(SPELL_MURMURS_TOUCH) || bot->HasAura(SPELL_MAGNETIC_PULL))
+    if (bot->HasAura(SPELL_MURMURS_TOUCH) || bot->HasAura(SL_SPELL_MAGNETIC_PULL))
     {
         // Move away from other players to avoid Murmur's Touch explosion
         Group* group = bot->GetGroup();

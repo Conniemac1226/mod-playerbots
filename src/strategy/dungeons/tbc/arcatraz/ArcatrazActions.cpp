@@ -151,7 +151,7 @@ bool AvoidShadowNovaAction::Execute(Event event)
     
     // RESEARCHED: Shadow Nova - boss_zereketh_the_unbound.cpp:59-65
     // AoE centered on boss - evacuate immediately when cast starts!
-    if (boss->FindCurrentSpellBySpellId(SPELL_SHADOW_NOVA))
+    if (boss->FindCurrentSpellBySpellId(ARC_SPELL_SHADOW_NOVA))
     {
         float safeDistance = 25.0f; // Increased safety margin
         float currentDist = bot->GetExactDist2d(boss);
@@ -223,14 +223,14 @@ bool DalliahWhirlwindAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
     
-    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:101 - DoCastAOE(SPELL_WHIRLWIND) is instant AoE
+    // RESEARCHED: boss_dalliah_the_doomsayer.cpp:101 - DoCastAOE(ARC_SPELL_WHIRLWIND) is instant AoE
     // CLAUDE.md COMPLIANT: Per-bot state management to prevent multi-bot coordination issues
     
     uint32 currentTime = getMSTime();
     ObjectGuid botGuid = bot->GetGUID();
     
     // Check if Dalliah has whirlwind active (FIXED: instant AoE detection)
-    bool isWhirlwinding = boss->HasAura(SPELL_WHIRLWIND);
+    bool isWhirlwinding = boss->HasAura(ARC_SPELL_WHIRLWIND);
     
     // Check if we're already in a safe position during this whirlwind
     if (g_dalliah_inSafePosition[botGuid] && isWhirlwinding)
@@ -293,7 +293,7 @@ bool DalliahHealInterruptAction::Execute(Event event)
     
     // RESEARCHED: Heal cast after Whirlwind - boss_dalliah_the_doomsayer.cpp:104-108
     // Boss heals herself 7 seconds after whirlwind - MUST interrupt!
-    if (boss->FindCurrentSpellBySpellId(SPELL_HEAL))
+    if (boss->FindCurrentSpellBySpellId(ARC_SPELL_HEAL))
     {
         // Try melee interrupt if in range
         if (bot->IsWithinMeleeRange(boss))
@@ -329,7 +329,7 @@ bool SoccothratesKnockAwayAction::Execute(Event event)
         return false;
     }
     
-    if (boss->FindCurrentSpellBySpellId(SPELL_KNOCK_AWAY))
+    if (boss->FindCurrentSpellBySpellId(ARC_SPELL_KNOCK_AWAY))
     {
         float safeDistance = 15.0f;
         float currentDist = bot->GetExactDist2d(boss);
@@ -351,7 +351,7 @@ bool SoccothratesChargeAction::Execute(Event event)
         return false;
     }
     
-    if (boss->HasAura(SPELL_FELFIRE) || boss->FindCurrentSpellBySpellId(SPELL_CHARGE))
+    if (boss->HasAura(SPELL_FELFIRE) || boss->FindCurrentSpellBySpellId(ARC_SPELL_CHARGE))
     {
         const GuidVector members = AI_VALUE(GuidVector, "group members");
         for (auto& member : members)
@@ -477,7 +477,7 @@ bool SkyrissFearAction::Execute(Event event)
     // RESEARCHED: Fear - boss_harbinger_skyriss.cpp:86-92
     // Boss casts Fear on random non-tank target every 25 seconds
     // If feared, try to break it or spread to prevent chain fears
-    if (bot->HasAura(SPELL_FEAR))
+    if (bot->HasAura(ARC_SPELL_FEAR))
     {
         // Try to use fear break abilities (PvP trinket, etc)
         Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "escape");
@@ -495,7 +495,7 @@ bool SkyrissFearAction::Execute(Event event)
         }
     }
     // Detect fear cast and spread to minimize chain fears
-    else if (boss->FindCurrentSpellBySpellId(SPELL_FEAR))
+    else if (boss->FindCurrentSpellBySpellId(ARC_SPELL_FEAR))
     {
         // Spread from other players to avoid chain fear
         const GuidVector members = AI_VALUE(GuidVector, "group members");
@@ -536,7 +536,7 @@ bool SkyrissDominationAction::Execute(Event event)
     // RESEARCHED: Domination - boss_harbinger_skyriss.cpp:94-99
     // Boss casts Domination (mind control) on random target every 30 seconds
     // Need to handle controlled ally as hostile temporarily
-    if (bot->HasAura(SPELL_DOMINATION))
+    if (bot->HasAura(ARC_SPELL_DOMINATION))
     {
         // Bot is mind controlled - can't do anything
         // Just wait for it to expire or be dispelled
@@ -555,7 +555,7 @@ bool SkyrissDominationAction::Execute(Event event)
             continue;
         
         // Check if this ally is mind controlled
-        if (unit->HasAura(SPELL_DOMINATION))
+        if (unit->HasAura(ARC_SPELL_DOMINATION))
         {
             float distance = bot->GetExactDist2d(unit);
             if (distance < 15.0f) // Stay away from dominated allies
