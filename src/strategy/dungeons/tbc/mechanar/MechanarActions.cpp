@@ -246,11 +246,7 @@ bool CapacitusPositionAction::isUseful()
 
 // ========== NETHERMANCER SEPETHREA ACTIONS ==========
 
-// Per-bot state maps for persistent kiting
-static std::map<ObjectGuid, uint32> g_flame_lastMoveTime;
-static std::map<ObjectGuid, bool> g_flame_inSafePosition;
-
-// Room boundaries for safe movement (expanded for safety)
+// Room boundaries for safe movement
 const Position MECHANAR_SEPETHREA_CENTER = {290.52f, 11.492f, 25.39f, 0.0f};
 const float MECHANAR_ROOM_MIN_X = 272.0f;
 const float MECHANAR_ROOM_MAX_X = 308.0f;
@@ -299,6 +295,13 @@ Position ConstrainToRoom(const Position& pos)
     safePos.m_positionZ = std::max(MECHANAR_ROOM_MIN_Z, 
                                   std::min(MECHANAR_ROOM_MAX_Z, pos.m_positionZ));
     return safePos;
+}
+
+// Helper function to reduce code duplication
+Unit* GetSepethreaBoss(PlayerbotAI* botAI)
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    return (boss && boss->IsAlive() && boss->IsInCombat()) ? boss : nullptr;
 }
 
 bool SepethreaRagingFlamesAction::Execute(Event event)
@@ -540,10 +543,10 @@ bool SepethreaTargetElementalAction::isUseful()
 bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !GetSepethreaBoss(botAI))
         return false;
 
-    // Find any Raging Flames in the area
+    // Find nearest Raging Flames in the area
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* nearestFlame = nullptr;
     float closestDistance = 100.0f;
