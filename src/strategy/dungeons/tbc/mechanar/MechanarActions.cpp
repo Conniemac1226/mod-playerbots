@@ -329,27 +329,12 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (bot->IsNonMeleeSpellCast(false))
         botAI->InterruptSpell();
     
-    // SIMPLE KITING - just stay 12-18 yards away and move when too close
-    if (flameDistance < 12.0f)
+    // SIMPLE KITING - just stay away from flame
+    if (flameDistance < 15.0f)
     {
         botAI->Reset();
-        // Simple flee away from flame
-        return FleePosition(targetingFlame->GetPosition(), 15.0f, 300U);
-    }
-    else if (flameDistance > 20.0f)
-    {
-        // Don't let flame get too far - move closer
-        Position flamePos = targetingFlame->GetPosition();
-        float angle = targetingFlame->GetAngle(bot);
-        float x = flamePos.m_positionX + cos(angle) * 15.0f;
-        float y = flamePos.m_positionY + sin(angle) * 15.0f;
-        
-        Position targetPos(x, y, bot->GetPositionZ(), 0.0f);
-        if (IsPositionSafe(targetPos))
-        {
-            return MoveTo(bot->GetMapId(), x, y, bot->GetPositionZ(),
-                         false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
-        }
+        // Simple flee away from flame - let FleePosition handle wall avoidance
+        return FleePosition(targetingFlame->GetPosition(), 18.0f, 500U);
     }
 
     return false;
@@ -489,12 +474,14 @@ bool SepethreaTargetElementalAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
+    // FORCE target back to boss (don't waste time on flames - focus burn boss)
     if (bot->GetSelectedUnit() != boss)
     {
         bot->SetSelection(boss->GetGUID());
+        return Attack(boss);
     }
 
-    return true;
+    return false;
 }
 
 bool SepethreaTargetElementalAction::isUseful()
