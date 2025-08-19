@@ -154,11 +154,11 @@ public:
     bool isUseful() override;
 };
 
-// FIXED: Raging Flames are IMMUNE to damage - DPS should target boss while kiting
+// FIXED: Force DPS back to boss when they target flames - focus burn boss while avoiding
 class SepethreaTargetElementalAction : public ai::ChangeTargetAction
 {
 public:
-    SepethreaTargetElementalAction(PlayerbotAI* ai) : ChangeTargetAction(ai, "target raging flames") {}
+    SepethreaTargetElementalAction(PlayerbotAI* ai) : ChangeTargetAction(ai, "focus boss not flames") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
