@@ -38,12 +38,12 @@ void MechanarStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     // Universal fire trail avoidance
     triggers.push_back(new TriggerNode(
         "raging flames fire trail",
-        NextAction::array(0, new NextAction("avoid raging flames fire trail", ACTION_EMERGENCY + 5), nullptr)));
+        NextAction::array(0, new NextAction("avoid raging flames fire trail", ACTION_EMERGENCY + 4), nullptr)));
     
     // Raging Flames fixate
     triggers.push_back(new TriggerNode(
         "raging flames active",
-        NextAction::array(0, new NextAction("flee raging flames", ACTION_EMERGENCY + 2), nullptr)));
+        NextAction::array(0, new NextAction("flee raging flames", ACTION_EMERGENCY + 1), nullptr)));
         
     // Inferno AoE avoidance
     triggers.push_back(new TriggerNode(
