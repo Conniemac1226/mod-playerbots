@@ -478,7 +478,7 @@ bool SepethreaTargetElementalAction::Execute(Event event)
     if (bot->GetSelectedUnit() != boss)
     {
         bot->SetSelection(boss->GetGUID());
-        return Attack(boss);
+        return true;
     }
 
     return false;
