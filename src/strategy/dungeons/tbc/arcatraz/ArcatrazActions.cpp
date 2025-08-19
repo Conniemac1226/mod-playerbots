@@ -44,11 +44,11 @@ bool AttackMellicharAddsAction::Execute(Event event)
         {
             if (unit->GetEntry() == addId)
             {
-                // WOTLK PATTERN: Don't keep swapping between same-type adds
-                // If we're already attacking one add, don't retarget another of same type
-                if (currentTarget && currentTarget->GetEntry() == addId)
+                // FORCE TARGET SWITCH: Always attack priority adds over Warden
+                // Only avoid switching if already targeting the EXACT same unit
+                if (currentTarget && currentTarget->GetGUID() == unit->GetGUID())
                 {
-                    return false; // Already targeting this add type
+                    return false; // Already targeting this exact unit
                 }
                 
                 // PRIORITY SWITCH: Target the add immediately
@@ -455,11 +455,15 @@ bool SkyrissIllusionAction::Execute(Event event)
         
         if (unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive())
         {
-            if (currentTarget != unit)
+            // FORCE TARGET SWITCH: Illusions are priority over main boss
+            // Only avoid switching if already targeting the EXACT same illusion
+            if (currentTarget && currentTarget->GetGUID() == unit->GetGUID())
             {
-                return Attack(unit);
+                return false; // Already targeting this exact illusion
             }
-            return false;
+            
+            // PRIORITY SWITCH: Target the illusion immediately
+            return Attack(unit);
         }
     }
     
