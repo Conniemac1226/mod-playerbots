@@ -187,6 +187,33 @@ bool RagingFlamesFireTrailTrigger::IsActive()
     return bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA);
 }
 
+// Universal trigger for ALL bots to avoid Raging Flames area aura
+bool RagingFlamesTooCloseTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+    
+    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Check if any Raging Flames are too close (within area aura range)
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    
+    for (auto& npc : npcs)
+    {
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
+            continue;
+            
+        if (bot->GetDistance(flame) < 10.0f) // Too close to area aura
+            return true;
+    }
+    
+    return false;
+}
+
 // ========== PATHALEON THE CALCULATOR TRIGGERS ==========
 
 bool PathaleonEngagedTrigger::IsActive()

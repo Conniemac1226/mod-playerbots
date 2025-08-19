@@ -163,6 +163,15 @@ public:
     bool isUseful() override;
 };
 
+// UNIVERSAL: All bots avoid Raging Flames area aura - based on ICC gas cloud pattern
+class SepethreaAvoidRagingFlamesAction : public MovementAction
+{
+public:
+    SepethreaAvoidRagingFlamesAction(PlayerbotAI* ai) : MovementAction(ai, "avoid raging flames creature") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 // ========== PATHALEON THE CALCULATOR ACTIONS ==========
 
 // RESEARCHED: boss_pathaleon_the_calculator.cpp:117-122 - Mind Control (Domination)
