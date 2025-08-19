@@ -259,12 +259,46 @@ const float MECHANAR_ROOM_MAX_Y = 31.0f;
 const float MECHANAR_ROOM_MIN_Z = 23.0f;
 const float MECHANAR_ROOM_MAX_Z = 28.0f;
 
-// Boundary validation to prevent out-of-bounds movement
+// Boundary validation to prevent out-of-bounds movement with buffer
 bool IsPositionSafe(const Position& pos)
 {
-    return pos.m_positionX >= MECHANAR_ROOM_MIN_X && pos.m_positionX <= MECHANAR_ROOM_MAX_X &&
-           pos.m_positionY >= MECHANAR_ROOM_MIN_Y && pos.m_positionY <= MECHANAR_ROOM_MAX_Y &&
+    // Add 2 yard buffer from walls to prevent clipping
+    const float buffer = 2.0f;
+    return pos.m_positionX >= MECHANAR_ROOM_MIN_X + buffer && pos.m_positionX <= MECHANAR_ROOM_MAX_X - buffer &&
+           pos.m_positionY >= MECHANAR_ROOM_MIN_Y + buffer && pos.m_positionY <= MECHANAR_ROOM_MAX_Y - buffer &&
            pos.m_positionZ >= MECHANAR_ROOM_MIN_Z && pos.m_positionZ <= MECHANAR_ROOM_MAX_Z;
+}
+
+// Validate movement path doesn't go through walls
+bool IsPathClear(const Position& from, const Position& to)
+{
+    const int steps = 10; // Check 10 points along the path
+    for (int i = 1; i <= steps; ++i)
+    {
+        float t = float(i) / float(steps);
+        Position checkPos;
+        checkPos.m_positionX = from.m_positionX + t * (to.m_positionX - from.m_positionX);
+        checkPos.m_positionY = from.m_positionY + t * (to.m_positionY - from.m_positionY);
+        checkPos.m_positionZ = from.m_positionZ + t * (to.m_positionZ - from.m_positionZ);
+        
+        if (!IsPositionSafe(checkPos))
+            return false;
+    }
+    return true;
+}
+
+// Force position to stay within safe room bounds
+Position ConstrainToRoom(const Position& pos)
+{
+    const float buffer = 3.0f;
+    Position safePos = pos;
+    safePos.m_positionX = std::max(MECHANAR_ROOM_MIN_X + buffer, 
+                                  std::min(MECHANAR_ROOM_MAX_X - buffer, pos.m_positionX));
+    safePos.m_positionY = std::max(MECHANAR_ROOM_MIN_Y + buffer, 
+                                  std::min(MECHANAR_ROOM_MAX_Y - buffer, pos.m_positionY));
+    safePos.m_positionZ = std::max(MECHANAR_ROOM_MIN_Z, 
+                                  std::min(MECHANAR_ROOM_MAX_Z, pos.m_positionZ));
+    return safePos;
 }
 
 bool SepethreaRagingFlamesAction::Execute(Event event)
@@ -282,18 +316,11 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     
     for (auto& npc : npcs)
     {
-        if (!botAI)
-            continue;
-            
         Unit* flame = botAI->GetUnit(npc);
-        if (!flame || !flame->IsAlive() || !flame->IsInWorld())
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
             
-        if (flame->GetEntry() != NPC_RAGING_FLAMES)
-            continue;
-            
-        Unit* victim = flame->GetVictim();
-        if (victim && victim == bot)
+        if (flame->GetVictim() == bot)
         {
             targetingFlame = flame;
             break;
@@ -301,14 +328,6 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     }
     
     if (!targetingFlame)
-    {
-        // Reset state when no flame is targeting
-        g_flame_inSafePosition[botGuid] = false;
-        return false;
-    }
-
-    // Validate flame is still valid before using
-    if (!targetingFlame->IsAlive() || !targetingFlame->IsInWorld())
     {
         g_flame_inSafePosition[botGuid] = false;
         return false;
@@ -318,131 +337,74 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     
     // Stop spellcasting when kiting flames
     if (bot->IsNonMeleeSpellCast(false))
-    {
-        if (botAI)
-        {
-            botAI->InterruptSpell();
-        }
-    }
+        botAI->InterruptSpell();
     
     // Emergency escape from fire trail
     if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA))
     {
-        if (botAI)
-        {
-            botAI->Reset();
-        }
-        return FleePosition(bot->GetPosition(), 8.0f, 200U);
+        botAI->Reset();
+        return FleePosition(bot->GetPosition(), 12.0f, 100U);
     }
     
-    // Kite Raging Flames at safe distance
-    if (flameDistance < 18.0f)
+    // SIMPLE RECTANGULAR KITING - adapted from ICC ooze pattern
+    if (flameDistance < 20.0f)
     {
-        if (botAI)
-        {
-            botAI->Reset();
-        }
+        botAI->Reset();
         
-        // Wall collision detection
+        const Position centerPos = MECHANAR_SEPETHREA_CENTER;
+        const float roomWidth = MECHANAR_ROOM_MAX_X - MECHANAR_ROOM_MIN_X;
+        const float roomHeight = MECHANAR_ROOM_MAX_Y - MECHANAR_ROOM_MIN_Y;
+        
+        // Safe zones within room boundaries (4 yard buffer from walls)
+        const float safeMinX = MECHANAR_ROOM_MIN_X + 4.0f;
+        const float safeMaxX = MECHANAR_ROOM_MAX_X - 4.0f;
+        const float safeMinY = MECHANAR_ROOM_MIN_Y + 4.0f;
+        const float safeMaxY = MECHANAR_ROOM_MAX_Y - 4.0f;
+        
         Position botPos = bot->GetPosition();
-        bool nearWall = !IsPositionSafe(Position(botPos.m_positionX + 3.0f, botPos.m_positionY, botPos.m_positionZ, 0.0f)) ||
-                       !IsPositionSafe(Position(botPos.m_positionX - 3.0f, botPos.m_positionY, botPos.m_positionZ, 0.0f)) ||
-                       !IsPositionSafe(Position(botPos.m_positionX, botPos.m_positionY + 3.0f, botPos.m_positionZ, 0.0f)) ||
-                       !IsPositionSafe(Position(botPos.m_positionX, botPos.m_positionY - 3.0f, botPos.m_positionZ, 0.0f));
         
-        // Check proximity to room boundaries
-        bool veryNearWall = (botPos.m_positionX <= MECHANAR_ROOM_MIN_X + 2.0f) ||
-                           (botPos.m_positionX >= MECHANAR_ROOM_MAX_X - 2.0f) ||
-                           (botPos.m_positionY <= MECHANAR_ROOM_MIN_Y + 2.0f) ||
-                           (botPos.m_positionY >= MECHANAR_ROOM_MAX_Y - 2.0f);
+        // Calculate current angle from center to bot
+        float currentAngle = atan2(botPos.m_positionY - centerPos.GetPositionY(), 
+                                  botPos.m_positionX - centerPos.GetPositionX());
         
-        // Stuck detection
-        bool wasStuck = false;
-        if (g_flame_lastMoveTime.count(botGuid) && 
-            (currentTime - g_flame_lastMoveTime[botGuid]) > 1500 &&
-            !g_flame_inSafePosition[botGuid])
+        // Move counterclockwise around room perimeter at safe distance
+        float moveAngle = currentAngle + 0.8f; // Larger step for faster movement
+        
+        // Calculate ideal position on rectangular orbit
+        float targetX, targetY;
+        
+        // For narrow room, use elliptical movement pattern
+        float radiusX = (roomWidth * 0.35f); // 35% of width
+        float radiusY = (roomHeight * 0.4f);  // 40% of height
+        
+        targetX = centerPos.GetPositionX() + cos(moveAngle) * radiusX;
+        targetY = centerPos.GetPositionY() + sin(moveAngle) * radiusY;
+        
+        // Clamp to safe boundaries
+        targetX = std::max(safeMinX, std::min(safeMaxX, targetX));
+        targetY = std::max(safeMinY, std::min(safeMaxY, targetY));
+        
+        Position targetPos(targetX, targetY, bot->GetPositionZ(), 0.0f);
+        
+        // WALL COLLISION VALIDATION - ensure path is clear
+        if (IsPositionSafe(targetPos) && IsPathClear(botPos, targetPos))
         {
-            wasStuck = true;
-        }
-        
-        g_flame_lastMoveTime[botGuid] = currentTime;
-        g_flame_inSafePosition[botGuid] = false;
-        
-        // Alternative movement for wall collision or stuck state
-        if (nearWall || veryNearWall || wasStuck)
-        {
-            // Calculate escape direction away from flame
-            float flameAngle = targetingFlame->GetAngle(bot);
-            const Position centerPos = MECHANAR_SEPETHREA_CENTER;
+            // Ensure minimum distance from flame
+            float distanceToFlame = sqrt(pow(targetX - targetingFlame->GetPositionX(), 2) + 
+                                       pow(targetY - targetingFlame->GetPositionY(), 2));
             
-            // Try positions in arc away from flame
-            for (int attempt = 0; attempt < 8; ++attempt)
+            if (distanceToFlame >= 15.0f)
             {
-                // Calculate escape angle with variation
-                float angleVariation = (attempt - 4) * (M_PI / 12.0f);
-                float escapeAngle = flameAngle + angleVariation;
-                
-                // Project escape position from room center
-                float escapeDistance = 10.0f + (attempt * 1.5f);
-                
-                float x = centerPos.GetPositionX() + cos(escapeAngle) * escapeDistance;
-                float y = centerPos.GetPositionY() + sin(escapeAngle) * escapeDistance;
-                float z = bot->GetPositionZ();
-                
-                Position testPos(x, y, z, 0.0f);
-                
-                // Validate escape position
-                if (IsPositionSafe(testPos) && 
-                    testPos.GetExactDist2d(targetingFlame->GetPosition()) > 15.0f &&
-                    testPos.GetExactDist2d(botPos) > 5.0f &&
-                    !bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA))
-                {
-                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                                 MovementPriority::MOVEMENT_FORCED);
-                }
-            }
-            
-            // Fallback: move along east-west axis
-            if (veryNearWall || wasStuck)
-            {
-                // Move east or west based on flame position
-                float flameX = targetingFlame->GetPositionX();
-                float botX = botPos.m_positionX;
-                
-                // Calculate east-west movement
-                float targetX, targetY;
-                if (flameX > botX)
-                {
-                    // Flame is east, move west
-                    targetX = botX - 8.0f;
-                }
-                else
-                {
-                    // Flame is west, move east  
-                    targetX = botX + 8.0f;
-                }
-                
-                // Adjust Y position toward center if needed
-                targetY = botPos.m_positionY;
-                if (botPos.m_positionY < centerPos.GetPositionY() - 3.0f)
-                    targetY += 2.0f;
-                else if (botPos.m_positionY > centerPos.GetPositionY() + 3.0f)
-                    targetY -= 2.0f;
-                
-                Position movePos(targetX, targetY, bot->GetPositionZ(), 0.0f);
-                if (IsPositionSafe(movePos) && 
-                    movePos.GetExactDist2d(targetingFlame->GetPosition()) > 12.0f)
-                {
-                    return MoveTo(bot->GetMapId(), targetX, targetY, bot->GetPositionZ(),
-                                 false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-                }
+                g_flame_lastMoveTime[botGuid] = currentTime;
+                return MoveTo(bot->GetMapId(), targetX, targetY, bot->GetPositionZ(),
+                             false, false, false, true, MovementPriority::MOVEMENT_FORCED);
             }
         }
         
-        // Default flame kiting
-        return FleePosition(targetingFlame->GetPosition(), 15.0f, 500U);
+        // Fallback: simple flee if orbit position too close to flame
+        return FleePosition(targetingFlame->GetPosition(), 18.0f, 200U);
     }
-    else if (flameDistance > 22.0f)
+    else if (flameDistance > 25.0f)
     {
         // Safe distance reached
         g_flame_inSafePosition[botGuid] = true;
@@ -697,22 +659,46 @@ bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Stop spellcasting and movement
+    // IMMEDIATE emergency response to standing in fire trail
     if (bot->IsNonMeleeSpellCast(false))
+        botAI->InterruptSpell();
+    
+    botAI->Reset();
+    
+    // Find nearest safe spot away from any fire trail areas
+    const Position centerPos = MECHANAR_SEPETHREA_CENTER;
+    Position botPos = bot->GetPosition();
+    
+    // Calculate direction to room center
+    float dirX = centerPos.GetPositionX() - botPos.m_positionX;
+    float dirY = centerPos.GetPositionY() - botPos.m_positionY;
+    float length = sqrt(dirX * dirX + dirY * dirY);
+    
+    if (length > 0.1f)
     {
-        if (botAI)
+        // Normalize and move toward center
+        dirX /= length;
+        dirY /= length;
+        
+        float targetX = botPos.m_positionX + dirX * 8.0f;
+        float targetY = botPos.m_positionY + dirY * 8.0f;
+        
+        // Ensure within room bounds
+        targetX = std::max(MECHANAR_ROOM_MIN_X + 3.0f, std::min(MECHANAR_ROOM_MAX_X - 3.0f, targetX));
+        targetY = std::max(MECHANAR_ROOM_MIN_Y + 3.0f, std::min(MECHANAR_ROOM_MAX_Y - 3.0f, targetY));
+        
+        Position targetPos(targetX, targetY, bot->GetPositionZ(), 0.0f);
+        
+        // WALL COLLISION CHECK - validate path is clear
+        if (IsPositionSafe(targetPos) && IsPathClear(botPos, targetPos))
         {
-            botAI->InterruptSpell();
+            return MoveTo(bot->GetMapId(), targetX, targetY, bot->GetPositionZ(),
+                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         }
     }
-
-    if (botAI)
-    {
-        botAI->Reset();
-    }
-
-    // Flee from fire trail
-    return FleePosition(bot->GetPosition(), 12.0f, 200U);
+    
+    // Fallback: quick flee from current position
+    return FleePosition(bot->GetPosition(), 10.0f, 100U);
 }
 
 bool SepethreaFireTrailAvoidanceAction::isUseful()
