@@ -15,6 +15,7 @@ public:
         
         // Nethermancer Sepethrea
         creators["flee raging flames"] = &MechanarActionContext::flee_raging_flames;
+        creators["avoid raging flames creature"] = &MechanarActionContext::avoid_raging_flames_creature;
         creators["avoid raging flames inferno"] = &MechanarActionContext::avoid_raging_flames_inferno;
         creators["avoid raging flames fire trail"] = &MechanarActionContext::avoid_raging_flames_fire_trail;
         creators["target raging flames"] = &MechanarActionContext::target_raging_flames;
@@ -39,6 +40,7 @@ private:
     
     // Nethermancer Sepethrea
     static Action* flee_raging_flames(PlayerbotAI* botAI) { return new SepethreaRagingFlamesAction(botAI); }
+    static Action* avoid_raging_flames_creature(PlayerbotAI* botAI) { return new SepethreaAvoidRagingFlamesAction(botAI); }
     static Action* avoid_raging_flames_inferno(PlayerbotAI* botAI) { return new SepethreaInfernoAvoidanceAction(botAI); }
     static Action* avoid_raging_flames_fire_trail(PlayerbotAI* botAI) { return new SepethreaFireTrailAvoidanceAction(botAI); }
     static Action* target_raging_flames(PlayerbotAI* botAI) { return new SepethreaTargetElementalAction(botAI); }

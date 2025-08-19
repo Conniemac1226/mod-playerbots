@@ -81,6 +81,13 @@ public:
     bool IsActive() override;
 };
 
+class RagingFlamesTooCloseTrigger : public Trigger
+{
+public:
+    RagingFlamesTooCloseTrigger(PlayerbotAI* botAI) : Trigger(botAI, "raging flames too close") {}
+    bool IsActive() override;
+};
+
 // ========== PATHALEON THE CALCULATOR TRIGGERS ==========
 
 class PathaleonEngagedTrigger : public Trigger

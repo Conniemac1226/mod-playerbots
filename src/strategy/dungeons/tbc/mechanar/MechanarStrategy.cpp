@@ -40,7 +40,12 @@ void MechanarStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "raging flames fire trail",
         NextAction::array(0, new NextAction("avoid raging flames fire trail", ACTION_EMERGENCY + 4), nullptr)));
     
-    // Raging Flames fixate
+    // UNIVERSAL: All bots avoid getting too close to Raging Flames (area aura)
+    triggers.push_back(new TriggerNode(
+        "raging flames too close",
+        NextAction::array(0, new NextAction("avoid raging flames creature", ACTION_EMERGENCY + 3), nullptr)));
+    
+    // Raging Flames fixate (only for targeted bot)
     triggers.push_back(new TriggerNode(
         "raging flames active",
         NextAction::array(0, new NextAction("flee raging flames", ACTION_EMERGENCY + 1), nullptr)));
