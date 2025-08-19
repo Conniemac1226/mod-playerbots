@@ -297,13 +297,6 @@ Position ConstrainToRoom(const Position& pos)
     return safePos;
 }
 
-// Helper function to reduce code duplication
-Unit* GetSepethreaBoss(PlayerbotAI* botAI)
-{
-    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
-    return (boss && boss->IsAlive() && boss->IsInCombat()) ? boss : nullptr;
-}
-
 bool SepethreaRagingFlamesAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
@@ -543,7 +536,7 @@ bool SepethreaTargetElementalAction::isUseful()
 bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !GetSepethreaBoss(botAI))
+    if (!bot)
         return false;
 
     // Find nearest Raging Flames in the area
