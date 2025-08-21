@@ -14,6 +14,7 @@
 #define NPC_PHOENIX             24674
 #define NPC_PHOENIX_EGG         24675
 #define NPC_ARCANE_SPHERE       24708
+#define NPC_FLAMESTRIKE_TRIGGER 24666
 
 // Spell IDs from AzerothCore
 #define SPELL_DRAIN_LIFE        44294
@@ -23,6 +24,8 @@
 #define SPELL_PYROBLAST         36819
 #define SPELL_FLAMESTRIKE       44192
 #define SPELL_GRAVITY_LAPSE     44224
+#define SPELL_GRAVITY_LAPSE_FLY 44227
+#define SPELL_GRAVITY_LAPSE_DOT 44226
 #define SPELL_SHOCK_BARRIER     46165
 
 // Kael'thas
@@ -44,6 +47,13 @@ class KaelthasArcaneSphereNearbyTrigger : public Trigger
 {
 public:
     KaelthasArcaneSphereNearbyTrigger(PlayerbotAI* ai) : Trigger(ai, "kaelthas arcane sphere nearby") {}
+    bool IsActive() override;
+};
+
+class KaelthasMTFlamestrikeTrigger : public Trigger
+{
+public:
+    KaelthasMTFlamestrikeTrigger(PlayerbotAI* ai) : Trigger(ai, "kaelthas flamestrike") {}
     bool IsActive() override;
 };
 
