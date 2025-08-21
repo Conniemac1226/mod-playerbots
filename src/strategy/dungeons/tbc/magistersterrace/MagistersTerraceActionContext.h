@@ -13,6 +13,7 @@ public:
         creators["interrupt kaelthas pyroblast"] = &MagistersTerraceActionContext::interrupt_kaelthas_pyroblast;
         creators["avoid gravity lapse"] = &MagistersTerraceActionContext::avoid_gravity_lapse;
         creators["flee arcane sphere"] = &MagistersTerraceActionContext::flee_arcane_sphere;
+        creators["avoid flamestrike"] = &MagistersTerraceActionContext::avoid_flamestrike;
 
         // Vexallus
         creators["attack pure energy"] = &MagistersTerraceActionContext::attack_pure_energy;
@@ -23,6 +24,8 @@ public:
 
         // Delrissa
         creators["attack delrissa add"] = &MagistersTerraceActionContext::attack_delrissa_add;
+        creators["interrupt delrissa helper"] = &MagistersTerraceActionContext::interrupt_delrissa_helper;
+        creators["delrissa dispel handling"] = &MagistersTerraceActionContext::delrissa_dispel_handling;
     }
 
 private:
@@ -30,6 +33,7 @@ private:
     static Action* interrupt_kaelthas_pyroblast(PlayerbotAI* ai) { return new InterruptKaelthasPyroblastAction(ai); }
     static Action* avoid_gravity_lapse(PlayerbotAI* ai) { return new AvoidGravityLapseAction(ai); }
     static Action* flee_arcane_sphere(PlayerbotAI* ai) { return new FleeArcaneSphereAction(ai); }
+    static Action* avoid_flamestrike(PlayerbotAI* ai) { return new AvoidFlamestrikeAction(ai); }
 
     // Vexallus
     static Action* attack_pure_energy(PlayerbotAI* ai) { return new AttackPureEnergyAction(ai); }
@@ -40,4 +44,6 @@ private:
 
     // Delrissa
     static Action* attack_delrissa_add(PlayerbotAI* ai) { return new AttackDelrissaAddAction(ai); }
+    static Action* interrupt_delrissa_helper(PlayerbotAI* ai) { return new InterruptDelrissaHelperAction(ai); }
+    static Action* delrissa_dispel_handling(PlayerbotAI* ai) { return new DelrissaDispelHandlingAction(ai); }
 };

@@ -31,6 +31,14 @@ public:
     bool isUseful() override;
 };
 
+class AvoidFlamestrikeAction : public MovementAction
+{
+public:
+    AvoidFlamestrikeAction(PlayerbotAI* ai) : MovementAction(ai, "avoid flamestrike") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 // Vexallus Actions
 class AttackPureEnergyAction : public AttackAction
 {
@@ -62,6 +70,22 @@ class AttackDelrissaAddAction : public AttackAction
 {
 public:
     AttackDelrissaAddAction(PlayerbotAI* ai) : AttackAction(ai, "attack delrissa add") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class InterruptDelrissaHelperAction : public Action
+{
+public:
+    InterruptDelrissaHelperAction(PlayerbotAI* ai) : Action(ai, "interrupt delrissa helper") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class DelrissaDispelHandlingAction : public Action
+{
+public:
+    DelrissaDispelHandlingAction(PlayerbotAI* ai) : Action(ai, "delrissa dispel handling") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

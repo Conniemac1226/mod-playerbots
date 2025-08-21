@@ -13,6 +13,7 @@ public:
         creators["kaelthas casting pyroblast"] = &MagistersTerraceTriggerContext::kaelthas_casting_pyroblast;
         creators["kaelthas casting gravity lapse"] = &MagistersTerraceTriggerContext::kaelthas_casting_gravity_lapse;
         creators["kaelthas arcane sphere nearby"] = &MagistersTerraceTriggerContext::kaelthas_arcane_sphere_nearby;
+        creators["kaelthas flamestrike"] = &MagistersTerraceTriggerContext::kaelthas_flamestrike;
 
         // Vexallus
         creators["vexallus pure energy spawned"] = &MagistersTerraceTriggerContext::vexallus_pure_energy_spawned;
@@ -31,6 +32,7 @@ private:
     static Trigger* kaelthas_casting_pyroblast(PlayerbotAI* ai) { return new KaelthasCastingPyroblastTrigger(ai); }
     static Trigger* kaelthas_casting_gravity_lapse(PlayerbotAI* ai) { return new KaelthasCastingGravityLapseTrigger(ai); }
     static Trigger* kaelthas_arcane_sphere_nearby(PlayerbotAI* ai) { return new KaelthasArcaneSphereNearbyTrigger(ai); }
+    static Trigger* kaelthas_flamestrike(PlayerbotAI* ai) { return new KaelthasMTFlamestrikeTrigger(ai); }
 
     // Vexallus
     static Trigger* vexallus_pure_energy_spawned(PlayerbotAI* ai) { return new VexallusPureEnergySpawnedTrigger(ai); }

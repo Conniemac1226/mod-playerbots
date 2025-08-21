@@ -31,17 +31,23 @@ bool KaelthasCastingGravityLapseTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Trigger during BOTH the initial cast AND the full gravity lapse effect duration
-    // This ensures continuous movement and casting interruption throughout the entire phase
+    // CRITICAL: Primary detection is the flight aura (44227) - this means gravity lapse is active
+    bool hasFlightAura = bot->HasAura(SPELL_GRAVITY_LAPSE_FLY);
+    
+    // Secondary detection: DOT aura (44226) - also indicates active gravity lapse
+    bool hasDotAura = bot->HasAura(SPELL_GRAVITY_LAPSE_DOT);
+    
+    // Tertiary detection: Boss casting initial gravity lapse
     bool isCastingGravityLapse = boss->HasUnitState(UNIT_STATE_CASTING) && 
                                 boss->FindCurrentSpellBySpellId(SPELL_GRAVITY_LAPSE);
     
-    bool hasGravityLapseAura = boss->HasAura(SPELL_GRAVITY_LAPSE);
+    // Quaternary detection: Boss channeling gravity lapse (44251)
+    bool isChannelingGravityLapse = boss->HasUnitState(UNIT_STATE_CASTING) && 
+                                   boss->FindCurrentSpellBySpellId(44251); // SPELL_GRAVITY_LAPSE_CHANNEL
     
-    // Also check if any player has gravity lapse effect (some versions apply it to players)
-    bool playerAffected = bot->HasAura(SPELL_GRAVITY_LAPSE);
     
-    return isCastingGravityLapse || hasGravityLapseAura || playerAffected;
+    // Return true if ANY gravity lapse effect is detected
+    return hasFlightAura || hasDotAura || isCastingGravityLapse || isChannelingGravityLapse;
 }
 
 bool KaelthasArcaneSphereNearbyTrigger::IsActive()
@@ -67,17 +73,21 @@ bool KaelthasArcaneSphereNearbyTrigger::IsActive()
     return false;
 }
 
-// Vexallus
-bool VexallusPureEnergySpawnedTrigger::IsActive()
+bool KaelthasMTFlamestrikeTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
+    Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Check for flamestrike trigger creatures within dangerous range
     std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 12.0f); // 12 yard avoidance radius
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 12.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -85,10 +95,100 @@ bool VexallusPureEnergySpawnedTrigger::IsActive()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_PURE_ENERGY)
+        if (unit->GetEntry() == NPC_FLAMESTRIKE_TRIGGER)
             return true;
     }
     return false;
+}
+
+// Vexallus
+bool VexallusPureEnergySpawnedTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if Vexallus is in combat first
+    Unit* boss = bot->FindNearestCreature(NPC_VEXALLUS, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // ENHANCED DETECTION: Comprehensive Pure Energy detection
+    bool pureEnergyFound = false;
+
+    // Method 1: Check hostile NPCs list (most reliable)
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_PURE_ENERGY)
+        {
+            pureEnergyFound = true;
+            break;
+        }
+    }
+
+    // Method 2: Direct creature search with wider range
+    if (!pureEnergyFound)
+    {
+        std::list<Unit*> targets;
+        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f); // Increased range significantly
+        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+        Cell::VisitObjects(bot, searcher, 80.0f);
+
+        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+        {
+            Unit* unit = *i;
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            // Accept ANY Pure Energy regardless of combat state
+            if (unit->GetEntry() == NPC_PURE_ENERGY)
+            {
+                pureEnergyFound = true;
+                break;
+            }
+        }
+    }
+
+    // Method 3: Check for Energy Feedback aura/spell effects (indicates Pure Energy is active)
+    if (!pureEnergyFound)
+    {
+        // Check if boss or players have energy feedback effects
+        if (boss->HasAura(44335) || boss->HasAura(44328)) // Energy Feedback spells
+        {
+            pureEnergyFound = true;
+        }
+        
+        // Check if any player has energy feedback channel
+        Group* group = bot->GetGroup();
+        if (group)
+        {
+            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+            {
+                Player* member = itr->GetSource();
+                if (member && member->HasAura(44328)) // Energy Feedback Channel
+                {
+                    pureEnergyFound = true;
+                    break;
+                }
+            }
+        }
+        else
+        {
+            // Solo case - check bot for energy feedback
+            if (bot->HasAura(44328))
+            {
+                pureEnergyFound = true;
+            }
+        }
+    }
+
+    
+    return pureEnergyFound;
 }
 
 // Selin Fireheart
@@ -125,19 +225,19 @@ bool FelCrystalNearbyTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if Selin is channeling and if there's a crystal nearby
+    // Check if Selin is in combat and look for active crystals
     Unit* boss = bot->FindNearestCreature(NPC_SELIN_FIREHEART, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Only look for crystals when Selin is channeling
-    if (!(boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_MANA_RAGE)))
-        return false;
-
+    // ENHANCED DETECTION: Use multiple methods to find active crystals
+    bool crystalFound = false;
+    
+    // Method 1: Direct creature search with Cell visiting
     std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f); // Increased range
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, 60.0f);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -145,10 +245,56 @@ bool FelCrystalNearbyTrigger::IsActive()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_FEL_CRYSTAL && !unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE))
-            return true;
+        if (unit->GetEntry() == NPC_FEL_CRYSTAL)
+        {
+            // EXPANDED DETECTION: More comprehensive crystal state checking
+            bool isSelectable = !unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+            bool isCasting = unit->HasUnitState(UNIT_STATE_CASTING) || unit->FindCurrentSpellBySpellId(SPELL_MANA_RAGE);
+            bool isChanneling = unit->HasAura(SPELL_MANA_RAGE) || boss->HasAura(SPELL_MANA_RAGE);
+            bool inCombat = unit->IsInCombat();
+            bool hasTarget = unit->GetVictim() != nullptr;
+            
+            // Crystal is active if ANY of these conditions are met
+            if (isSelectable || isCasting || isChanneling || inCombat || hasTarget)
+            {
+                crystalFound = true;
+                break;
+            }
+        }
     }
-    return false;
+    
+    // Method 2: Check hostile NPCs list as backup
+    if (!crystalFound)
+    {
+        const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+        for (auto& npc : npcs)
+        {
+            Unit* unit = botAI->GetUnit(npc);
+            if (!unit || !unit->IsAlive())
+                continue;
+                
+            if (unit->GetEntry() == NPC_FEL_CRYSTAL)
+            {
+                // Any fel crystal in hostile list is considered active
+                crystalFound = true;
+                break;
+            }
+        }
+    }
+    
+    // Method 3: Boss state detection - if boss is channeling, there's likely an active crystal
+    if (!crystalFound)
+    {
+        bool bossChanneling = boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_MANA_RAGE);
+        bool bossHasAura = boss->HasAura(SPELL_MANA_RAGE);
+        
+        if (bossChanneling || bossHasAura)
+        {
+            crystalFound = true;
+        }
+    }
+
+    return crystalFound;
 }
 
 // Delrissa
