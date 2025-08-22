@@ -16,6 +16,9 @@ void ShadowLabyrinthStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     
     triggers.push_back(new TriggerNode("blackheart war stomp",
         NextAction::array(0, new NextAction("avoid war stomp", ACTION_MOVE + 5), nullptr)));
+        
+    triggers.push_back(new TriggerNode("blackheart charge",
+        NextAction::array(0, new NextAction("blackheart charge react", ACTION_MOVE + 4), nullptr)));
     
     // Grandmaster Vorpil
     triggers.push_back(new TriggerNode("vorpil void traveler",

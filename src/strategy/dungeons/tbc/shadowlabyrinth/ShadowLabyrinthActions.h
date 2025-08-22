@@ -12,6 +12,7 @@ const uint32 SL_SPELL_FEAR = 33547;
 
 const uint32 SPELL_INCITE_CHAOS = 33676;
 const uint32 SPELL_INCITE_CHAOS_B = 33684;
+const uint32 SL_SPELL_CHARGE = 33709;
 const uint32 SL_SPELL_WAR_STOMP = 33707;
 
 const uint32 SPELL_RAIN_OF_FIRE = 33617;
@@ -54,6 +55,13 @@ class AvoidWarStompAction : public MovementAction
 {
 public:
     AvoidWarStompAction(PlayerbotAI* botAI) : MovementAction(botAI, "avoid war stomp") {}
+    bool Execute(Event event) override;
+};
+
+class BlackheartChargeReactAction : public MovementAction
+{
+public:
+    BlackheartChargeReactAction(PlayerbotAI* botAI) : MovementAction(botAI, "blackheart charge react") {}
     bool Execute(Event event) override;
 };
 
