@@ -266,8 +266,9 @@ bool OmorDemonicShieldAction::Execute(Event event)
             return true;
         }
         
-        // Otherwise just wait
-        return true;
+        // NO ADDS: Don't block other actions - let bots continue normal behavior
+        // Shield makes Omor immune but bots can still move, heal, buff, etc.
+        return false;
     }
 
     return false;
