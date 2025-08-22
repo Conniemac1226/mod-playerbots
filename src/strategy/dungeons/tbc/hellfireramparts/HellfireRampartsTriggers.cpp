@@ -122,8 +122,9 @@ bool OmorEngagedTrigger::IsActive()
         return false;
 
     // RESEARCHED: Omor doesn't move - boss_omor_the_unscarred.cpp:44
-    // Non-tank melees should stay at range
-    return !botAI->IsRanged(bot) && !botAI->IsTank(bot) && bot->GetDistance(boss) < 8.0f;
+    // Only melee non-tanks with Treacherous Aura need to stay at range to avoid spreading damage
+    return !botAI->IsRanged(bot) && !botAI->IsTank(bot) && bot->HasAura(SPELL_TREACHEROUS_AURA) && 
+           bot->GetDistance(boss) < 8.0f;
 }
 
 // Liquid Fire patches nearby
