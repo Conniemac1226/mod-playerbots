@@ -39,7 +39,7 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 
     // PROACTIVE SPREAD: Keep all bots spread throughout Omor fight - CRITICAL: 400+ damage per second to nearby allies!
     triggers.push_back(new TriggerNode("omor proactive spread", 
-             NextAction::array(0, new NextAction("omor proactive spread", ACTION_MOVE + 2), nullptr)));
+             NextAction::array(0, new NextAction("omor proactive spread", ACTION_MOVE - 2), nullptr)));
     
     // Boss: Vazruden & Nazan
     // Avoid Liquid Fire patches

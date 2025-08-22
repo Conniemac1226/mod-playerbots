@@ -562,11 +562,15 @@ bool OmorProactiveSpreadAction::isUseful()
     if (!bot)
         return false;
 
+    // EXCLUDE healers from spreading - they need to stay in heal range
+    if (botAI->IsHeal(bot))
+        return false;
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Always useful during Omor fight if allies are too close
+    // Only spread if allies are dangerously close (< 15 yards, not 18)
     GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
     for (const auto& guid : friendlyUnits)
     {
@@ -574,7 +578,7 @@ bool OmorProactiveSpreadAction::isUseful()
         if (unit && bot != unit && unit->IsAlive())
         {
             float distance = bot->GetDistance(unit);
-            if (distance < 18.0f) // Need to maintain 18+ yard spacing
+            if (distance < 15.0f) // Reduced threshold to avoid constant movement
             {
                 return true;
             }
@@ -613,11 +617,11 @@ bool OmorProactiveSpreadAction::Execute(Event event)
         }
     }
 
-    if (closestAlly && closestDistance < 18.0f)
+    if (closestAlly && closestDistance < 15.0f)
     {
         // Calculate spread position: Move away from closest ally while staying in range of boss
         float angle = bot->GetAngle(closestAlly) + M_PI; // Opposite direction
-        float moveDistance = 20.0f - closestDistance; // Target 20+ yard spacing
+        float moveDistance = 18.0f - closestDistance; // Target 18+ yard spacing
         
         // Position relative to boss to maintain combat range
         float bossDistance = bot->GetDistance(boss);
@@ -627,15 +631,16 @@ bool OmorProactiveSpreadAction::Execute(Event event)
         {
             // Adjust movement to stay in range - move perpendicular instead
             angle = bot->GetAngle(closestAlly) + (M_PI / 2.0f); // 90 degrees
-            moveDistance = std::min(moveDistance, 15.0f);
+            moveDistance = std::min(moveDistance, 10.0f); // Smaller adjustment
         }
         
         float newX = bot->GetPositionX() + cos(angle) * moveDistance;
         float newY = bot->GetPositionY() + sin(angle) * moveDistance;
         float newZ = bot->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, true, 
-                     MovementPriority::MOVEMENT_COMBAT);
+        // Use lower priority movement that doesn't interrupt combat
+        return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, false, 
+                     MovementPriority::MOVEMENT_NORMAL);
     }
 
     return false;
