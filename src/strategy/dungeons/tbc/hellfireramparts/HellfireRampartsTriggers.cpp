@@ -1,4 +1,5 @@
 #include "HellfireRampartsTriggers.h"
+#include "HellfireRampartsActions.h"
 #include "Playerbots.h"
 
 // Watchkeeper Gargolmar - Hellfire Watchers join at 50%
@@ -140,8 +141,8 @@ bool LiquidFireNearbyTrigger::IsActive()
         if (!unit)
             continue;
             
-        // Check for fire visual NPCs
-        if (unit->GetEntry() == 17084 || unit->GetEntry() == 18240)
+        // RESEARCHED: Liquid Fire summoned by SPELL_SUMMON_LIQUID_FIRE (31706) - HellfireRampartsActions.h:21
+        if (unit->GetEntry() == NPC_LIQUID_FIRE)
         {
             if (bot->GetDistance(unit) < 8.0f)
                 return true;
@@ -223,36 +224,28 @@ bool NazanBellowingRoarTrigger::IsActive()
     return bot->HasAura(SPELL_BELLOWING_ROAR);
 }
 
-bool OmorTreacherySpreadTrigger::IsActive()
+bool OmorProactiveSpreadTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // CASE 1: Bot has the aura - needs to move away from others
-    if (bot->HasAura(SPELL_TREACHEROUS_AURA))
-    {
-        GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
-        for (const auto& guid : friendlyUnits)
-        {
-            Unit* unit = botAI->GetUnit(guid);
-            if (unit && bot != unit && bot->GetDistance(unit) < 15.0f) // 15 yards danger zone
-            {
-                return true; // Bot needs to move away from allies
-            }
-        }
-    }
-    
-    // CASE 2: Another player has the aura - bot needs to avoid them
+    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // PROACTIVE SPREAD: Always keep bots spread during Omor fight
+    // Check if any ally is too close (within 18 yards safety zone)
     GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
     for (const auto& guid : friendlyUnits)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (unit && bot != unit && unit->HasAura(SPELL_TREACHEROUS_AURA))
+        if (unit && bot != unit && unit->IsAlive())
         {
-            if (bot->GetDistance(unit) < 15.0f) // Too close to cursed ally
+            float distance = bot->GetDistance(unit);
+            if (distance < 18.0f) // Larger safety zone for proactive spreading
             {
-                return true; // Bot needs to move away from cursed ally
+                return true; // Bot needs to maintain distance from allies
             }
         }
     }

@@ -343,8 +343,8 @@ bool NazanLiquidFireAction::Execute(Event event)
         if (!unit)
             continue;
             
-        // Liquid Fire visual/trigger units
-        if (unit->GetEntry() == 17084 || unit->GetEntry() == 18240) // Common fire visual NPCs
+        // RESEARCHED: Liquid Fire summoned by SPELL_SUMMON_LIQUID_FIRE (31706) - HellfireRampartsActions.h:21
+        if (unit->GetEntry() == NPC_LIQUID_FIRE)
         {
             float distance = bot->GetDistance(unit);
             if (distance < 8.0f)
@@ -363,8 +363,17 @@ bool NazanLiquidFireAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* fire = AI_VALUE2(Unit*, "find target", "liquid fire");
-    return fire && fire->IsAlive();
+    // Check if any liquid fire patches are near the bot
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& guid : npcs)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->GetEntry() == NPC_LIQUID_FIRE)
+        {
+            if (bot->GetDistance(unit) < 8.0f)
+                return true;
+        }
+    }
 
     return false;
 }
@@ -547,36 +556,27 @@ bool NazanBellowingRoarAction::isUseful()
     return bot->HasAura(SPELL_BELLOWING_ROAR);
 }
 
-bool OmorTreacherySpreadAction::isUseful()
+bool OmorProactiveSpreadAction::isUseful()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // CASE 1: Bot has the aura - needs to move away from others
-    if (bot->HasAura(SPELL_TREACHEROUS_AURA))
-    {
-        GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
-        for (const auto& guid : friendlyUnits)
-        {
-            Unit* unit = botAI->GetUnit(guid);
-            if (unit && bot != unit && bot->GetDistance(unit) < 15.0f) // 15 yards danger zone
-            {
-                return true; // Bot needs to move away from allies
-            }
-        }
-    }
-    
-    // CASE 2: Another player has the aura - bot needs to avoid them
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Always useful during Omor fight if allies are too close
     GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
     for (const auto& guid : friendlyUnits)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (unit && bot != unit && unit->HasAura(SPELL_TREACHEROUS_AURA))
+        if (unit && bot != unit && unit->IsAlive())
         {
-            if (bot->GetDistance(unit) < 15.0f) // Too close to cursed ally
+            float distance = bot->GetDistance(unit);
+            if (distance < 18.0f) // Need to maintain 18+ yard spacing
             {
-                return true; // Bot needs to move away from cursed ally
+                return true;
             }
         }
     }
@@ -584,67 +584,58 @@ bool OmorTreacherySpreadAction::isUseful()
     return false;
 }
 
-bool OmorTreacherySpreadAction::Execute(Event event)
+bool OmorProactiveSpreadAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    Unit* dangerTarget = nullptr;
-    float minDistance = 15.0f; // 15 yard danger radius
-    bool botHasAura = bot->HasAura(SPELL_TREACHEROUS_AURA);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
 
-    GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
+    // Find closest ally to spread away from
+    Unit* closestAlly = nullptr;
+    float closestDistance = 25.0f; // Only care about allies within 25 yards
     
-    // CASE 1: Bot has aura - find closest ally to move away from
-    if (botHasAura)
+    GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
+    for (const auto& guid : friendlyUnits)
     {
-        for (const auto& guid : friendlyUnits)
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && bot != unit && unit->IsAlive())
         {
-            Unit* unit = botAI->GetUnit(guid);
-            if (unit && bot != unit)
+            float distance = bot->GetDistance(unit);
+            if (distance < closestDistance)
             {
-                float distance = bot->GetDistance(unit);
-                if (distance < minDistance)
-                {
-                    minDistance = distance;
-                    dangerTarget = unit;
-                }
-            }
-        }
-    }
-    // CASE 2: Find any ally with aura that we're too close to
-    else
-    {
-        for (const auto& guid : friendlyUnits)
-        {
-            Unit* unit = botAI->GetUnit(guid);
-            if (unit && bot != unit && unit->HasAura(SPELL_TREACHEROUS_AURA))
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < 15.0f)
-                {
-                    dangerTarget = unit;
-                    minDistance = distance;
-                    break; // Found cursed ally nearby, evacuate!
-                }
+                closestDistance = distance;
+                closestAlly = unit;
             }
         }
     }
 
-    if (dangerTarget)
+    if (closestAlly && closestDistance < 18.0f)
     {
-        // EMERGENCY: Move away from danger (cursed player or nearest ally)
-        float angle = bot->GetAngle(dangerTarget) + M_PI;
-        float moveDistance = 20.0f - minDistance; // Move to 20 yards away for safety
+        // Calculate spread position: Move away from closest ally while staying in range of boss
+        float angle = bot->GetAngle(closestAlly) + M_PI; // Opposite direction
+        float moveDistance = 20.0f - closestDistance; // Target 20+ yard spacing
+        
+        // Position relative to boss to maintain combat range
+        float bossDistance = bot->GetDistance(boss);
+        float maxRange = botAI->IsRanged(bot) ? 25.0f : 8.0f; // Ranged stay far, melee closer
+        
+        if (bossDistance + moveDistance > maxRange)
+        {
+            // Adjust movement to stay in range - move perpendicular instead
+            angle = bot->GetAngle(closestAlly) + (M_PI / 2.0f); // 90 degrees
+            moveDistance = std::min(moveDistance, 15.0f);
+        }
+        
         float newX = bot->GetPositionX() + cos(angle) * moveDistance;
         float newY = bot->GetPositionY() + sin(angle) * moveDistance;
         float newZ = bot->GetPositionZ();
         
-        // Note: Don't stop attacks permanently - bots should resume after positioning
-        
         return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, true, 
-                     MovementPriority::MOVEMENT_FORCED);
+                     MovementPriority::MOVEMENT_COMBAT);
     }
 
     return false;

@@ -252,17 +252,18 @@ bool VoidTravelerPriorityAction::Execute(Event event)
         }
     }
     
+    // Only attack if we found a valid Void Traveler
     if (closestTraveler)
     {
-        return Attack(closestTraveler);
-    }
-    
-    // SAFETY: No travelers found but trigger is active - something went wrong
-    // Force attack boss to prevent bot from doing nothing
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    if (!currentTarget || currentTarget->GetGUID() != boss->GetGUID())
-    {
-        return Attack(boss);
+        // Check if we're already targeting this traveler to avoid unnecessary switching
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+        if (!currentTarget || currentTarget->GetEntry() != NPC_VOID_TRAVELER || 
+            currentTarget->GetGUID() != closestTraveler->GetGUID())
+        {
+            return Attack(closestTraveler);
+        }
+        // Already targeting the right traveler - continue attacking
+        return true;
     }
     
     return false;
