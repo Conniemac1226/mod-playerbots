@@ -64,10 +64,10 @@ public:
     bool IsActive() override;
 };
 
-class OmorTreacherySpreadTrigger : public Trigger
+class OmorProactiveSpreadTrigger : public Trigger
 {
 public:
-    OmorTreacherySpreadTrigger(PlayerbotAI* ai) : Trigger(ai, "omor treachery spread") {}
+    OmorProactiveSpreadTrigger(PlayerbotAI* ai) : Trigger(ai, "omor proactive spread") {}
     bool IsActive() override;
 };
 

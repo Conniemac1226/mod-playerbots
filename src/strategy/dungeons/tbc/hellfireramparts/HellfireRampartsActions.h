@@ -114,10 +114,10 @@ public:
     bool isUseful() override;
 };
 
-class OmorTreacherySpreadAction : public MovementAction
+class OmorProactiveSpreadAction : public MovementAction
 {
 public:
-    OmorTreacherySpreadAction(PlayerbotAI* ai) : MovementAction(ai, "omor treachery spread") {}
+    OmorProactiveSpreadAction(PlayerbotAI* ai) : MovementAction(ai, "omor proactive spread") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

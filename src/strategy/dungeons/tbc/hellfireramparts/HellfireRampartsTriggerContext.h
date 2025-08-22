@@ -18,7 +18,7 @@ public:
         creators["omor treacherous aura"] = &HellfireRampartsTriggerContext::omor_treacherous_aura;
         creators["omor demonic shield"] = &HellfireRampartsTriggerContext::omor_demonic_shield;
         creators["omor engaged"] = &HellfireRampartsTriggerContext::omor_engaged;
-        creators["omor treachery spread"] = &HellfireRampartsTriggerContext::omor_treachery_spread;
+        creators["omor proactive spread"] = &HellfireRampartsTriggerContext::omor_proactive_spread;
         creators["liquid fire nearby"] = &HellfireRampartsTriggerContext::liquid_fire_nearby;
         creators["nazan cone of fire"] = &HellfireRampartsTriggerContext::nazan_cone_of_fire;
         creators["nazan landed"] = &HellfireRampartsTriggerContext::nazan_landed;
@@ -35,7 +35,7 @@ private:
     static Trigger* omor_treacherous_aura(PlayerbotAI* ai) { return new OmorTreacherousAuraTrigger(ai); }
     static Trigger* omor_demonic_shield(PlayerbotAI* ai) { return new OmorDemonicShieldTrigger(ai); }
     static Trigger* omor_engaged(PlayerbotAI* ai) { return new OmorEngagedTrigger(ai); }
-    static Trigger* omor_treachery_spread(PlayerbotAI* ai) { return new OmorTreacherySpreadTrigger(ai); }
+    static Trigger* omor_proactive_spread(PlayerbotAI* ai) { return new OmorProactiveSpreadTrigger(ai); }
     static Trigger* liquid_fire_nearby(PlayerbotAI* ai) { return new LiquidFireNearbyTrigger(ai); }
     static Trigger* nazan_cone_of_fire(PlayerbotAI* ai) { return new NazanConeOfFireTrigger(ai); }
     static Trigger* nazan_landed(PlayerbotAI* ai) { return new NazanLandedTrigger(ai); }
