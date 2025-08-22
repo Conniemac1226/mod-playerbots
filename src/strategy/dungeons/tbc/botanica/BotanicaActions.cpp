@@ -308,7 +308,79 @@ bool ThorngrinHellfireAction::Execute(Event event)
             // Stop casting and move immediately
             bot->InterruptNonMeleeSpells(true);
             return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                        MovementPriority::MOVEMENT_FORCED);
+                        MovementPriority::MOVEMENT_NORMAL);
+        }
+    }
+    
+    return false;
+}
+
+bool ThorngrinEnrageAction::Execute(Event event)
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "thorngrin the tender");
+    if (!boss)
+    {
+        return false;
+    }
+    
+    // RESEARCHED: Enrage - boss_thorngrin_the_tender.cpp:92
+    // Boss gains enrage buff every 30 seconds, increasing damage
+    // Dispel if possible, otherwise healers need to be more careful
+    if (boss->HasAura(BOT_SPELL_ENRAGE))
+    {
+        // Try to dispel enrage if we have magic dispel abilities
+        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel magic");
+        if (spellIdsValue)
+        {
+            std::list<uint32> spellIds = spellIdsValue->Get();
+            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+            {
+                uint32 spellId = *it;
+                if (botAI->CanCastSpell(spellId, boss, false))
+                {
+                    return botAI->CastSpell(spellId, boss);
+                }
+            }
+        }
+        
+        // If we can't dispel and we're a healer, prioritize low health targets
+        if (botAI->IsHeal(bot))
+        {
+            // Enrage means more damage - find targets that need emergency healing
+            const GuidVector members = AI_VALUE(GuidVector, "group members");
+            Unit* lowestHealthTarget = nullptr;
+            float lowestHealthPct = 100.0f;
+            
+            for (auto& member : members)
+            {
+                Unit* unit = botAI->GetUnit(member);
+                if (!unit || !unit->IsAlive())
+                    continue;
+                
+                float healthPct = (float)unit->GetHealth() / (float)unit->GetMaxHealth() * 100.0f;
+                if (healthPct < lowestHealthPct && healthPct < 80.0f) // Focus on targets below 80%
+                {
+                    lowestHealthTarget = unit;
+                    lowestHealthPct = healthPct;
+                }
+            }
+            
+            if (lowestHealthTarget)
+            {
+                Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "heal");
+                if (spellIdsValue)
+                {
+                    std::list<uint32> spellIds = spellIdsValue->Get();
+                    for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+                    {
+                        uint32 spellId = *it;
+                        if (botAI->CanCastSpell(spellId, lowestHealthTarget, false))
+                        {
+                            return botAI->CastSpell(spellId, lowestHealthTarget);
+                        }
+                    }
+                }
+            }
         }
     }
     

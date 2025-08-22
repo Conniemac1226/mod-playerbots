@@ -61,6 +61,13 @@ public:
     bool IsActive() override;
 };
 
+class ThorngrinEnrageTrigger : public Trigger
+{
+public:
+    ThorngrinEnrageTrigger(PlayerbotAI* botAI) : Trigger(botAI, "thorngrin enrage") {}
+    bool IsActive() override;
+};
+
 class WarpSplinterWarStompTrigger : public Trigger
 {
 public:

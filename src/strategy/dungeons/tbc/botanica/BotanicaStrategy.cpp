@@ -31,6 +31,9 @@ void BotanicaStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("thorngrin hellfire",
         NextAction::array(0, new NextAction("thorngrin hellfire", ACTION_MOVE + 5), nullptr)));
     
+    triggers.push_back(new TriggerNode("thorngrin enrage",
+        NextAction::array(0, new NextAction("thorngrin enrage", ACTION_DISPEL), nullptr)));
+    
     // Warp Splinter
     triggers.push_back(new TriggerNode("warp splinter war stomp",
         NextAction::array(0, new NextAction("warp splinter war stomp", ACTION_MOVE + 5), nullptr)));

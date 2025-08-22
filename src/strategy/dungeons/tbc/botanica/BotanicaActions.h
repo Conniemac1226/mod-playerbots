@@ -87,6 +87,13 @@ public:
     bool Execute(Event event) override;
 };
 
+class ThorngrinEnrageAction : public Action
+{
+public:
+    ThorngrinEnrageAction(PlayerbotAI* botAI) : Action(botAI, "thorngrin enrage") {}
+    bool Execute(Event event) override;
+};
+
 class WarpSplinterWarStompAction : public MovementAction
 {
 public:

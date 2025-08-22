@@ -130,13 +130,24 @@ bool ThorngrinHellfireTrigger::IsActive()
         return false;
     }
     
-    if (boss->HasAura(BOT_SPELL_HELLFIRE) || boss->FindCurrentSpellBySpellId(BOT_SPELL_HELLFIRE))
+    if (boss->FindCurrentSpellBySpellId(BOT_SPELL_HELLFIRE))
     {
         float distance = bot->GetExactDist2d(boss);
-        return distance < 10.0f;
+        return distance < 15.0f;
     }
     
     return false;
+}
+
+bool ThorngrinEnrageTrigger::IsActive()
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "thorngrin the tender");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    {
+        return false;
+    }
+    
+    return boss->HasAura(BOT_SPELL_ENRAGE);
 }
 
 bool WarpSplinterWarStompTrigger::IsActive()

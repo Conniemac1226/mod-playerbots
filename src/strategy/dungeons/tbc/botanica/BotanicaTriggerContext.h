@@ -17,6 +17,7 @@ public:
         creators["laj teleport"] = &BotanicaTriggerContext::laj_teleport;
         creators["thorngrin sacrifice"] = &BotanicaTriggerContext::thorngrin_sacrifice;
         creators["thorngrin hellfire"] = &BotanicaTriggerContext::thorngrin_hellfire;
+        creators["thorngrin enrage"] = &BotanicaTriggerContext::thorngrin_enrage;
         creators["warp splinter war stomp"] = &BotanicaTriggerContext::warp_splinter_war_stomp;
         creators["warp splinter arcane volley"] = &BotanicaTriggerContext::warp_splinter_arcane_volley;
     }
@@ -30,6 +31,7 @@ private:
     static Trigger* laj_teleport(PlayerbotAI* botAI) { return new LajTeleportTrigger(botAI); }
     static Trigger* thorngrin_sacrifice(PlayerbotAI* botAI) { return new ThorngrinSacrificeTrigger(botAI); }
     static Trigger* thorngrin_hellfire(PlayerbotAI* botAI) { return new ThorngrinHellfireTrigger(botAI); }
+    static Trigger* thorngrin_enrage(PlayerbotAI* botAI) { return new ThorngrinEnrageTrigger(botAI); }
     static Trigger* warp_splinter_war_stomp(PlayerbotAI* botAI) { return new WarpSplinterWarStompTrigger(botAI); }
     static Trigger* warp_splinter_arcane_volley(PlayerbotAI* botAI) { return new WarpSplinterArcaneVolleyTrigger(botAI); }
 };
