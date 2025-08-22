@@ -22,7 +22,7 @@ void ShadowLabyrinthStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     
     // Grandmaster Vorpil
     triggers.push_back(new TriggerNode("vorpil void traveler",
-        NextAction::array(0, new NextAction("void traveler priority", ACTION_RAID + 3), nullptr)));
+        NextAction::array(0, new NextAction("void traveler priority", ACTION_EMERGENCY), nullptr)));
     
     triggers.push_back(new TriggerNode("vorpil rain of fire",
         NextAction::array(0, new NextAction("move from rain of fire", ACTION_MOVE + 5), nullptr)));
