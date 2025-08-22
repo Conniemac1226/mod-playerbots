@@ -14,6 +14,13 @@
 std::map<ObjectGuid, uint32> g_kaelthas_lastMoveTime;
 std::map<ObjectGuid, bool> g_kaelthas_inSafePosition;
 
+// Per-bot state maps for Delrissa add targeting stability
+std::map<ObjectGuid, ObjectGuid> g_delrissa_lockedTarget;
+std::map<ObjectGuid, uint32> g_delrissa_lockTime;
+
+// Per-bot state maps for Pure Energy timeout mechanism
+std::map<ObjectGuid, uint32> g_pureEnergy_lastSeenTime;
+
 // Kael'thas Actions
 bool InterruptKaelthasPyroblastAction::Execute(Event event)
 {
@@ -90,16 +97,45 @@ bool AvoidGravityLapseAction::Execute(Event event)
         // FLYING PHASE: Smart positioning - move when needed, heal/DPS when safe
         
         // Flying movement constants
-        static const float MIN_MOVEMENT_INTERVAL = 800U;   // Move every 0.8 seconds (faster)
-        static const float MIN_FLIGHT_HEIGHT = 10.0f;      // Minimum height above ground
+        static const float MIN_MOVEMENT_INTERVAL = 400U;   // Move every 0.4 seconds (FASTER)
+        static const float MIN_FLIGHT_HEIGHT = 12.0f;      // Higher minimum height above ground
         static const float MAX_FLIGHT_HEIGHT = 20.0f;      // Maximum height (room ceiling)
-        static const float FLIGHT_RADIUS = 28.0f;          // Stay near room edges
+        static const float KITING_RADIUS = 15.0f;          // Larger kiting radius for better spread
+        static const float MAX_ROOM_RADIUS = 18.0f;        // Maximum safe distance from center
         static const float SAFE_SPHERE_DISTANCE = 15.0f;   // Safe distance from spheres
         
         // Get room center for circular flight pattern (Kael'thas boss room)
         Position roomCenter(148.5f, 187.0f, -16.6f); // Actual Kael'thas room center
         float distanceFromCenter = bot->GetDistance(roomCenter);
         float currentHeight = bot->GetPositionZ() - roomCenter.GetPositionZ();
+        
+        // CRITICAL: IMMEDIATE EMERGENCY ASCENT when gravity lapse first detected
+        // This prevents initial fall that gets bots killed by spheres
+        if (currentHeight < MIN_FLIGHT_HEIGHT || abs(bot->GetPositionZ() - roomCenter.GetPositionZ()) < 3.0f)
+        {
+            // EMERGENCY ASCENT: Force immediate upward movement
+            float emergencyX = bot->GetPositionX();
+            float emergencyY = bot->GetPositionY(); 
+            float emergencyZ = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT + 8.0f; // HIGH altitude immediately
+            
+            // Clear any movement to prevent conflicts
+            bot->GetMotionMaster()->Clear();
+            bot->StopMoving();
+            
+            // Force flying movement to high altitude
+            Movement::MoveSplineInit init(bot);
+            init.MoveTo(emergencyX, emergencyY, emergencyZ, false, false);
+            init.SetFly();
+            init.Launch();
+            
+            // Track movement
+            float distance = bot->GetExactDist(emergencyX, emergencyY, emergencyZ);
+            float delay = 1000.0f * distance / bot->GetSpeed(MOVE_FLIGHT);
+            AI_VALUE(LastMovement&, "last movement").Set(bot->GetMapId(), emergencyX, emergencyY, emergencyZ, bot->GetOrientation(), delay, MovementPriority::MOVEMENT_FORCED);
+            
+            g_kaelthas_lastMoveTime[botGuid] = currentTime;
+            return true; // Emergency ascent complete
+        }
         
         // Check for nearby dangerous spheres
         Unit* nearestSphere = nullptr;
@@ -145,7 +181,7 @@ bool AvoidGravityLapseAction::Execute(Event event)
         }
         
         // EMERGENCY: If bot is on the ground (same Z as room), force immediate ascent
-        if (abs(bot->GetPositionZ() - roomCenter.GetPositionZ()) < 2.0f)
+        if (abs(bot->GetPositionZ() - roomCenter.GetPositionZ()) < 3.0f)
         {
             shouldMove = true;
         }
@@ -253,11 +289,11 @@ bool AvoidGravityLapseAction::Execute(Event event)
             if (!useAvoidanceMovement)
             {
                 // EMERGENCY ASCENT: If too low, move straight up first
-                if (currentHeight < MIN_FLIGHT_HEIGHT)
+                if (currentHeight < MIN_FLIGHT_HEIGHT || abs(bot->GetPositionZ() - roomCenter.GetPositionZ()) < 4.0f)
                 {
                     newX = bot->GetPositionX();
                     newY = bot->GetPositionY();
-                    newZ = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT + 5.0f; // Force high altitude
+                    newZ = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT + 8.0f; // Force even higher altitude for safety
                 }
                 else
                 {
@@ -299,45 +335,45 @@ bool AvoidGravityLapseAction::Execute(Event event)
                             newX = bot->GetPositionX() + cos(angle) * moveDistance;
                             newY = bot->GetPositionY() + sin(angle) * moveDistance;
                         }
-                        else if (distanceToGroup < 10.0f) // Too close to group
+                        else if (distanceToGroup < 12.0f) // Too close to group
                         {
-                            // Move slightly away to avoid stacking
+                            // Move away to maintain proper spread
                             float angle = bot->GetAngle(&groupCenter) + M_PI; // Opposite direction
-                            newX = bot->GetPositionX() + cos(angle) * 8.0f;
-                            newY = bot->GetPositionY() + sin(angle) * 8.0f;
+                            newX = bot->GetPositionX() + cos(angle) * KITING_RADIUS;
+                            newY = bot->GetPositionY() + sin(angle) * KITING_RADIUS;
                         }
                         else
                         {
-                            // Good distance, just do small circular movement around group
+                            // Good distance, do circular movement around group with larger radius
                             float currentAngle = atan2(bot->GetPositionY() - groupCenter.GetPositionY(), 
                                                      bot->GetPositionX() - groupCenter.GetPositionX());
-                            float newAngle = currentAngle + (M_PI / 12.0f); // 15 degree increments (slower)
+                            float newAngle = currentAngle + (M_PI / 16.0f); // 11.25 degree increments (smoother)
                             
-                            newX = groupCenter.GetPositionX() + cos(newAngle) * 8.0f; // Very tight radius
-                            newY = groupCenter.GetPositionY() + sin(newAngle) * 8.0f;
+                            newX = groupCenter.GetPositionX() + cos(newAngle) * KITING_RADIUS; // Larger radius for better spread
+                            newY = groupCenter.GetPositionY() + sin(newAngle) * KITING_RADIUS;
                         }
                         
                         newZ = groupCenter.GetPositionZ(); // Match group altitude
                     }
                     else
                     {
-                        // No group members found, stay near boss with tight movement
+                        // No group members found, kite around room center with proper radius
                         float currentAngle = atan2(bot->GetPositionY() - roomCenter.GetPositionY(), 
                                                  bot->GetPositionX() - roomCenter.GetPositionX());
                         
-                        float newAngle = currentAngle + (M_PI / 8.0f); // 22.5 degree increments
+                        float newAngle = currentAngle + (M_PI / 12.0f); // 15 degree increments (smoother)
                         
-                        newX = roomCenter.GetPositionX() + cos(newAngle) * 8.0f; // Very tight radius
-                        newY = roomCenter.GetPositionY() + sin(newAngle) * 8.0f;
+                        newX = roomCenter.GetPositionX() + cos(newAngle) * KITING_RADIUS; // Proper kiting radius
+                        newY = roomCenter.GetPositionY() + sin(newAngle) * KITING_RADIUS;
                         newZ = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT + 5.0f;
                     }
                     
                     // WALL COLLISION PREVENTION: Ensure all movement stays within safe bounds
                     float distanceFromCenter = sqrt((newX - roomCenter.GetPositionX()) * (newX - roomCenter.GetPositionX()) + 
                                                    (newY - roomCenter.GetPositionY()) * (newY - roomCenter.GetPositionY()));
-                    if (distanceFromCenter > 10.0f) // Max 10 yards from center to avoid walls
+                    if (distanceFromCenter > MAX_ROOM_RADIUS) // Keep within safe room bounds
                     {
-                        float scale = 10.0f / distanceFromCenter;
+                        float scale = MAX_ROOM_RADIUS / distanceFromCenter;
                         newX = roomCenter.GetPositionX() + (newX - roomCenter.GetPositionX()) * scale;
                         newY = roomCenter.GetPositionY() + (newY - roomCenter.GetPositionY()) * scale;
                     }
@@ -382,16 +418,16 @@ bool AvoidGravityLapseAction::Execute(Event event)
             
             // Fallback: 3D random movement if primary patterns fail
             float randomAngle = frand(0, 2 * M_PI);
-            float verticalOffset = frand(-4.0f, 4.0f); // Random vertical movement
+            float verticalOffset = frand(0.0f, 4.0f); // Only UPWARD vertical movement to prevent falling
             static const float FLIGHT_MOVEMENT_RADIUS = 15.0f; // Define missing constant
             
             float fallbackX = bot->GetPositionX() + cos(randomAngle) * FLIGHT_MOVEMENT_RADIUS;
             float fallbackY = bot->GetPositionY() + sin(randomAngle) * FLIGHT_MOVEMENT_RADIUS;
-            float fallbackZ = roomCenter.GetPositionZ() + 8.0f + verticalOffset;
+            float fallbackZ = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT + 4.0f + verticalOffset; // Ensure high altitude
             
-            // Clamp fallback Z to safe limits
-            fallbackZ = std::max(roomCenter.GetPositionZ() + 3.0f, 
-                               std::min(roomCenter.GetPositionZ() + 15.0f, fallbackZ));
+            // Clamp fallback Z to safe limits - NEVER go below minimum
+            fallbackZ = std::max(roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT, 
+                               std::min(roomCenter.GetPositionZ() + MAX_FLIGHT_HEIGHT, fallbackZ));
             
             // FALLBACK: Also clear movement for fallback and force aerial positioning
             bot->GetMotionMaster()->Clear();
@@ -445,27 +481,50 @@ bool AvoidGravityLapseAction::Execute(Event event)
         // POST-FLIGHT PHASE: Gravity lapse has ended, force bots back to ground
         static std::map<ObjectGuid, bool> wasFlying;
         
-        // Check if bot was flying but gravity lapse is now over
-        if (wasFlying[botGuid] && !hasFlightAura && !hasDotAura)
+        // Track flying state FIRST to capture transitions
+        bool currentlyFlying = hasFlightAura || hasDotAura;
+        bool wasAlreadyFlying = wasFlying[botGuid];
+        wasFlying[botGuid] = currentlyFlying;
+        
+        // Check if bot WAS flying but gravity lapse is now over
+        if (wasAlreadyFlying && !currentlyFlying)
         {
-            // Force bot back to ground level for normal combat
+            // CRITICAL: Force bot back to ground level for normal combat
             Position groundPos = boss->GetPosition();
             float groundZ = groundPos.GetPositionZ();
             
-            // Move to ground level near the boss
-            bool moved = MoveTo(bot->GetMapId(), groundPos.GetPositionX() + frand(-10.0f, 10.0f), 
-                               groundPos.GetPositionY() + frand(-10.0f, 10.0f), groundZ,
+            // Clear any aerial movement first
+            bot->GetMotionMaster()->Clear();
+            bot->StopMoving();
+            
+            // Move to ground level near the boss with ground-based movement
+            bool moved = MoveTo(bot->GetMapId(), groundPos.GetPositionX() + frand(-8.0f, 8.0f), 
+                               groundPos.GetPositionY() + frand(-8.0f, 8.0f), groundZ,
+                               false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            
+            if (moved)
+            {
+                return true; // Ground descent in progress
+            }
+        }
+        
+        // Also check if bot is still at high altitude after gravity lapse ends
+        Position roomCenter(148.5f, 187.0f, -16.6f);
+        float currentHeight = bot->GetPositionZ() - roomCenter.GetPositionZ();
+        
+        if (!currentlyFlying && currentHeight > 5.0f) // Bot is high but not flying
+        {
+            // Force descent to ground level
+            Position groundPos = boss->GetPosition();
+            bool moved = MoveTo(bot->GetMapId(), groundPos.GetPositionX() + frand(-8.0f, 8.0f), 
+                               groundPos.GetPositionY() + frand(-8.0f, 8.0f), groundPos.GetPositionZ(),
                                false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
             
             if (moved)
             {
-                wasFlying[botGuid] = false;
-                return true;
+                return true; // Forced descent
             }
         }
-        
-        // Track flying state
-        wasFlying[botGuid] = hasFlightAura || hasDotAura;
         
         // PRE-FLIGHT PHASE: Initial gravity lapse cast detected
         Position centerPos = boss->GetPosition();
@@ -742,6 +801,10 @@ bool AttackPureEnergyAction::isUseful()
     if (!bot || !botAI)
         return false;
 
+    // CRITICAL: HEALERS SHOULD NEVER ATTACK ADDS - Always prioritize healing
+    if (botAI->IsHeal(bot))
+        return false;
+
     // CRITICAL FIX: Use direct trigger logic instead of Value system
     // The Value system may be failing to map trigger values properly
     
@@ -750,7 +813,10 @@ bool AttackPureEnergyAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check hostile NPCs list for Pure Energy (most reliable method)
+    // ENHANCED DETECTION: Same logic as trigger to ensure consistency
+    bool pureEnergyFound = false;
+
+    // Method 1: Check hostile NPCs list for Pure Energy (most reliable method)
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
@@ -760,11 +826,38 @@ bool AttackPureEnergyAction::isUseful()
 
         if (unit->GetEntry() == NPC_PURE_ENERGY)
         {
-            return true;
+            pureEnergyFound = true;
+            break;
         }
     }
+
+    // Method 2: Direct creature search if not found in hostile list
+    if (!pureEnergyFound)
+    {
+        std::list<Unit*> targets;
+        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f);
+        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+        Cell::VisitObjects(bot, searcher, 80.0f);
+
+        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+        {
+            Unit* unit = *i;
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            if (unit->GetEntry() == NPC_PURE_ENERGY)
+            {
+                pureEnergyFound = true;
+                break;
+            }
+        }
+    }
+
+    // CRITICAL FIX: DO NOT use aura detection - causes DPS freezing
+    // Auras persist after creatures die, creating false positives that block normal combat
+    // Only use reliable creature detection methods
     
-    return false;
+    return pureEnergyFound;
 }
 
 // Selin Fireheart Actions
@@ -923,6 +1016,10 @@ bool AttackFelCrystalAction::isUseful()
     if (!bot || !botAI)
         return false;
 
+    // CRITICAL: HEALERS SHOULD NEVER ATTACK CRYSTALS - Always prioritize healing
+    if (botAI->IsHeal(bot))
+        return false;
+
     Value<bool>* crystalValue = botAI->GetAiObjectContext()->GetValue<bool>("fel crystal nearby");
     if (!crystalValue)
         return false;
@@ -940,10 +1037,52 @@ bool AttackDelrissaAddAction::Execute(Event event)
     // Check if Delrissa is in combat
     Unit* boss = AI_VALUE2(Unit*, "find target", "priestess delrissa");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    {
+        // Clear target lock when encounter is not active
+        ObjectGuid botGuid = bot->GetGUID();
+        g_delrissa_lockedTarget[botGuid] = ObjectGuid::Empty;
+        g_delrissa_lockTime[botGuid] = 0;
         return false;
+    }
+
+    ObjectGuid botGuid = bot->GetGUID();
+    uint32 currentTime = getMSTime();
+    
+    // TARGET LOCKING MECHANISM: Prevent rapid target switching
+    static const uint32 TARGET_LOCK_DURATION = 5000U; // 5 second minimum lock
+    
+    // Check if we have a locked target that's still valid
+    Unit* lockedTarget = nullptr;
+    if (g_delrissa_lockedTarget[botGuid] && g_delrissa_lockTime[botGuid])
+    {
+        // Check if lock is still active
+        if ((currentTime - g_delrissa_lockTime[botGuid]) < TARGET_LOCK_DURATION)
+        {
+            lockedTarget = botAI->GetUnit(g_delrissa_lockedTarget[botGuid]);
+            
+            // Validate locked target is still attackable
+            if (lockedTarget && lockedTarget->IsAlive() && lockedTarget->IsInCombat() && 
+                AttackersValue::IsValidTarget(lockedTarget, bot) && bot->GetDistance(lockedTarget) < 50.0f)
+            {
+                // Continue attacking locked target
+                return Attack(lockedTarget);
+            }
+            else
+            {
+                // Locked target is no longer valid, clear lock
+                g_delrissa_lockedTarget[botGuid] = ObjectGuid::Empty;
+                g_delrissa_lockTime[botGuid] = 0;
+            }
+        }
+        else
+        {
+            // Lock expired, clear it
+            g_delrissa_lockedTarget[botGuid] = ObjectGuid::Empty;
+            g_delrissa_lockTime[botGuid] = 0;
+        }
+    }
 
     // PRIORITY-BASED targeting system (highest to lowest threat)
-    // Based on boss script research and helper abilities
     struct HelperPriority {
         uint32 npcId;
         uint32 priority;
@@ -951,19 +1090,19 @@ bool AttackDelrissaAddAction::Execute(Event event)
     };
 
     const HelperPriority delrissaHelpers[] = {
-        // PRIORITY 1: Healers (must die first - heal others including Delrissa)
-        {24554, 100, "Eramas Brightblaze"},      // Mage - Polymorph, Fireball (high threat caster)
-        {24558, 95,  "Elris Duskhallow"},       // Warlock - Fear, Shadow Bolt (high threat caster)
+        // PRIORITY 1: Dangerous Casters (highest threat)
+        {24554, 100, "Eramas Brightblaze"},      // Mage - Polymorph, Fireball
+        {24558, 95,  "Elris Duskhallow"},       // Warlock - Fear, Shadow Bolt
         
-        // PRIORITY 2: Dangerous Casters (crowd control and damage)
+        // PRIORITY 2: Other Casters
         {24561, 85,  "Yazzaj"},                 // Warlock - Fear, Shadow damage
         {24553, 80,  "Apoko"},                  // Mage - Similar to Eramas
         
-        // PRIORITY 3: Melee DPS with special abilities
-        {24557, 70,  "Kagani Nightstrike"},    // Rogue - Gouge, Kidney Shot (stuns)
+        // PRIORITY 3: Melee with special abilities
+        {24557, 70,  "Kagani Nightstrike"},    // Rogue - Gouge, Kidney Shot
         {24559, 65,  "Warlord Salaris"},       // Warrior - Intercept, Mortal Strike
         
-        // PRIORITY 4: Lower threat melee
+        // PRIORITY 4: Basic melee
         {24555, 50,  "Garaxxas"},              // Melee DPS
         {24556, 45,  "Zelfan"},                // Melee DPS
     };
@@ -988,23 +1127,10 @@ bool AttackDelrissaAddAction::Execute(Event event)
         {
             if (unit->GetEntry() == helper.npcId)
             {
-                // Priority system: Higher priority value = more important target
-                // Also consider distance for ties (closer target preferred)
                 float distance = bot->GetDistance(unit);
-                bool isBetterTarget = false;
-
-                if (helper.priority > highestPriority)
-                {
-                    // Higher priority always wins
-                    isBetterTarget = true;
-                }
-                else if (helper.priority == highestPriority && distance < targetDistance)
-                {
-                    // Same priority, prefer closer target
-                    isBetterTarget = true;
-                }
-
-                if (isBetterTarget)
+                
+                // SIMPLIFIED PRIORITY: Just pick highest priority within range
+                if (helper.priority > highestPriority && distance < 50.0f)
                 {
                     priorityTarget = unit;
                     highestPriority = helper.priority;
@@ -1015,43 +1141,13 @@ bool AttackDelrissaAddAction::Execute(Event event)
         }
     }
 
-    // Fallback: If no priority targets found, try direct search
-    if (!priorityTarget)
-    {
-        std::list<Unit*> targets;
-        Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-        Cell::VisitObjects(bot, searcher, 50.0f);
-
-        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-        {
-            Unit* unit = *i;
-            if (!unit || !unit->IsAlive() || !unit->IsInCombat())
-                continue;
-
-            if (!AttackersValue::IsValidTarget(unit, bot))
-                continue;
-
-            for (const auto& helper : delrissaHelpers)
-            {
-                if (unit->GetEntry() == helper.npcId)
-                {
-                    float distance = bot->GetDistance(unit);
-                    if (helper.priority > highestPriority || 
-                        (helper.priority == highestPriority && distance < targetDistance))
-                    {
-                        priorityTarget = unit;
-                        highestPriority = helper.priority;
-                        targetDistance = distance;
-                    }
-                    break;
-                }
-            }
-        }
-    }
-
+    // If we found a priority target, lock onto it
     if (priorityTarget)
     {
+        // Lock the target to prevent switching
+        g_delrissa_lockedTarget[botGuid] = priorityTarget->GetGUID();
+        g_delrissa_lockTime[botGuid] = currentTime;
+        
         return Attack(priorityTarget);
     }
 
@@ -1062,6 +1158,10 @@ bool AttackDelrissaAddAction::isUseful()
 {
     Player* bot = botAI->GetBot();
     if (!bot || !botAI)
+        return false;
+
+    // CRITICAL: HEALERS SHOULD NEVER ATTACK ADDS - Always prioritize healing
+    if (botAI->IsHeal(bot))
         return false;
 
     Value<bool>* addActiveValue = botAI->GetAiObjectContext()->GetValue<bool>("delrissa add active");

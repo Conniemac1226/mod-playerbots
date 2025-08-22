@@ -154,39 +154,30 @@ bool VexallusPureEnergySpawnedTrigger::IsActive()
         }
     }
 
-    // Method 3: Check for Energy Feedback aura/spell effects (indicates Pure Energy is active)
-    if (!pureEnergyFound)
+    // CRITICAL FIX: DO NOT use aura detection - it causes false positives
+    // Auras can persist after Pure Energy creatures die, blocking normal combat
+    // Only rely on actual creature detection (Methods 1 & 2 above)
+    
+    // TIMEOUT MECHANISM: Track when Pure Energy was last seen to prevent stale triggers
+    extern std::map<ObjectGuid, uint32> g_pureEnergy_lastSeenTime;
+    ObjectGuid botGuid = bot->GetGUID();
+    uint32 currentTime = getMSTime();
+    
+    if (pureEnergyFound)
     {
-        // Check if boss or players have energy feedback effects
-        if (boss->HasAura(44335) || boss->HasAura(44328)) // Energy Feedback spells
+        // Update last seen time when Pure Energy is detected
+        g_pureEnergy_lastSeenTime[botGuid] = currentTime;
+    }
+    else
+    {
+        // Check if we recently saw Pure Energy but haven't seen it for 3+ seconds
+        if (g_pureEnergy_lastSeenTime[botGuid] > 0 && 
+            (currentTime - g_pureEnergy_lastSeenTime[botGuid]) > 3000U)
         {
-            pureEnergyFound = true;
-        }
-        
-        // Check if any player has energy feedback channel
-        Group* group = bot->GetGroup();
-        if (group)
-        {
-            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
-            {
-                Player* member = itr->GetSource();
-                if (member && member->HasAura(44328)) // Energy Feedback Channel
-                {
-                    pureEnergyFound = true;
-                    break;
-                }
-            }
-        }
-        else
-        {
-            // Solo case - check bot for energy feedback
-            if (bot->HasAura(44328))
-            {
-                pureEnergyFound = true;
-            }
+            // Clear the timestamp - Pure Energy phase is definitely over
+            g_pureEnergy_lastSeenTime[botGuid] = 0;
         }
     }
-
     
     return pureEnergyFound;
 }
