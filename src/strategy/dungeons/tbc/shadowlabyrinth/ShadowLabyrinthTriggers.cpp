@@ -37,16 +37,53 @@ bool BlackheartInciteChaosTrigger::IsActive()
 
 bool BlackheartWarStompTrigger::IsActive()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
     Unit* boss = AI_VALUE2(Unit*, "find target", "blackheart the inciter");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-    {
         return false;
-    }
     
+    // REACTIVE DETECTION: Respond to actual War Stomp cast
     if (boss->FindCurrentSpellBySpellId(SL_SPELL_WAR_STOMP))
     {
         float distance = bot->GetExactDist2d(boss);
-        return distance < 10.0f;
+        return distance < 12.0f; // War Stomp affects ~10 yard radius, safety margin
+    }
+    
+    return false;
+}
+
+bool BlackheartChargeTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
+    Unit* boss = AI_VALUE2(Unit*, "find target", "blackheart the inciter");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+    
+    // CHARGE DETECTION: Boss targets random player and charges at them
+    // Detect if boss is casting Charge at this bot or if bot was recently charged
+    if (boss->FindCurrentSpellBySpellId(SL_SPELL_CHARGE))
+    {
+        // Check if this bot is the target of the charge
+        Unit* chargeTarget = boss->GetVictim();
+        if (chargeTarget && chargeTarget->GetGUID() == bot->GetGUID())
+            return true;
+            
+        // Also check by spell target (more reliable)
+        if (boss->HasUnitState(UNIT_STATE_CASTING))
+        {
+            Spell* currentSpell = boss->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+            if (currentSpell && currentSpell->GetSpellInfo()->Id == SL_SPELL_CHARGE)
+            {
+                Unit* target = currentSpell->m_targets.GetUnitTarget();
+                return (target && target->GetGUID() == bot->GetGUID());
+            }
+        }
     }
     
     return false;

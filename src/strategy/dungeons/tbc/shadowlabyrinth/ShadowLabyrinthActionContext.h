@@ -13,6 +13,7 @@ public:
         creators["hellmaw fear react"] = &ShadowLabyrinthActionContext::hellmaw_fear_react;
         creators["incite chaos react"] = &ShadowLabyrinthActionContext::incite_chaos_react;
         creators["avoid war stomp"] = &ShadowLabyrinthActionContext::avoid_war_stomp;
+        creators["blackheart charge react"] = &ShadowLabyrinthActionContext::blackheart_charge_react;
         creators["void traveler priority"] = &ShadowLabyrinthActionContext::void_traveler_priority;
         creators["move from rain of fire"] = &ShadowLabyrinthActionContext::move_from_rain_of_fire;
         creators["draw shadows react"] = &ShadowLabyrinthActionContext::draw_shadows_react;
@@ -27,6 +28,7 @@ private:
     static Action* hellmaw_fear_react(PlayerbotAI* botAI) { return new HellmawFearReactAction(botAI); }
     static Action* incite_chaos_react(PlayerbotAI* botAI) { return new InciteChaosReactAction(botAI); }
     static Action* avoid_war_stomp(PlayerbotAI* botAI) { return new AvoidWarStompAction(botAI); }
+    static Action* blackheart_charge_react(PlayerbotAI* botAI) { return new BlackheartChargeReactAction(botAI); }
     static Action* void_traveler_priority(PlayerbotAI* botAI) { return new VoidTravelerPriorityAction(botAI); }
     static Action* move_from_rain_of_fire(PlayerbotAI* botAI) { return new MoveFromRainOfFireAction(botAI); }
     static Action* draw_shadows_react(PlayerbotAI* botAI) { return new DrawShadowsReactAction(botAI); }

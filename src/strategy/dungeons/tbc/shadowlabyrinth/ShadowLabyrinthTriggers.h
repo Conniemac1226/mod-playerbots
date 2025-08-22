@@ -33,6 +33,13 @@ public:
     bool IsActive() override;
 };
 
+class BlackheartChargeTrigger : public Trigger
+{
+public:
+    BlackheartChargeTrigger(PlayerbotAI* botAI) : Trigger(botAI, "blackheart charge") {}
+    bool IsActive() override;
+};
+
 class VorpilVoidTravelerTrigger : public Trigger
 {
 public:

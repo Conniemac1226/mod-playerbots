@@ -2,6 +2,11 @@
 #include "ShadowLabyrinthActions.h"
 #include "ShadowLabyrinthStrategy.h"
 
+// Per-bot state maps for Void Traveler targeting stability
+std::map<ObjectGuid, ObjectGuid> g_voidTraveler_lockedTarget;
+std::map<ObjectGuid, uint32> g_voidTraveler_lockTime;
+std::map<ObjectGuid, uint32> g_voidTraveler_lastSeenTime;
+
 bool AvoidCorrosiveAcidAction::Execute(Event event)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "ambassador hellmaw");
@@ -79,15 +84,28 @@ bool HellmawFearReactAction::Execute(Event event)
 
 bool InciteChaosReactAction::Execute(Event event)
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
     Unit* boss = AI_VALUE2(Unit*, "find target", "blackheart the inciter");
     if (!boss)
-    {
         return false;
-    }
     
-    // During Incite Chaos, players attack each other - spread out!
+    // During Incite Chaos, players attack each other AND boss becomes immune - spread out!
     if (boss->FindCurrentSpellBySpellId(SPELL_INCITE_CHAOS) || bot->HasAura(SPELL_INCITE_CHAOS_B))
     {
+        // CRITICAL: Boss is immune during Incite Chaos - stop attacking boss
+        if (boss->HasUnitFlag(UNIT_FLAG_IMMUNE_TO_PC) || boss->HasUnitFlag(UNIT_FLAG_IMMUNE_TO_NPC))
+        {
+            // Clear target if currently attacking immune boss to prevent wasted abilities
+            Unit* currentTarget = AI_VALUE(Unit*, "current target");
+            if (currentTarget && currentTarget->GetGUID() == boss->GetGUID())
+            {
+                botAI->ChangeStrategy("-follow,+stay", BotState::BOT_STATE_COMBAT);
+                // Stop attacking boss during immunity - will resume after chaos ends
+            }
+        }
         // Move away from all other players to minimize damage
         float bestAngle = 0;
         float maxMinDist = 0;
@@ -131,32 +149,68 @@ bool InciteChaosReactAction::Execute(Event event)
 
 bool AvoidWarStompAction::Execute(Event event)
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
     Unit* boss = AI_VALUE2(Unit*, "find target", "blackheart the inciter");
     if (!boss)
-    {
         return false;
-    }
     
-    // War Stomp is instant but we can predict it based on timing
-    // It happens every 16-26 seconds, move out if melee and not tank
-    if (!botAI->IsTank(bot) && bot->GetExactDist2d(boss) < 10.0f)
+    // REACTIVE WAR STOMP AVOIDANCE: Move away when boss actually casts War Stomp
+    if (boss->FindCurrentSpellBySpellId(SL_SPELL_WAR_STOMP))
     {
-        // Check if boss might cast War Stomp soon (simplified timing check)
-        static std::map<ObjectGuid, time_t> lastStompTime;
-        time_t currentTime = time(nullptr);
-        
-        if (lastStompTime[boss->GetGUID()] == 0)
-            lastStompTime[boss->GetGUID()] = currentTime;
-        
-        if ((currentTime - lastStompTime[boss->GetGUID()]) > 15)
+        float currentDistance = bot->GetExactDist2d(boss);
+        if (currentDistance < 12.0f) // Within stomp range
         {
-            // Preemptively move out
-            float angle = boss->GetAngle(bot) + M_PI;
-            float destX = bot->GetPositionX() + cos(angle) * 12.0f;
-            float destY = bot->GetPositionY() + sin(angle) * 12.0f;
-            lastStompTime[boss->GetGUID()] = currentTime;
+            // Move directly away from boss to avoid the stomp
+            float angle = boss->GetAngle(bot) + M_PI; // Opposite direction
+            float moveDistance = 15.0f - currentDistance; // Get outside 12+ yard range
+            float destX = bot->GetPositionX() + cos(angle) * moveDistance;
+            float destY = bot->GetPositionY() + sin(angle) * moveDistance;
+            
             return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        }
+    }
+    
+    return false;
+}
+
+bool BlackheartChargeReactAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
+    Unit* boss = AI_VALUE2(Unit*, "find target", "blackheart the inciter");
+    if (!boss)
+        return false;
+    
+    // CHARGE REACTION: Boss charges at bot, need to prepare for impact and reposition
+    if (boss->FindCurrentSpellBySpellId(SL_SPELL_CHARGE))
+    {
+        // Check if this bot is being charged
+        if (boss->HasUnitState(UNIT_STATE_CASTING))
+        {
+            Spell* currentSpell = boss->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+            if (currentSpell && currentSpell->GetSpellInfo()->Id == SL_SPELL_CHARGE)
+            {
+                Unit* target = currentSpell->m_targets.GetUnitTarget();
+                if (target && target->GetGUID() == bot->GetGUID())
+                {
+                    // Bot is being charged - notify group by moving slightly to indicate threat
+                    // This helps tanks regain aggro after charge
+                    
+                    // Move perpendicular to boss to avoid being in direct line after charge
+                    float angle = boss->GetAngle(bot) + (M_PI / 2.0f); // 90 degrees
+                    float destX = bot->GetPositionX() + cos(angle) * 8.0f;
+                    float destY = bot->GetPositionY() + sin(angle) * 8.0f;
+                    
+                    return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                                false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                }
+            }
         }
     }
     
@@ -170,43 +224,113 @@ bool VoidTravelerPriorityAction::isUseful()
 
 bool VoidTravelerPriorityAction::Execute(Event event)
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
     Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
     if (!boss || !boss->IsInCombat())
     {
+        // Clear all target state when encounter is not active
+        ObjectGuid botGuid = bot->GetGUID();
+        g_voidTraveler_lockedTarget[botGuid] = ObjectGuid::Empty;
+        g_voidTraveler_lockTime[botGuid] = 0;
+        g_voidTraveler_lastSeenTime[botGuid] = 0;
         return false;
     }
     
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    ObjectGuid botGuid = bot->GetGUID();
+    uint32 currentTime = getMSTime();
     
-    // Void Travelers walk to Vorpil and sacrifice, healing him
-    // Must kill them before they reach him
+    // TARGET LOCKING MECHANISM: Prevent rapid target switching between travelers and boss
+    static const uint32 TARGET_LOCK_DURATION = 3000U; // 3 second minimum lock on a traveler
+    
+    // Check if we have a locked Void Traveler that's still valid
+    Unit* lockedTraveler = nullptr;
+    if (g_voidTraveler_lockedTarget[botGuid] && g_voidTraveler_lockTime[botGuid])
+    {
+        // Check if lock is still active
+        if ((currentTime - g_voidTraveler_lockTime[botGuid]) < TARGET_LOCK_DURATION)
+        {
+            lockedTraveler = botAI->GetUnit(g_voidTraveler_lockedTarget[botGuid]);
+            
+            // Validate locked traveler is still attackable and moving toward boss
+            if (lockedTraveler && lockedTraveler->IsAlive() && 
+                lockedTraveler->GetEntry() == NPC_VOID_TRAVELER && 
+                bot->GetDistance(lockedTraveler) < 50.0f)
+            {
+                // Continue attacking locked traveler
+                return Attack(lockedTraveler);
+            }
+            else
+            {
+                // Locked traveler is no longer valid, clear lock
+                g_voidTraveler_lockedTarget[botGuid] = ObjectGuid::Empty;
+                g_voidTraveler_lockTime[botGuid] = 0;
+            }
+        }
+        else
+        {
+            // Lock expired, clear it
+            g_voidTraveler_lockedTarget[botGuid] = ObjectGuid::Empty;
+            g_voidTraveler_lockTime[botGuid] = 0;
+        }
+    }
+    
+    // Find the most urgent Void Traveler (closest to boss = highest priority)
     GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* closestTraveler = nullptr;
+    Unit* mostUrgentTraveler = nullptr;
     float closestDistToBoss = 100.0f;
     
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
-        {
             continue;
-        }
         
         if (unit->GetEntry() == NPC_VOID_TRAVELER)
         {
             float distToBoss = unit->GetExactDist2d(boss);
+            // CRITICAL: Prioritize travelers within 10 yards of boss (about to sacrifice)
             if (distToBoss < closestDistToBoss)
             {
                 closestDistToBoss = distToBoss;
-                closestTraveler = unit;
+                mostUrgentTraveler = unit;
             }
         }
     }
     
-    // Switch to closest traveler to boss
-    if (closestTraveler && currentTarget != closestTraveler)
+    // Lock onto the most urgent traveler
+    if (mostUrgentTraveler)
     {
-        return Attack(closestTraveler);
+        // Update last seen time when travelers are active
+        g_voidTraveler_lastSeenTime[botGuid] = currentTime;
+        
+        // Lock the target to prevent switching
+        g_voidTraveler_lockedTarget[botGuid] = mostUrgentTraveler->GetGUID();
+        g_voidTraveler_lockTime[botGuid] = currentTime;
+        
+        return Attack(mostUrgentTraveler);
+    }
+    
+    // CRITICAL: No Void Travelers alive - ensure bots return to boss
+    // Clear any locks and explicitly attack the boss to prevent freezing
+    g_voidTraveler_lockedTarget[botGuid] = ObjectGuid::Empty;
+    g_voidTraveler_lockTime[botGuid] = 0;
+    
+    // TIMEOUT MECHANISM: Track when we last saw travelers to prevent stale high-priority actions
+    if (g_voidTraveler_lastSeenTime[botGuid] > 0 && 
+        (currentTime - g_voidTraveler_lastSeenTime[botGuid]) > 2000U) // 2 seconds since last traveler
+    {
+        // Clear the timestamp - no travelers for 2+ seconds, definitely back to boss
+        g_voidTraveler_lastSeenTime[botGuid] = 0;
+        
+        // Force target boss to prevent bots from doing nothing
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+        if (!currentTarget || currentTarget->GetGUID() != boss->GetGUID())
+        {
+            return Attack(boss);
+        }
     }
     
     return false;
