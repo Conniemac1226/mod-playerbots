@@ -2,10 +2,6 @@
 #include "ShadowLabyrinthActions.h"
 #include "ShadowLabyrinthStrategy.h"
 
-// Per-bot state maps for Void Traveler targeting stability
-std::map<ObjectGuid, ObjectGuid> g_voidTraveler_lockedTarget;
-std::map<ObjectGuid, uint32> g_voidTraveler_lockTime;
-std::map<ObjectGuid, uint32> g_voidTraveler_lastSeenTime;
 
 bool AvoidCorrosiveAcidAction::Execute(Event event)
 {
@@ -231,55 +227,12 @@ bool VoidTravelerPriorityAction::Execute(Event event)
     Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
     if (!boss || !boss->IsInCombat())
     {
-        // Clear all target state when encounter is not active
-        ObjectGuid botGuid = bot->GetGUID();
-        g_voidTraveler_lockedTarget[botGuid] = ObjectGuid::Empty;
-        g_voidTraveler_lockTime[botGuid] = 0;
-        g_voidTraveler_lastSeenTime[botGuid] = 0;
         return false;
     }
     
-    ObjectGuid botGuid = bot->GetGUID();
-    uint32 currentTime = getMSTime();
-    
-    // TARGET LOCKING MECHANISM: Prevent rapid target switching between travelers and boss
-    static const uint32 TARGET_LOCK_DURATION = 3000U; // 3 second minimum lock on a traveler
-    
-    // Check if we have a locked Void Traveler that's still valid
-    Unit* lockedTraveler = nullptr;
-    if (g_voidTraveler_lockedTarget[botGuid] && g_voidTraveler_lockTime[botGuid])
-    {
-        // Check if lock is still active
-        if ((currentTime - g_voidTraveler_lockTime[botGuid]) < TARGET_LOCK_DURATION)
-        {
-            lockedTraveler = botAI->GetUnit(g_voidTraveler_lockedTarget[botGuid]);
-            
-            // Validate locked traveler is still attackable and moving toward boss
-            if (lockedTraveler && lockedTraveler->IsAlive() && 
-                lockedTraveler->GetEntry() == NPC_VOID_TRAVELER && 
-                bot->GetDistance(lockedTraveler) < 50.0f)
-            {
-                // Continue attacking locked traveler
-                return Attack(lockedTraveler);
-            }
-            else
-            {
-                // Locked traveler is no longer valid, clear lock
-                g_voidTraveler_lockedTarget[botGuid] = ObjectGuid::Empty;
-                g_voidTraveler_lockTime[botGuid] = 0;
-            }
-        }
-        else
-        {
-            // Lock expired, clear it
-            g_voidTraveler_lockedTarget[botGuid] = ObjectGuid::Empty;
-            g_voidTraveler_lockTime[botGuid] = 0;
-        }
-    }
-    
-    // Find the most urgent Void Traveler (closest to boss = highest priority)
+    // EMERGENCY PRIORITY: Find closest Void Traveler to boss (about to heal him)
     GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* mostUrgentTraveler = nullptr;
+    Unit* closestTraveler = nullptr;
     float closestDistToBoss = 100.0f;
     
     for (auto& npc : npcs)
@@ -291,46 +244,17 @@ bool VoidTravelerPriorityAction::Execute(Event event)
         if (unit->GetEntry() == NPC_VOID_TRAVELER)
         {
             float distToBoss = unit->GetExactDist2d(boss);
-            // CRITICAL: Prioritize travelers within 10 yards of boss (about to sacrifice)
             if (distToBoss < closestDistToBoss)
             {
                 closestDistToBoss = distToBoss;
-                mostUrgentTraveler = unit;
+                closestTraveler = unit;
             }
         }
     }
     
-    // Lock onto the most urgent traveler
-    if (mostUrgentTraveler)
+    if (closestTraveler)
     {
-        // Update last seen time when travelers are active
-        g_voidTraveler_lastSeenTime[botGuid] = currentTime;
-        
-        // Lock the target to prevent switching
-        g_voidTraveler_lockedTarget[botGuid] = mostUrgentTraveler->GetGUID();
-        g_voidTraveler_lockTime[botGuid] = currentTime;
-        
-        return Attack(mostUrgentTraveler);
-    }
-    
-    // CRITICAL: No Void Travelers alive - ensure bots return to boss
-    // Clear any locks and explicitly attack the boss to prevent freezing
-    g_voidTraveler_lockedTarget[botGuid] = ObjectGuid::Empty;
-    g_voidTraveler_lockTime[botGuid] = 0;
-    
-    // TIMEOUT MECHANISM: Track when we last saw travelers to prevent stale high-priority actions
-    if (g_voidTraveler_lastSeenTime[botGuid] > 0 && 
-        (currentTime - g_voidTraveler_lastSeenTime[botGuid]) > 2000U) // 2 seconds since last traveler
-    {
-        // Clear the timestamp - no travelers for 2+ seconds, definitely back to boss
-        g_voidTraveler_lastSeenTime[botGuid] = 0;
-        
-        // Force target boss to prevent bots from doing nothing
-        Unit* currentTarget = AI_VALUE(Unit*, "current target");
-        if (!currentTarget || currentTarget->GetGUID() != boss->GetGUID())
-        {
-            return Attack(boss);
-        }
+        return Attack(closestTraveler);
     }
     
     return false;
