@@ -257,6 +257,14 @@ bool VoidTravelerPriorityAction::Execute(Event event)
         return Attack(closestTraveler);
     }
     
+    // SAFETY: No travelers found but trigger is active - something went wrong
+    // Force attack boss to prevent bot from doing nothing
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (!currentTarget || currentTarget->GetGUID() != boss->GetGUID())
+    {
+        return Attack(boss);
+    }
+    
     return false;
 }
 
