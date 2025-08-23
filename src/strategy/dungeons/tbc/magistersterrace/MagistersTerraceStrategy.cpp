@@ -17,7 +17,7 @@ void MagistersTerraceStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     // Vexallus
     triggers.push_back(new TriggerNode(
         "vexallus pure energy spawned",
-        NextAction::array(0, new NextAction("attack pure energy", ACTION_EMERGENCY + 1), NULL)
+        NextAction::array(0, new NextAction("attack pure energy", ACTION_NORMAL + 5), NULL)
     ));
 
     // Priestess Delrissa

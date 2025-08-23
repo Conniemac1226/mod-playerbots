@@ -84,8 +84,6 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
 
     // Find other players with same/opposite polarity
     const GuidVector members = AI_VALUE(GuidVector, "group members");
-    Position safePos;
-    bool foundSamePolarity = false;
     
     for (auto& member : members)
     {
@@ -95,40 +93,33 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
 
         bool allyPositive = ally->HasAura(SPELL_POSITIVE_POLARITY);
         bool allyNegative = ally->HasAura(SPELL_NEGATIVE_POLARITY);
+        float distance = bot->GetDistance(ally);
         
         if ((hasPositive && allyPositive) || (hasNegative && allyNegative))
         {
-            // Same polarity - move closer to stack
-            float distance = bot->GetDistance(ally);
-            if (distance > 5.0f)
+            // Same polarity - move closer if too far, stop when close enough
+            if (distance > 8.0f)
             {
-                safePos = ally->GetPosition();
-                foundSamePolarity = true;
-                break;
+                return MoveTo(bot->GetMapId(), ally->GetPositionX(), ally->GetPositionY(),
+                             ally->GetPositionZ(), false, false, false, true,
+                             MovementPriority::MOVEMENT_NORMAL);
             }
+            // Already close enough - stop moving and let normal combat resume
         }
         else if ((hasPositive && allyNegative) || (hasNegative && allyPositive))
         {
-            // Opposite polarity - stay away
-            float distance = bot->GetDistance(ally);
-            if (distance < 10.0f)
+            // Opposite polarity - move away if too close
+            if (distance < 8.0f)
             {
-                // Move away from opposite polarity
                 float angle = bot->GetAngle(ally) + M_PI;
-                float x = bot->GetPositionX() + cos(angle) * 15.0f;
-                float y = bot->GetPositionY() + sin(angle) * 15.0f;
+                float x = bot->GetPositionX() + cos(angle) * 12.0f;
+                float y = bot->GetPositionY() + sin(angle) * 12.0f;
                 float z = bot->GetPositionZ();
                 return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                            MovementPriority::MOVEMENT_FORCED);
+                            MovementPriority::MOVEMENT_NORMAL);
             }
+            // Already far enough - stop moving and let normal combat resume
         }
-    }
-
-    if (foundSamePolarity)
-    {
-        return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
-                     safePos.m_positionZ, false, false, false, true,
-                     MovementPriority::MOVEMENT_FORCED);
     }
 
     return false;
@@ -548,7 +539,7 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
     if (!nearestFlame)
         return false;
 
-    const float MIN_SAFE_DISTANCE = 10.0f; // Area aura range + buffer
+    const float MIN_SAFE_DISTANCE = 16.0f; // Area aura + Inferno range + buffer
     
     // If too close to ANY Raging Flames, move away (like ICC gas cloud)
     if (closestDistance < MIN_SAFE_DISTANCE)
@@ -594,7 +585,7 @@ bool SepethreaAvoidRagingFlamesAction::isUseful()
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
             
-        if (bot->GetDistance(flame) < 10.0f) // Too close to area aura
+        if (bot->GetDistance(flame) < 16.0f) // Too close to area aura + inferno range
             return true;
     }
     
@@ -632,8 +623,9 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
     if (!infernoFlame)
         return false;
 
-    // Flee from Inferno
-    return FleePosition(infernoFlame->GetPosition(), 18.0f, 300U);
+    // RESEARCHED: boss_nethermancer_sepethrea.cpp:151-157 - Inferno AoE damage
+    // Flee further from Inferno to ensure safety
+    return FleePosition(infernoFlame->GetPosition(), 22.0f, 500U);
 }
 
 bool SepethreaInfernoAvoidanceAction::isUseful()
@@ -654,8 +646,9 @@ bool SepethreaInfernoAvoidanceAction::isUseful()
         if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_RAGING_FLAMES)
             continue;
 
-        // Check for Inferno casting
-        if (unit->FindCurrentSpellBySpellId(SPELL_INFERNO) && bot->GetDistance(unit) < 18.0f)
+        // Check for Inferno casting OR active Inferno aura (persistent damage)
+        if ((unit->FindCurrentSpellBySpellId(SPELL_INFERNO) || unit->HasAura(SPELL_INFERNO)) 
+            && bot->GetDistance(unit) < 20.0f)
             return true;
     }
     

@@ -181,3 +181,25 @@ bool KalithreshChannelingRageTrigger::IsActive()
     }
     return false;
 }
+
+bool KalithreshSpellReflectionEndedTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_WARLORD_KALITHRESH, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Check if we previously had spell reflection flag set but boss no longer has the aura
+    Value<bool>* spellReflectionActiveValue = botAI->GetAiObjectContext()->GetValue<bool>("spell reflection active");
+    if (!spellReflectionActiveValue)
+        return false;
+
+    bool wasActive = spellReflectionActiveValue->Get();
+    bool currentlyActive = boss->HasAura(SPELL_SPELL_REFLECTION);
+    
+    // Trigger when spell reflection WAS active but is no longer active
+    return wasActive && !currentlyActive;
+}

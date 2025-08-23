@@ -22,6 +22,7 @@ public:
 
         // Warlord Kalithresh
         creators["stop casting spell reflection"] = &SteamvaultActionContext::stop_casting_spell_reflection;
+        creators["resume attack after spell reflection"] = &SteamvaultActionContext::resume_attack_after_spell_reflection;
         creators["heal impale target"] = &SteamvaultActionContext::heal_impale_target;
         creators["attack naga distiller"] = &SteamvaultActionContext::attack_naga_distiller;
         creators["interrupt distiller channel"] = &SteamvaultActionContext::interrupt_distiller_channel;
@@ -41,6 +42,7 @@ private:
 
     // Warlord Kalithresh
     static Action* stop_casting_spell_reflection(PlayerbotAI* ai) { return new StopCastingSpellReflectionAction(ai); }
+    static Action* resume_attack_after_spell_reflection(PlayerbotAI* ai) { return new ResumeAttackAfterSpellReflectionAction(ai); }
     static Action* heal_impale_target(PlayerbotAI* ai) { return new HealImpaleTargetAction(ai); }
     static Action* attack_naga_distiller(PlayerbotAI* ai) { return new AttackNagaDistillerAction(ai); }
     static Action* interrupt_distiller_channel(PlayerbotAI* ai) { return new InterruptDistillerChannelAction(ai); }
