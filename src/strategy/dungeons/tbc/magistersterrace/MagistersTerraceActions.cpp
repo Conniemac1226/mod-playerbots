@@ -20,6 +20,8 @@ std::map<ObjectGuid, uint32> g_delrissa_lockTime;
 
 // Per-bot state maps for Pure Energy timeout mechanism
 std::map<ObjectGuid, uint32> g_pureEnergy_lastSeenTime;
+std::map<ObjectGuid, uint32> g_pureEnergy_stuckTime;
+std::map<ObjectGuid, ObjectGuid> g_pureEnergy_lastTarget;
 
 // Kael'thas Actions
 bool InterruptKaelthasPyroblastAction::Execute(Event event)
@@ -711,6 +713,10 @@ bool AttackPureEnergyAction::Execute(Event event)
     if (!bot)
         return false;
 
+    // CRITICAL: HEALERS NEVER ATTACK ADDS - Always prioritize healing
+    if (botAI->IsHeal(bot))
+        return false;
+
     // ENHANCED PURE ENERGY TARGETING: Multi-method approach
     Unit* pureEnergy = nullptr;
     float closestDistance = 80.0f; // Increased detection range
@@ -789,6 +795,53 @@ bool AttackPureEnergyAction::Execute(Event event)
 
     if (pureEnergy)
     {
+        ObjectGuid botGuid = bot->GetGUID();
+        ObjectGuid energyGuid = pureEnergy->GetGUID();
+        uint32 currentTime = getMSTime();
+        
+        // EMERGENCY FALLBACK: Track if bot is stuck on same Pure Energy target
+        if (g_pureEnergy_lastTarget[botGuid] == energyGuid)
+        {
+            // Same target - check if stuck
+            if (g_pureEnergy_stuckTime[botGuid] == 0)
+            {
+                g_pureEnergy_stuckTime[botGuid] = currentTime;
+            }
+            else if ((currentTime - g_pureEnergy_stuckTime[botGuid]) > 5000U)
+            {
+                // Stuck for 5+ seconds - force target switch or fallback to boss
+                g_pureEnergy_lastTarget[botGuid] = ObjectGuid::Empty;
+                g_pureEnergy_stuckTime[botGuid] = 0;
+                
+                // Try to target boss instead
+                Unit* boss = bot->FindNearestCreature(NPC_VEXALLUS, 100.0f);
+                if (boss)
+                {
+                    return Attack(boss);
+                }
+                return false;
+            }
+        }
+        else
+        {
+            // New target - reset tracking
+            g_pureEnergy_lastTarget[botGuid] = energyGuid;
+            g_pureEnergy_stuckTime[botGuid] = 0;
+        }
+        
+        // SPECIAL HANDLING: Pure Energy has REACT_PASSIVE
+        // Use direct targeting instead of normal Attack() which might fail
+        
+        // Clear current target to reset combat state
+        bot->SetTarget(pureEnergy->GetGUID());
+        
+        // Force threat generation for passive targets
+        if (!pureEnergy->GetThreatMgr().GetThreat(bot))
+        {
+            pureEnergy->GetThreatMgr().AddThreat(bot, 1.0f);
+        }
+        
+        // Use normal attack method
         return Attack(pureEnergy);
     }
 
@@ -813,6 +866,19 @@ bool AttackPureEnergyAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
+    // SMART TIMEOUT: Don't be useful if stuck on same target too long
+    ObjectGuid botGuid = bot->GetGUID();
+    uint32 currentTime = getMSTime();
+    
+    // If we've been targeting Pure Energy for more than 10 seconds, something is wrong
+    if (g_pureEnergy_lastSeenTime[botGuid] > 0 && 
+        (currentTime - g_pureEnergy_lastSeenTime[botGuid]) > 10000U)
+    {
+        // Force timeout - let bots resume normal combat
+        g_pureEnergy_lastSeenTime[botGuid] = 0;
+        return false;
+    }
+
     // ENHANCED DETECTION: Same logic as trigger to ensure consistency
     bool pureEnergyFound = false;
 
@@ -827,6 +893,8 @@ bool AttackPureEnergyAction::isUseful()
         if (unit->GetEntry() == NPC_PURE_ENERGY)
         {
             pureEnergyFound = true;
+            // Update last seen time for timeout system
+            g_pureEnergy_lastSeenTime[botGuid] = currentTime;
             break;
         }
     }
@@ -848,6 +916,8 @@ bool AttackPureEnergyAction::isUseful()
             if (unit->GetEntry() == NPC_PURE_ENERGY)
             {
                 pureEnergyFound = true;
+                // Update last seen time for timeout system
+                g_pureEnergy_lastSeenTime[botGuid] = currentTime;
                 break;
             }
         }

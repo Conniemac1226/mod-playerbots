@@ -164,8 +164,8 @@ bool RagingFlamesInfernoTrigger::IsActive()
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
 
-        // Check if flame is casting Inferno
-        if (flame->FindCurrentSpellBySpellId(SPELL_INFERNO))
+        // Check if flame is casting Inferno OR has the Inferno aura active
+        if (flame->FindCurrentSpellBySpellId(SPELL_INFERNO) || flame->HasAura(SPELL_INFERNO))
             return true;
     }
     
@@ -207,7 +207,9 @@ bool RagingFlamesTooCloseTrigger::IsActive()
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
             
-        if (bot->GetDistance(flame) < 10.0f) // Too close to area aura
+        // RESEARCHED: boss_nethermancer_sepethrea.cpp:146 - Raging Flames have area aura
+        // RESEARCHED: boss_nethermancer_sepethrea.cpp:151-157 - Inferno AoE every 15-25s
+        if (bot->GetDistance(flame) < 15.0f) // Increased safe distance for area aura + inferno
             return true;
     }
     

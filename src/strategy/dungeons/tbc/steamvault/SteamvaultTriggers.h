@@ -103,3 +103,10 @@ public:
     KalithreshChannelingRageTrigger(PlayerbotAI* ai) : Trigger(ai, "kalithresh channeling rage") {}
     bool IsActive() override;
 };
+
+class KalithreshSpellReflectionEndedTrigger : public Trigger
+{
+public:
+    KalithreshSpellReflectionEndedTrigger(PlayerbotAI* ai) : Trigger(ai, "kalithresh spell reflection ended") {}
+    bool IsActive() override;
+};

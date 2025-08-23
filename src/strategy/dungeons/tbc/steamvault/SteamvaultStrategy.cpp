@@ -47,6 +47,11 @@ void SteamvaultStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     ));
 
     triggers.push_back(new TriggerNode(
+        "kalithresh spell reflection ended",
+        NextAction::array(0, new NextAction("resume attack after spell reflection", ACTION_NORMAL + 1), NULL)
+    ));
+
+    triggers.push_back(new TriggerNode(
         "kalithresh impale",
         NextAction::array(0, new NextAction("heal impale target", ACTION_EMERGENCY + 1), NULL)
     ));

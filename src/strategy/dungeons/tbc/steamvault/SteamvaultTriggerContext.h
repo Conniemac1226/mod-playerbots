@@ -22,6 +22,7 @@ public:
 
         // Warlord Kalithresh
         creators["kalithresh spell reflection"] = &SteamvaultTriggerContext::kalithresh_spell_reflection;
+        creators["kalithresh spell reflection ended"] = &SteamvaultTriggerContext::kalithresh_spell_reflection_ended;
         creators["kalithresh impale"] = &SteamvaultTriggerContext::kalithresh_impale;
         creators["kalithresh naga distiller active"] = &SteamvaultTriggerContext::kalithresh_naga_distiller_active;
         creators["kalithresh channeling rage"] = &SteamvaultTriggerContext::kalithresh_channeling_rage;
@@ -41,6 +42,7 @@ private:
 
     // Warlord Kalithresh
     static Trigger* kalithresh_spell_reflection(PlayerbotAI* ai) { return new KalithreshSpellReflectionTrigger(ai); }
+    static Trigger* kalithresh_spell_reflection_ended(PlayerbotAI* ai) { return new KalithreshSpellReflectionEndedTrigger(ai); }
     static Trigger* kalithresh_impale(PlayerbotAI* ai) { return new KalithreshImpaleTrigger(ai); }
     static Trigger* kalithresh_naga_distiller_active(PlayerbotAI* ai) { return new KalithreshNagaDistillerActiveTrigger(ai); }
     static Trigger* kalithresh_channeling_rage(PlayerbotAI* ai) { return new KalithreshChannelingRageTrigger(ai); }

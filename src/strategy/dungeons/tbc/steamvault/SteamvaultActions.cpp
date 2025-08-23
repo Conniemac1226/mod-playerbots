@@ -333,23 +333,21 @@ bool StopCastingSpellReflectionAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Spell Reflection - boss_warlord_kalithresh.cpp:79-82
-    // Boss casts spell reflection every 20-36 seconds
-    // CRITICAL: Stop ALL spellcasting immediately!
-    if (boss->HasAura(SPELL_SPELL_REFLECTION) || boss->FindCurrentSpellBySpellId(SPELL_SPELL_REFLECTION))
+    // Boss casts SPELL_SPELL_REFLECTION every 20-36 seconds via DoCastSelf
+    // CRITICAL: Stop ALL spellcasting immediately for ALL classes!
+    if (boss->HasAura(SPELL_SPELL_REFLECTION))
     {
-        // Interrupt any current cast
+        // Interrupt any current cast for ALL bots (not just casters)
         if (bot->HasUnitState(UNIT_STATE_CASTING))
         {
             bot->InterruptNonMeleeSpells(true);
         }
         
-        // Clear target to prevent auto-cast
-        if (botAI->IsCaster(bot))
-        {
-            bot->AttackStop();
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(nullptr);
-        }
+        // Set a temporary flag to prevent spell casting
+        botAI->GetAiObjectContext()->GetValue<bool>("spell reflection active")->Set(true);
         
+        // For melee, continue auto-attacks but no spells
+        // For casters/hybrids, avoid all spell casting temporarily
         return true;
     }
 
@@ -530,6 +528,47 @@ bool InterruptDistillerChannelAction::isUseful()
         return false;
 
     Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("kalithresh channeling rage");
+    if (!boolValue)
+        return false;
+    
+    return boolValue->Get();
+}
+
+bool ResumeAttackAfterSpellReflectionAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "warlord kalithresh");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Clear the spell reflection flag when boss no longer has the buff
+    if (!boss->HasAura(SPELL_SPELL_REFLECTION))
+    {
+        botAI->GetAiObjectContext()->GetValue<bool>("spell reflection active")->Set(false);
+        
+        // Resume normal combat behavior - target the boss again if no current target
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+        if (!currentTarget || !currentTarget->IsAlive())
+        {
+            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(boss);
+        }
+        
+        return true;
+    }
+
+    return false;
+}
+
+bool ResumeAttackAfterSpellReflectionAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("kalithresh spell reflection ended");
     if (!boolValue)
         return false;
     

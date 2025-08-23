@@ -96,3 +96,11 @@ public:
     bool Execute(Event event) override;
     bool isUseful() override;
 };
+
+class ResumeAttackAfterSpellReflectionAction : public Action
+{
+public:
+    ResumeAttackAfterSpellReflectionAction(PlayerbotAI* ai) : Action(ai, "resume attack after spell reflection") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
