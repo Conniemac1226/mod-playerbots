@@ -136,11 +136,21 @@ bool AttackFiendishHoundAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find Fiendish Hounds - simplified approach
-    Unit* hound = AI_VALUE2(Unit*, "find target", "fiendish hound");
-    if (hound && hound->IsAlive() && hound->IsInCombat())
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss)
+        return false;
+        
+    LOG_INFO("playerbots", "OMOR DEBUG: {} - AttackFiendishHoundAction Execute - Boss shield: {}", 
+             bot->GetName(), boss->HasAura(SPELL_DEMONIC_SHIELD) ? "YES" : "NO");
+    
+    // ONLY prioritize hounds during shield phase when Omor is immune
+    if (boss->HasAura(SPELL_DEMONIC_SHIELD))
     {
-        return Attack(hound);
+        Unit* hound = AI_VALUE2(Unit*, "find target", "fiendish hound");
+        if (hound && hound->IsAlive() && hound->IsInCombat())
+        {
+            return Attack(hound);
+        }
     }
 
     return false;
@@ -253,6 +263,9 @@ bool OmorDemonicShieldAction::Execute(Event event)
     Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
+        
+    LOG_INFO("playerbots", "OMOR DEBUG: {} - DemonicShieldAction Execute - Boss shield: {}", 
+             bot->GetName(), boss->HasAura(SPELL_DEMONIC_SHIELD) ? "YES" : "NO");
 
     // RESEARCHED: Demonic Shield at 21% - boss_omor_the_unscarred.cpp:56-62
     if (boss->HasAura(SPELL_DEMONIC_SHIELD))
@@ -613,6 +626,8 @@ bool OmorProactiveSpreadAction::Execute(Event event)
     Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
+        
+    LOG_INFO("playerbots", "OMOR DEBUG: {} - ProactiveSpreadAction Execute", bot->GetName());
 
     // Find closest ally to spread away from
     Unit* closestAlly = nullptr;
@@ -637,7 +652,7 @@ bool OmorProactiveSpreadAction::Execute(Event event)
     {
         // Calculate spread position: Move away from closest ally while staying in range of boss
         float angle = bot->GetAngle(closestAlly) + M_PI; // Opposite direction
-        float moveDistance = 18.0f - closestDistance; // Target 18+ yard spacing
+        float moveDistance = 12.0f - closestDistance; // Target 12+ yard spacing
         
         // Position relative to boss to maintain combat range
         float bossDistance = bot->GetDistance(boss);
