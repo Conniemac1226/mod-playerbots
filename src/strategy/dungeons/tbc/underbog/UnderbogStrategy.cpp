@@ -41,7 +41,7 @@ void UnderbogStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     
     triggers.push_back(new TriggerNode(
         "spore strider active",
-        NextAction::array(0, new NextAction("attack spore strider", ACTION_HIGH + 4), nullptr)));
+        NextAction::array(0, new NextAction("attack spore strider", ACTION_EMERGENCY), nullptr)));
     
     triggers.push_back(new TriggerNode(
         "chain lightning casting",

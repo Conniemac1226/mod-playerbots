@@ -123,7 +123,7 @@ bool SporeStriderActiveTrigger::IsActive()
         return false;
 
     Unit* strider = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f);
-    return strider && strider->IsAlive() && strider->IsInCombat();
+    return strider && strider->IsAlive();
 }
 
 // Chain Lightning being cast
