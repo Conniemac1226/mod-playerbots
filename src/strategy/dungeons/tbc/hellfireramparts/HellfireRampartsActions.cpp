@@ -140,8 +140,6 @@ bool AttackFiendishHoundAction::Execute(Event event)
     if (!boss)
         return false;
         
-    LOG_INFO("playerbots", "OMOR DEBUG: {} - AttackFiendishHoundAction Execute - Boss shield: {}", 
-             bot->GetName(), boss->HasAura(SPELL_DEMONIC_SHIELD) ? "YES" : "NO");
     
     // ONLY prioritize hounds during shield phase when Omor is immune
     if (boss->HasAura(SPELL_DEMONIC_SHIELD))
@@ -264,9 +262,6 @@ bool OmorDemonicShieldAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
         
-    LOG_INFO("playerbots", "OMOR DEBUG: {} - DemonicShieldAction Execute - Boss shield: {}", 
-             bot->GetName(), boss->HasAura(SPELL_DEMONIC_SHIELD) ? "YES" : "NO");
-
     // RESEARCHED: Demonic Shield at 21% - boss_omor_the_unscarred.cpp:56-62
     if (boss->HasAura(SPELL_DEMONIC_SHIELD))
     {
@@ -300,61 +295,6 @@ bool OmorDemonicShieldAction::isUseful()
     return boss->HasAura(SPELL_DEMONIC_SHIELD);
 }
 
-// Position for ranged against Omor (he doesn't move)
-bool OmorRangedPositionAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // RESEARCHED: Omor has no movement - boss_omor_the_unscarred.cpp:44
-    // RESEARCHED: Treacherous Aura spreads damage - boss_omor_the_unscarred.cpp:76
-    // Melee bots must avoid cursed group members to prevent spread damage
-    if (botAI->IsRanged(bot) || botAI->IsTank(bot))
-    {
-        return false;
-    }
-    
-    // Find cursed group members and move away from them
-    const GuidVector members = AI_VALUE(GuidVector, "group members");
-    for (auto& member : members)
-    {
-        Unit* unit = botAI->GetUnit(member);
-        if (!unit || !unit->IsAlive() || unit == bot)
-            continue;
-        
-        if (unit->HasAura(SPELL_TREACHEROUS_AURA))
-        {
-            float distance = bot->GetDistance(unit);
-            if (distance < 12.0f)
-            {
-                // Move away from cursed ally to avoid spread damage
-                return MoveAway(unit, 15.0f - distance);
-            }
-        }
-    }
-
-    return false;
-}
-
-bool OmorRangedPositionAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // Only melee non-tanks with Treacherous Aura need to stay at range
-    return !botAI->IsRanged(bot) && !botAI->IsTank(bot) && bot->HasAura(SPELL_TREACHEROUS_AURA) && 
-           bot->GetDistance(boss) < 8.0f;
-}
 
 // Nazan & Vazruden - Avoid Liquid Fire
 bool NazanLiquidFireAction::Execute(Event event)
@@ -591,15 +531,11 @@ bool OmorProactiveSpreadAction::isUseful()
     if (!bot)
         return false;
 
-    // EXCLUDE healers from spreading - they need to stay in heal range
-    if (botAI->IsHeal(bot))
-        return false;
-
     Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Only spread if allies are dangerously close (< 15 yards, not 18)
+    // Only spread if allies are dangerously close (< 18 yards)
     GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
     for (const auto& guid : friendlyUnits)
     {
@@ -607,7 +543,7 @@ bool OmorProactiveSpreadAction::isUseful()
         if (unit && bot != unit && unit->IsAlive())
         {
             float distance = bot->GetDistance(unit);
-            if (distance < 15.0f) // Reduced threshold to avoid constant movement
+            if (distance < 18.0f) // Match trigger threshold
             {
                 return true;
             }
@@ -627,11 +563,9 @@ bool OmorProactiveSpreadAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
         
-    LOG_INFO("playerbots", "OMOR DEBUG: {} - ProactiveSpreadAction Execute", bot->GetName());
-
     // Find closest ally to spread away from
     Unit* closestAlly = nullptr;
-    float closestDistance = 25.0f; // Only care about allies within 25 yards
+    float closestDistance = 18.0f; // Check within 18 yards
     
     GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
     for (const auto& guid : friendlyUnits)
@@ -648,30 +582,10 @@ bool OmorProactiveSpreadAction::Execute(Event event)
         }
     }
 
-    if (closestAlly && closestDistance < 15.0f)
+    if (closestAlly)
     {
-        // Calculate spread position: Move away from closest ally while staying in range of boss
-        float angle = bot->GetAngle(closestAlly) + M_PI; // Opposite direction
-        float moveDistance = 12.0f - closestDistance; // Target 12+ yard spacing
-        
-        // Position relative to boss to maintain combat range
-        float bossDistance = bot->GetDistance(boss);
-        float maxRange = botAI->IsRanged(bot) ? 20.0f : 8.0f; // Ranged stay within 20 yards for reliable casting
-        
-        if (bossDistance + moveDistance > maxRange)
-        {
-            // Adjust movement to stay in range - move perpendicular instead
-            angle = bot->GetAngle(closestAlly) + (M_PI / 2.0f); // 90 degrees
-            moveDistance = std::min(moveDistance, 10.0f); // Smaller adjustment
-        }
-        
-        float newX = bot->GetPositionX() + cos(angle) * moveDistance;
-        float newY = bot->GetPositionY() + sin(angle) * moveDistance;
-        float newZ = bot->GetPositionZ();
-        
-        // Use lower priority movement that doesn't interrupt combat
-        return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, false, 
-                     MovementPriority::MOVEMENT_NORMAL);
+        // Move away from the closest ally to maintain spread
+        return MoveAway(closestAlly, 20.0f, false);
     }
 
     return false;

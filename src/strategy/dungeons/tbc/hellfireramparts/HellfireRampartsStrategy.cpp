@@ -30,9 +30,6 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("omor shadow bolt cast",
              NextAction::array(0, new NextAction("interrupt omor shadow bolt", ACTION_INTERRUPT + 2), nullptr)));
     
-    // // Dispel Treacherous Aura - TESTING: Disable dispel first
-    // triggers.push_back(new TriggerNode("omor treacherous aura",
-    //          NextAction::array(0, new NextAction("omor treacherous aura", ACTION_DISPEL + 1), nullptr)));
 
     // PROACTIVE SPREAD - ESSENTIAL to prevent death from aura spread
     triggers.push_back(new TriggerNode("omor proactive spread", 

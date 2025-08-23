@@ -17,7 +17,6 @@ public:
         creators["interrupt omor shadow bolt"] = &HellfireRampartsActionContext::interrupt_omor_shadow_bolt;
         creators["omor treacherous aura"] = &HellfireRampartsActionContext::omor_treacherous_aura;
         creators["omor demonic shield"] = &HellfireRampartsActionContext::omor_demonic_shield;
-        creators["omor ranged position"] = &HellfireRampartsActionContext::omor_ranged_position;
         creators["omor proactive spread"] = &HellfireRampartsActionContext::omor_proactive_spread;
         creators["avoid liquid fire"] = &HellfireRampartsActionContext::avoid_liquid_fire;
         creators["avoid cone of fire"] = &HellfireRampartsActionContext::avoid_cone_of_fire;
@@ -34,7 +33,6 @@ private:
     static Action* interrupt_omor_shadow_bolt(PlayerbotAI* ai) { return new OmorShadowBoltInterruptAction(ai); }
     static Action* omor_treacherous_aura(PlayerbotAI* ai) { return new OmorTreacherousAuraAction(ai); }
     static Action* omor_demonic_shield(PlayerbotAI* ai) { return new OmorDemonicShieldAction(ai); }
-    static Action* omor_ranged_position(PlayerbotAI* ai) { return new OmorRangedPositionAction(ai); }
     static Action* omor_proactive_spread(PlayerbotAI* ai) { return new OmorProactiveSpreadAction(ai); }
     static Action* avoid_liquid_fire(PlayerbotAI* ai) { return new NazanLiquidFireAction(ai); }
     static Action* avoid_cone_of_fire(PlayerbotAI* ai) { return new NazanConeOfFireAction(ai); }

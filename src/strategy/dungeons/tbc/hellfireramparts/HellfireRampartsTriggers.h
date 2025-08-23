@@ -57,12 +57,6 @@ public:
     bool IsActive() override;
 };
 
-class OmorEngagedTrigger : public Trigger
-{
-public:
-    OmorEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "omor engaged") {}
-    bool IsActive() override;
-};
 
 class OmorProactiveSpreadTrigger : public Trigger
 {

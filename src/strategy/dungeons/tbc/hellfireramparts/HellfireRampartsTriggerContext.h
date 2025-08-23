@@ -17,7 +17,6 @@ public:
         creators["omor shadow bolt cast"] = &HellfireRampartsTriggerContext::omor_shadow_bolt_cast;
         creators["omor treacherous aura"] = &HellfireRampartsTriggerContext::omor_treacherous_aura;
         creators["omor demonic shield"] = &HellfireRampartsTriggerContext::omor_demonic_shield;
-        creators["omor engaged"] = &HellfireRampartsTriggerContext::omor_engaged;
         creators["omor proactive spread"] = &HellfireRampartsTriggerContext::omor_proactive_spread;
         creators["liquid fire nearby"] = &HellfireRampartsTriggerContext::liquid_fire_nearby;
         creators["nazan cone of fire"] = &HellfireRampartsTriggerContext::nazan_cone_of_fire;
@@ -34,7 +33,6 @@ private:
     static Trigger* omor_shadow_bolt_cast(PlayerbotAI* ai) { return new OmorShadowBoltCastTrigger(ai); }
     static Trigger* omor_treacherous_aura(PlayerbotAI* ai) { return new OmorTreacherousAuraTrigger(ai); }
     static Trigger* omor_demonic_shield(PlayerbotAI* ai) { return new OmorDemonicShieldTrigger(ai); }
-    static Trigger* omor_engaged(PlayerbotAI* ai) { return new OmorEngagedTrigger(ai); }
     static Trigger* omor_proactive_spread(PlayerbotAI* ai) { return new OmorProactiveSpreadTrigger(ai); }
     static Trigger* liquid_fire_nearby(PlayerbotAI* ai) { return new LiquidFireNearbyTrigger(ai); }
     static Trigger* nazan_cone_of_fire(PlayerbotAI* ai) { return new NazanConeOfFireTrigger(ai); }
