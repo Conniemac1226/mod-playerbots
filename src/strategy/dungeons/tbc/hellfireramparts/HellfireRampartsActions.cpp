@@ -299,14 +299,29 @@ bool OmorRangedPositionAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Omor has no movement - boss_omor_the_unscarred.cpp:44
-    // Only force ranged positioning if bot has Treacherous Aura (dangerous to be in melee)
-    if (!botAI->IsRanged(bot) && !botAI->IsTank(bot) && bot->HasAura(SPELL_TREACHEROUS_AURA))
+    // RESEARCHED: Treacherous Aura spreads damage - boss_omor_the_unscarred.cpp:76
+    // Melee bots must avoid cursed group members to prevent spread damage
+    if (botAI->IsRanged(bot) || botAI->IsTank(bot))
     {
-        float distance = bot->GetDistance(boss);
-        if (distance < 8.0f)
+        return false;
+    }
+    
+    // Find cursed group members and move away from them
+    const GuidVector members = AI_VALUE(GuidVector, "group members");
+    for (auto& member : members)
+    {
+        Unit* unit = botAI->GetUnit(member);
+        if (!unit || !unit->IsAlive() || unit == bot)
+            continue;
+        
+        if (unit->HasAura(SPELL_TREACHEROUS_AURA))
         {
-            // Cursed melee should stay at range to avoid spreading damage
-            return MoveAway(boss, 10.0f - distance);
+            float distance = bot->GetDistance(unit);
+            if (distance < 12.0f)
+            {
+                // Move away from cursed ally to avoid spread damage
+                return MoveAway(unit, 15.0f - distance);
+            }
         }
     }
 
@@ -626,7 +641,7 @@ bool OmorProactiveSpreadAction::Execute(Event event)
         
         // Position relative to boss to maintain combat range
         float bossDistance = bot->GetDistance(boss);
-        float maxRange = botAI->IsRanged(bot) ? 25.0f : 8.0f; // Ranged stay far, melee closer
+        float maxRange = botAI->IsRanged(bot) ? 20.0f : 8.0f; // Ranged stay within 20 yards for reliable casting
         
         if (bossDistance + moveDistance > maxRange)
         {
