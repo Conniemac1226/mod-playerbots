@@ -106,13 +106,6 @@ public:
     bool isUseful() override;
 };
 
-class OmorRangedPositionAction : public MovementAction
-{
-public:
-    OmorRangedPositionAction(PlayerbotAI* ai) : MovementAction(ai, "omor ranged position") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
 
 class OmorProactiveSpreadAction : public MovementAction
 {

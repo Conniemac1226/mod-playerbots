@@ -116,21 +116,6 @@ bool OmorDemonicShieldTrigger::IsActive()
     return boss->HasAura(SPELL_DEMONIC_SHIELD);
 }
 
-// Omor is engaged - positioning check for non-tanks
-bool OmorEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // RESEARCHED: Omor doesn't move - boss_omor_the_unscarred.cpp:44
-    // This trigger is no longer used - positioning handled by proactive spread trigger
-    return false;
-}
 
 // Liquid Fire patches nearby
 bool LiquidFireNearbyTrigger::IsActive()
@@ -241,7 +226,7 @@ bool OmorProactiveSpreadTrigger::IsActive()
         return false;
 
     // PROACTIVE SPREAD: Always keep bots spread during Omor fight
-    // Check if any ally is too close (within 18 yards safety zone)
+    // Check if any ally is too close (maintain 18+ yard safety zone)
     GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
     for (const auto& guid : friendlyUnits)
     {
@@ -249,7 +234,7 @@ bool OmorProactiveSpreadTrigger::IsActive()
         if (unit && bot != unit && unit->IsAlive())
         {
             float distance = bot->GetDistance(unit);
-            if (distance < 8.0f) // Only spread when actually too close
+            if (distance < 18.0f) // Trigger spread when within 18 yards
             {
                 return true; // Bot needs to maintain distance from allies
             }
