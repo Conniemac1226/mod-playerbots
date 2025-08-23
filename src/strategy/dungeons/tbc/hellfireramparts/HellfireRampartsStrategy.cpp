@@ -16,27 +16,27 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("gargolmar surge",
              NextAction::array(0, new NextAction("gargolmar surge", ACTION_MOVE + 1), nullptr)));
     
-    // Boss: Omor the Unscarred positioning handled by proactive spread trigger below
+    // Boss: Omor the Unscarred - Keep essential survival, test combat blocking
     
-    // Demonic Shield at 21% - stop damage and focus adds
+    // Demonic Shield at 21% - ESSENTIAL for shield phase
     triggers.push_back(new TriggerNode("omor demonic shield",
              NextAction::array(0, new NextAction("omor demonic shield", ACTION_EMERGENCY), nullptr)));
     
-    // Fiendish Hounds - priority adds
+    // Fiendish Hounds - ESSENTIAL during shield phase
     triggers.push_back(new TriggerNode("fiendish hound active",
-             NextAction::array(0, new NextAction("attack fiendish hound", ACTION_EMERGENCY + 1), nullptr)));
+             NextAction::array(0, new NextAction("attack fiendish hound", ACTION_RAID + 1), nullptr)));
     
-    // Interrupt Shadow Bolt
+    // Interrupt Shadow Bolt - ESSENTIAL to prevent damage
     triggers.push_back(new TriggerNode("omor shadow bolt cast",
              NextAction::array(0, new NextAction("interrupt omor shadow bolt", ACTION_INTERRUPT + 2), nullptr)));
     
-    // Dispel Treacherous Aura
-    triggers.push_back(new TriggerNode("omor treacherous aura",
-             NextAction::array(0, new NextAction("omor treacherous aura", ACTION_DISPEL + 1), nullptr)));
+    // // Dispel Treacherous Aura - TESTING: Disable dispel first
+    // triggers.push_back(new TriggerNode("omor treacherous aura",
+    //          NextAction::array(0, new NextAction("omor treacherous aura", ACTION_DISPEL + 1), nullptr)));
 
-    // PROACTIVE SPREAD: Keep all bots spread throughout Omor fight - CRITICAL: 400+ damage per second to nearby allies!
+    // PROACTIVE SPREAD - ESSENTIAL to prevent death from aura spread
     triggers.push_back(new TriggerNode("omor proactive spread", 
-             NextAction::array(0, new NextAction("omor proactive spread", ACTION_MOVE - 2), nullptr)));
+             NextAction::array(0, new NextAction("omor proactive spread", ACTION_NORMAL - 5), nullptr)));
     
     // Boss: Vazruden & Nazan
     // Avoid Liquid Fire patches

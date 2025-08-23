@@ -62,7 +62,13 @@ bool FiendishHoundActiveTrigger::IsActive()
     if (!bot)
         return false;
 
-    // RESEARCHED: Fiendish Hound summon - boss_omor_the_unscarred.cpp:78-85
+    // RESEARCHED: Fiendish Hounds spawn throughout fight - boss_omor_the_unscarred.cpp:78-85
+    // RESEARCHED: Demonic Shield at 21% makes Omor immune - boss_omor_the_unscarred.cpp:56-62
+    // Only prioritize hounds when Omor has shield (immune to damage)
+    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat() || !boss->HasAura(SPELL_DEMONIC_SHIELD))
+        return false;
+        
     Unit* hound = bot->FindNearestCreature(NPC_FIENDISH_HOUND, 50.0f);
     return hound && hound->IsAlive() && hound->IsInCombat();
 
@@ -243,7 +249,7 @@ bool OmorProactiveSpreadTrigger::IsActive()
         if (unit && bot != unit && unit->IsAlive())
         {
             float distance = bot->GetDistance(unit);
-            if (distance < 18.0f) // Larger safety zone for proactive spreading
+            if (distance < 8.0f) // Only spread when actually too close
             {
                 return true; // Bot needs to maintain distance from allies
             }
