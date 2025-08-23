@@ -336,7 +336,7 @@ bool AttackSporeStriderAction::Execute(Event event)
         return false;
 
     Unit* strider = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f);
-    if (strider && strider->IsAlive() && strider->IsInCombat())
+    if (strider && strider->IsAlive())
     {
         return Attack(strider);
     }
@@ -350,8 +350,12 @@ bool AttackSporeStriderAction::isUseful()
     if (!bot)
         return false;
 
+    // CRITICAL: HEALERS SHOULD NEVER ATTACK ADDS - Always prioritize healing
+    if (botAI->IsHeal(bot))
+        return false;
+
     Unit* strider = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f);
-    return strider && strider->IsAlive() && strider->IsInCombat();
+    return strider && strider->IsAlive();
 }
 
 // Interrupt Chain Lightning
