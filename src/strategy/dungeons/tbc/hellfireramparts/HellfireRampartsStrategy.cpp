@@ -16,10 +16,7 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("gargolmar surge",
              NextAction::array(0, new NextAction("gargolmar surge", ACTION_MOVE + 1), nullptr)));
     
-    // Boss: Omor the Unscarred
-    // Non-tank positioning for stationary caster boss - ONLY when cursed
-    triggers.push_back(new TriggerNode("omor engaged",
-             NextAction::array(0, new NextAction("omor ranged position", ACTION_MOVE - 1), nullptr)));
+    // Boss: Omor the Unscarred positioning handled by proactive spread trigger below
     
     // Demonic Shield at 21% - stop damage and focus adds
     triggers.push_back(new TriggerNode("omor demonic shield",
