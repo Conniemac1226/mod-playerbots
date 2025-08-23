@@ -28,6 +28,7 @@ const uint32 SL_SPELL_MAGNETIC_PULL = 33689;
 const uint32 SPELL_THUNDERING_STORM = 39365;
 
 const uint32 NPC_VOID_TRAVELER = 19226;
+const uint32 NPC_GRANDMASTER_VORPIL = 18732;
 const uint32 NPC_INCITE_TRIGGER = 19300;
 
 class AvoidCorrosiveAcidAction : public MovementAction

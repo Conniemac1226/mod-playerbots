@@ -1,6 +1,14 @@
 #include "Playerbots.h"
 #include "ShadowLabyrinthActions.h"
 #include "ShadowLabyrinthStrategy.h"
+#include "CellImpl.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
+
+// Per-bot state maps for Void Traveler timeout mechanism
+std::map<ObjectGuid, uint32> g_voidTraveler_lastSeenTime;
+std::map<ObjectGuid, uint32> g_voidTraveler_stuckTime;
+std::map<ObjectGuid, ObjectGuid> g_voidTraveler_lastTarget;
 
 
 bool AvoidCorrosiveAcidAction::Execute(Event event)
@@ -215,13 +223,87 @@ bool BlackheartChargeReactAction::Execute(Event event)
 
 bool VoidTravelerPriorityAction::isUseful()
 {
-    return !botAI->IsHeal(bot);
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    // CRITICAL: HEALERS SHOULD NEVER ATTACK ADDS - Always prioritize healing
+    if (botAI->IsHeal(bot))
+        return false;
+
+    // Check if Grandmaster Vorpil encounter is active
+    Unit* boss = bot->FindNearestCreature(NPC_GRANDMASTER_VORPIL, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // SMART TIMEOUT: Don't be useful if stuck on same target too long
+    ObjectGuid botGuid = bot->GetGUID();
+    uint32 currentTime = getMSTime();
+    
+    // If we've been targeting Void Travelers for more than 8 seconds, something is wrong
+    if (g_voidTraveler_lastSeenTime[botGuid] > 0 && 
+        (currentTime - g_voidTraveler_lastSeenTime[botGuid]) > 8000U)
+    {
+        // Force timeout - let bots resume normal combat
+        g_voidTraveler_lastSeenTime[botGuid] = 0;
+        return false;
+    }
+
+    // ENHANCED DETECTION: Same logic as trigger to ensure consistency
+    bool voidTravelerFound = false;
+
+    // Method 1: Check hostile NPCs list for Void Travelers (most reliable method)
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_VOID_TRAVELER)
+        {
+            voidTravelerFound = true;
+            // Update last seen time for timeout system
+            g_voidTraveler_lastSeenTime[botGuid] = currentTime;
+            break;
+        }
+    }
+
+    // Method 2: Direct creature search if not found in hostile list
+    if (!voidTravelerFound)
+    {
+        std::list<Unit*> targets;
+        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f);
+        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+        Cell::VisitObjects(bot, searcher, 80.0f);
+
+        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+        {
+            Unit* unit = *i;
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            if (unit->GetEntry() == NPC_VOID_TRAVELER)
+            {
+                voidTravelerFound = true;
+                // Update last seen time for timeout system
+                g_voidTraveler_lastSeenTime[botGuid] = currentTime;
+                break;
+            }
+        }
+    }
+    
+    return voidTravelerFound;
 }
 
 bool VoidTravelerPriorityAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
+        return false;
+
+    // CRITICAL: HEALERS NEVER ATTACK ADDS - Always prioritize healing
+    if (botAI->IsHeal(bot))
         return false;
         
     Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
@@ -230,40 +312,132 @@ bool VoidTravelerPriorityAction::Execute(Event event)
         return false;
     }
     
-    // EMERGENCY PRIORITY: Find closest Void Traveler to boss (about to heal him)
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* closestTraveler = nullptr;
+    // ENHANCED VOID TRAVELER TARGETING: Multi-method approach for REACT_PASSIVE
+    Unit* voidTraveler = nullptr;
     float closestDistToBoss = 100.0f;
-    
+
+    // Method 1: Check hostile NPCs list first (most reliable)
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
-        
+
         if (unit->GetEntry() == NPC_VOID_TRAVELER)
         {
             float distToBoss = unit->GetExactDist2d(boss);
             if (distToBoss < closestDistToBoss)
             {
                 closestDistToBoss = distToBoss;
-                closestTraveler = unit;
+                voidTraveler = unit;
             }
         }
     }
-    
-    // Only attack if we found a valid Void Traveler
-    if (closestTraveler)
+
+    // Method 2: Direct creature search if no void traveler found in hostile list
+    if (!voidTraveler)
     {
-        // Check if we're already targeting this traveler to avoid unnecessary switching
-        Unit* currentTarget = AI_VALUE(Unit*, "current target");
-        if (!currentTarget || currentTarget->GetEntry() != NPC_VOID_TRAVELER || 
-            currentTarget->GetGUID() != closestTraveler->GetGUID())
+        std::list<Unit*> targets;
+        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f);
+        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+        Cell::VisitObjects(bot, searcher, 80.0f);
+
+        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
         {
-            return Attack(closestTraveler);
+            Unit* unit = *i;
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            if (unit->GetEntry() == NPC_VOID_TRAVELER)
+            {
+                float distToBoss = unit->GetExactDist2d(boss);
+                if (distToBoss < closestDistToBoss)
+                {
+                    closestDistToBoss = distToBoss;
+                    voidTraveler = unit;
+                }
+            }
         }
-        // Already targeting the right traveler - continue attacking
-        return true;
+    }
+
+    // Method 3: Emergency fallback - find ANY Void Traveler if none found above
+    if (!voidTraveler)
+    {
+        std::list<Unit*> allTargets;
+        Acore::AnyUnitInObjectRangeCheck u_check_all(bot, 100.0f); // Maximum search range
+        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher_all(bot, allTargets, u_check_all);
+        Cell::VisitObjects(bot, searcher_all, 100.0f);
+
+        for (std::list<Unit*>::iterator i = allTargets.begin(); i != allTargets.end(); ++i)
+        {
+            Unit* unit = *i;
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            // Accept ANY Void Traveler as emergency target
+            if (unit->GetEntry() == NPC_VOID_TRAVELER)
+            {
+                float distToBoss = unit->GetExactDist2d(boss);
+                if (distToBoss < closestDistToBoss)
+                {
+                    closestDistToBoss = distToBoss;
+                    voidTraveler = unit;
+                }
+            }
+        }
+    }
+
+    if (voidTraveler)
+    {
+        ObjectGuid botGuid = bot->GetGUID();
+        ObjectGuid travelerGuid = voidTraveler->GetGUID();
+        uint32 currentTime = getMSTime();
+        
+        // EMERGENCY FALLBACK: Track if bot is stuck on same Void Traveler target
+        if (g_voidTraveler_lastTarget[botGuid] == travelerGuid)
+        {
+            // Same target - check if stuck
+            if (g_voidTraveler_stuckTime[botGuid] == 0)
+            {
+                g_voidTraveler_stuckTime[botGuid] = currentTime;
+            }
+            else if ((currentTime - g_voidTraveler_stuckTime[botGuid]) > 5000U)
+            {
+                // Stuck for 5+ seconds - force target switch or fallback to boss
+                g_voidTraveler_lastTarget[botGuid] = ObjectGuid::Empty;
+                g_voidTraveler_stuckTime[botGuid] = 0;
+                
+                // Try to target boss instead
+                Unit* fallbackBoss = bot->FindNearestCreature(NPC_GRANDMASTER_VORPIL, 100.0f);
+                if (fallbackBoss)
+                {
+                    return Attack(fallbackBoss);
+                }
+                return false;
+            }
+        }
+        else
+        {
+            // New target - reset tracking
+            g_voidTraveler_lastTarget[botGuid] = travelerGuid;
+            g_voidTraveler_stuckTime[botGuid] = 0;
+        }
+        
+        // SPECIAL HANDLING: Void Travelers have REACT_PASSIVE
+        // Use direct targeting instead of normal Attack() which might fail
+        
+        // Clear current target to reset combat state
+        bot->SetTarget(voidTraveler->GetGUID());
+        
+        // Force threat generation for passive targets
+        if (!voidTraveler->GetThreatMgr().GetThreat(bot))
+        {
+            voidTraveler->GetThreatMgr().AddThreat(bot, 1.0f);
+        }
+        
+        // Use normal attack method
+        return Attack(voidTraveler);
     }
     
     return false;
