@@ -24,12 +24,8 @@ bool AttackMennuTotemAction::Execute(Event event)
         {
             if (totem && totem->IsAlive())
             {
-                // Switch to totem immediately if not already targeting
-                if (currentTarget != totem)
-                {
-                    return Attack(totem);
-                }
-                return false; // Already attacking highest priority totem
+                // Always attack the highest priority totem
+                return Attack(totem);
             }
         }
     }

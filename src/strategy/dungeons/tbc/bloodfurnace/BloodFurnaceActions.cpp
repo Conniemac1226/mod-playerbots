@@ -343,11 +343,7 @@ bool AttackShadowmoonChannelerAction::Execute(Event event)
     
     if (nearestChanneler)
     {
-        Unit* currentTarget = AI_VALUE(Unit*, "current target");
-        if (currentTarget != nearestChanneler)
-        {
-            return Attack(nearestChanneler);
-        }
+        return Attack(nearestChanneler);
     }
 
     return false;

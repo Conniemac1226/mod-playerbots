@@ -40,11 +40,7 @@ bool SarannisReinforcementsAction::Execute(Event event)
         
         if (unit->GetEntry() == NPC_BLOODWARDER_MENDER)
         {
-            if (currentTarget != unit)
-            {
-                return Attack(unit);
-            }
-            return false;
+            return Attack(unit);
         }
     }
     
@@ -58,11 +54,7 @@ bool SarannisReinforcementsAction::Execute(Event event)
         
         if (unit->GetEntry() == NPC_BLOODWARDER_RESERVIST)
         {
-            if (currentTarget != unit)
-            {
-                return Attack(unit);
-            }
-            return false;
+            return Attack(unit);
         }
     }
     
@@ -100,11 +92,7 @@ bool FreywinnFrayerPriorityAction::Execute(Event event)
         
         if (unit->GetEntry() == NPC_FRAYER && unit->IsAlive())
         {
-            if (currentTarget != unit)
-            {
-                return Attack(unit);
-            }
-            return false;
+            return Attack(unit);
         }
     }
     
