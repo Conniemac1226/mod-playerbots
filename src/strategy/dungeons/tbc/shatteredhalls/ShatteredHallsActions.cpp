@@ -216,11 +216,7 @@ bool KillShatteredAssassinsAction::Execute(Event event)
         
         if (unit->GetEntry() == NPC_SHATTERED_ASSASSIN)
         {
-            if (currentTarget != unit)
-            {
-                return Attack(unit);
-            }
-            return false;
+            return Attack(unit);
         }
     }
     
@@ -253,11 +249,7 @@ bool NetheKursePeonPriorityAction::Execute(Event event)
         
         if (unit->GetEntry() == NPC_PEON && unit->IsAlive() && unit->IsInCombat())
         {
-            if (currentTarget != unit)
-            {
-                return Attack(unit);
-            }
-            return false;
+            return Attack(unit);
         }
     }
     

@@ -284,11 +284,7 @@ bool MaladaarStolenSoulAction::Execute(Event event)
         if (unit->GetEntry() == NPC_STOLEN_SOUL)
         {
             // Priority target - kill stolen souls immediately
-            if (currentTarget != unit)
-            {
-                return Attack(unit);
-            }
-            return false;
+            return Attack(unit);
         }
     }
     
@@ -325,20 +321,14 @@ bool MaladaarAvatarAction::Execute(Event event)
             // Tank should pick up Avatar immediately
             if (botAI->IsTank(bot))
             {
-                if (currentTarget != unit)
-                {
-                    return Attack(unit);
-                }
+                return Attack(unit);
             }
             // DPS can focus Avatar after tank has aggro
             else if (!botAI->IsHeal(bot))
             {
                 if (unit->GetVictim() && botAI->IsTank(unit->GetVictim()->ToPlayer()))
                 {
-                    if (currentTarget != unit)
-                    {
-                        return Attack(unit);
-                    }
+                    return Attack(unit);
                 }
             }
             return false;

@@ -280,25 +280,22 @@ bool AttackEtherealBeaconAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Beacons spawn every 10s - boss_nexusprince_shaffar.cpp:86-93
-    // Priority target - they spawn adds if not killed
+    // Priority target - they spawn adds if not killed quickly
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
-    // Find all beacons and target the oldest one
-    std::list<Creature*> beaconList;
-    bot->GetCreatureListWithEntryInGrid(beaconList, NPC_ETHEREAL_BEACON, 50.0f);
-    
-    Unit* oldestBeacon = nullptr;
-    uint32 oldestTime = 0;
-    
-    for (Creature* beacon : beaconList)
+    // Find the nearest beacon to prioritize
+    Unit* nearestBeacon = bot->FindNearestCreature(NPC_ETHEREAL_BEACON, 50.0f);
+    if (nearestBeacon && nearestBeacon->IsAlive())
     {
-        if (beacon && beacon->IsAlive())
+        // Always attack beacons with highest priority
+        if (currentTarget != nearestBeacon)
         {
-            // Target beacon immediately if not already
-            if (currentTarget != beacon)
-            {
-                return Attack(beacon);
-            }
+            return Attack(nearestBeacon);
+        }
+        else
+        {
+            // Already targeting a beacon - continue attacking it
+            return Attack(nearestBeacon);
         }
     }
 
