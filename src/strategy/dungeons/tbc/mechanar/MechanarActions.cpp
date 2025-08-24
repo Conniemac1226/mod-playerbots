@@ -97,14 +97,33 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
         
         if ((hasPositive && allyPositive) || (hasNegative && allyNegative))
         {
-            // Same polarity - move closer if too far, stop when close enough
+            // Same polarity - move closer if too far
             if (distance > 8.0f)
             {
-                return MoveTo(bot->GetMapId(), ally->GetPositionX(), ally->GetPositionY(),
-                             ally->GetPositionZ(), false, false, false, true,
-                             MovementPriority::MOVEMENT_NORMAL);
+                // Check if we are already moving to the correct ally
+                if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
+                {
+                    float destX, destY, destZ;
+                    if (bot->GetMotionMaster()->GetDestination(destX, destY, destZ))
+                    {
+                        // If already moving, let it continue, unless the target is far off
+                        if (ally->GetDistance(destX, destY, destZ) < 2.0f)
+                        {
+                            return false; // Already moving to the right place
+                        }
+                    }
+                }
+                
+                // If not moving or moving to the wrong place, start moving.
+                return MoveTo(ally, 4.0f); // Move to within 4 yards of the ally
             }
             // Already close enough - stop moving and let normal combat resume
+            else if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE && distance < 7.0f)
+            {
+                // If we are moving and get close enough, stop moving to allow casting.
+                bot->GetMotionMaster()->Clear();
+                return true;
+            }
         }
         else if ((hasPositive && allyNegative) || (hasNegative && allyPositive))
         {
@@ -314,18 +333,39 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (!targetingFlame)
         return false;
 
-    float flameDistance = bot->GetDistance(targetingFlame);
-    
     // Stop spellcasting when kiting flames
     if (bot->IsNonMeleeSpellCast(false))
         botAI->InterruptSpell();
     
-    // SIMPLE KITING - just stay away from flame
-    if (flameDistance < 15.0f)
+    botAI->Reset();
+
+    // INTELLIGENT KITING - use room boundaries
+    float fleeDistance = 20.0f;
+    float angle = bot->GetAngle(targetingFlame) + M_PI; // Angle away from the flame
+
+    Position botPos = bot->GetPosition();
+    Position targetPos;
+    targetPos.m_positionX = botPos.m_positionX + cos(angle) * fleeDistance;
+    targetPos.m_positionY = botPos.m_positionY + sin(angle) * fleeDistance;
+    targetPos.m_positionZ = botPos.m_positionZ;
+
+    // Ensure the calculated position is within the room's safe boundaries
+    Position safePos = ConstrainToRoom(targetPos);
+
+    // Check if the path to the safe position is clear of walls
+    if (IsPathClear(botPos, safePos))
     {
-        botAI->Reset();
-        // Simple flee away from flame - let FleePosition handle wall avoidance
-        return FleePosition(targetingFlame->GetPosition(), 18.0f, 500U);
+        return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY, 
+                     safePos.m_positionZ, false, false, false, true, 
+                     MovementPriority::MOVEMENT_FORCED);
+    }
+    else
+    {
+        // If path is not clear (e.g., cornered), try moving towards the room center as a fallback
+        Position centerPos = MECHANAR_SEPETHREA_CENTER;
+        return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
+                     centerPos.m_positionZ, false, false, false, true,
+                     MovementPriority::MOVEMENT_FORCED);
     }
 
     return false;
