@@ -275,31 +275,25 @@ bool ThorngrinHellfireAction::Execute(Event event)
     {
         return false;
     }
-    
-    // RESEARCHED: Hellfire - boss_thorngrin_the_tender.cpp:87
-    // AoE spell that damages all nearby targets
-    // Move when cast starts to avoid damage!
-    if (boss->FindCurrentSpellBySpellId(BOT_SPELL_HELLFIRE))
+
+    float safeDistance = 15.0f; // Hellfire has 15 yard radius per spell data
+    float currentDist = bot->GetExactDist2d(boss);
+
+    if (currentDist < safeDistance)
     {
-        float safeDistance = 15.0f; // Hellfire has 15 yard radius per spell data
-        float currentDist = bot->GetExactDist2d(boss);
-        
-        if (currentDist < safeDistance)
-        {
-            // EMERGENCY: Move out of hellfire range
-            float angle = bot->GetAngle(boss) + M_PI;
-            float moveDistance = safeDistance - currentDist + 3.0f;
-            float x = bot->GetPositionX() + cos(angle) * moveDistance;
-            float y = bot->GetPositionY() + sin(angle) * moveDistance;
-            float z = bot->GetPositionZ();
-            
-            // Stop casting and move immediately
-            bot->InterruptNonMeleeSpells(true);
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                        MovementPriority::MOVEMENT_NORMAL);
-        }
+        // EMERGENCY: Move out of hellfire range
+        float angle = bot->GetAngle(boss) + M_PI;
+        float moveDistance = safeDistance - currentDist + 3.0f;
+        float x = bot->GetPositionX() + cos(angle) * moveDistance;
+        float y = bot->GetPositionY() + sin(angle) * moveDistance;
+        float z = bot->GetPositionZ();
+
+        // Stop casting and move immediately
+        bot->InterruptNonMeleeSpells(true);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                    MovementPriority::MOVEMENT_NORMAL);
     }
-    
+
     return false;
 }
 
