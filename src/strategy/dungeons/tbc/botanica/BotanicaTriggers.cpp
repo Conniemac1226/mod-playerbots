@@ -130,7 +130,7 @@ bool ThorngrinHellfireTrigger::IsActive()
         return false;
     }
     
-    if (boss->FindCurrentSpellBySpellId(BOT_SPELL_HELLFIRE))
+    if (boss->HasAura(BOT_SPELL_HELLFIRE))
     {
         float distance = bot->GetExactDist2d(boss);
         return distance < 15.0f;
