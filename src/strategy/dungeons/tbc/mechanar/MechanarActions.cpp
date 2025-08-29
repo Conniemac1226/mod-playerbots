@@ -2,11 +2,127 @@
 #include "MechanarTriggers.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
+#include "VMapFactory.h"
+
+using namespace VMAP;
 
 // Per-bot state management
 std::map<ObjectGuid, uint32> g_capacitus_lastPolarityTime;
 std::map<ObjectGuid, bool> g_capacitus_hasPositive;
 std::map<ObjectGuid, bool> g_capacitus_hasNegative;
+
+// Room boundaries for safe movement - Sepethrea room
+const Position MECHANAR_SEPETHREA_CENTER = {290.52f, 11.492f, 25.39f, 0.0f};
+const float MECHANAR_SEPETHREA_MIN_X = 272.0f;
+const float MECHANAR_SEPETHREA_MAX_X = 308.0f;
+const float MECHANAR_SEPETHREA_MIN_Y = -8.0f;
+const float MECHANAR_SEPETHREA_MAX_Y = 31.0f;
+const float MECHANAR_SEPETHREA_MIN_Z = 23.0f;
+const float MECHANAR_SEPETHREA_MAX_Z = 28.0f;
+
+// Room boundaries for safe movement - Pathaleon room 
+const Position MECHANAR_PATHALEON_CENTER = {113.0f, -14.5f, 26.3f, 0.0f};
+const float MECHANAR_PATHALEON_MIN_X = 95.0f;
+const float MECHANAR_PATHALEON_MAX_X = 131.0f;
+const float MECHANAR_PATHALEON_MIN_Y = -32.0f;
+const float MECHANAR_PATHALEON_MAX_Y = 3.0f;
+const float MECHANAR_PATHALEON_MIN_Z = 25.0f;
+const float MECHANAR_PATHALEON_MAX_Z = 28.0f;
+
+// Boundary validation to prevent out-of-bounds movement with buffer
+bool IsPositionSafe(const Position& pos, PlayerbotAI* botAI = nullptr)
+{
+    const float buffer = 2.0f;
+    
+    // Detect which boss room we're in based on position or boss target
+    bool isPathaleonRoom = false;
+    if (botAI)
+    {
+        Unit* pathaleon = botAI->GetAiObjectContext()->GetValue<Unit*>("find target", "pathaleon the calculator")->Get();
+        if (pathaleon && pathaleon->IsAlive())
+            isPathaleonRoom = true;
+    }
+    
+    // Use position heuristic if no AI context
+    if (!isPathaleonRoom && !botAI)
+    {
+        isPathaleonRoom = (pos.m_positionX < 200.0f); // Pathaleon room is west of Sepethrea
+    }
+    
+    if (isPathaleonRoom)
+    {
+        return pos.m_positionX >= MECHANAR_PATHALEON_MIN_X + buffer && pos.m_positionX <= MECHANAR_PATHALEON_MAX_X - buffer &&
+               pos.m_positionY >= MECHANAR_PATHALEON_MIN_Y + buffer && pos.m_positionY <= MECHANAR_PATHALEON_MAX_Y - buffer &&
+               pos.m_positionZ >= MECHANAR_PATHALEON_MIN_Z && pos.m_positionZ <= MECHANAR_PATHALEON_MAX_Z;
+    }
+    else
+    {
+        return pos.m_positionX >= MECHANAR_SEPETHREA_MIN_X + buffer && pos.m_positionX <= MECHANAR_SEPETHREA_MAX_X - buffer &&
+               pos.m_positionY >= MECHANAR_SEPETHREA_MIN_Y + buffer && pos.m_positionY <= MECHANAR_SEPETHREA_MAX_Y - buffer &&
+               pos.m_positionZ >= MECHANAR_SEPETHREA_MIN_Z && pos.m_positionZ <= MECHANAR_SEPETHREA_MAX_Z;
+    }
+}
+
+// Validate movement path doesn't go through walls
+bool IsPathClear(const Position& from, const Position& to, PlayerbotAI* botAI = nullptr)
+{
+    const int steps = 10; // Check 10 points along the path
+    for (int i = 1; i <= steps; ++i)
+    {
+        float t = float(i) / float(steps);
+        Position checkPos;
+        checkPos.m_positionX = from.m_positionX + t * (to.m_positionX - from.m_positionX);
+        checkPos.m_positionY = from.m_positionY + t * (to.m_positionY - from.m_positionY);
+        checkPos.m_positionZ = from.m_positionZ + t * (to.m_positionZ - from.m_positionZ);
+        
+        if (!IsPositionSafe(checkPos, botAI))
+            return false;
+    }
+    return true;
+}
+
+// Force position to stay within safe room bounds
+Position ConstrainToRoom(const Position& pos, PlayerbotAI* botAI = nullptr)
+{
+    const float buffer = 3.0f;
+    Position safePos = pos;
+    
+    // Detect which boss room we're in
+    bool isPathaleonRoom = false;
+    if (botAI)
+    {
+        Unit* pathaleon = botAI->GetAiObjectContext()->GetValue<Unit*>("find target", "pathaleon the calculator")->Get();
+        if (pathaleon && pathaleon->IsAlive())
+            isPathaleonRoom = true;
+    }
+    
+    // Use position heuristic if no AI context
+    if (!isPathaleonRoom && !botAI)
+    {
+        isPathaleonRoom = (pos.m_positionX < 200.0f); // Pathaleon room is west of Sepethrea
+    }
+    
+    if (isPathaleonRoom)
+    {
+        safePos.m_positionX = std::max(MECHANAR_PATHALEON_MIN_X + buffer, 
+                                      std::min(MECHANAR_PATHALEON_MAX_X - buffer, pos.m_positionX));
+        safePos.m_positionY = std::max(MECHANAR_PATHALEON_MIN_Y + buffer, 
+                                      std::min(MECHANAR_PATHALEON_MAX_Y - buffer, pos.m_positionY));
+        safePos.m_positionZ = std::max(MECHANAR_PATHALEON_MIN_Z, 
+                                      std::min(MECHANAR_PATHALEON_MAX_Z, pos.m_positionZ));
+    }
+    else
+    {
+        safePos.m_positionX = std::max(MECHANAR_SEPETHREA_MIN_X + buffer, 
+                                      std::min(MECHANAR_SEPETHREA_MAX_X - buffer, pos.m_positionX));
+        safePos.m_positionY = std::max(MECHANAR_SEPETHREA_MIN_Y + buffer, 
+                                      std::min(MECHANAR_SEPETHREA_MAX_Y - buffer, pos.m_positionY));
+        safePos.m_positionZ = std::max(MECHANAR_SEPETHREA_MIN_Z, 
+                                      std::min(MECHANAR_SEPETHREA_MAX_Z, pos.m_positionZ));
+    }
+    
+    return safePos;
+}
 
 // Mechano Lord Capacitus
 
@@ -134,8 +250,32 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
                 float x = bot->GetPositionX() + cos(angle) * 12.0f;
                 float y = bot->GetPositionY() + sin(angle) * 12.0f;
                 float z = bot->GetPositionZ();
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                            MovementPriority::MOVEMENT_NORMAL);
+                Position targetPos(x, y, z, 0.0f);
+                targetPos = ConstrainToRoom(targetPos, botAI);
+                
+                if (IsPositionSafe(targetPos) && IsPathClear(bot->GetPosition(), targetPos))
+                {
+                    return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY, 
+                                 targetPos.m_positionZ, false, false, false, true,
+                                 MovementPriority::MOVEMENT_NORMAL);
+                }
+                
+                // Fallback: find safe direction
+                for (int i = 0; i < 8; ++i)
+                {
+                    float testAngle = (i * M_PI / 4);
+                    float testX = bot->GetPositionX() + cos(testAngle) * 8.0f;
+                    float testY = bot->GetPositionY() + sin(testAngle) * 8.0f;
+                    Position testPos(testX, testY, z, 0.0f);
+                    testPos = ConstrainToRoom(testPos);
+                    
+                    if (IsPositionSafe(testPos) && IsPathClear(bot->GetPosition(), testPos))
+                    {
+                        return MoveTo(bot->GetMapId(), testPos.m_positionX, testPos.m_positionY,
+                                     testPos.m_positionZ, false, false, false, true,
+                                     MovementPriority::MOVEMENT_NORMAL);
+                    }
+                }
             }
             // Already far enough - stop moving and let normal combat resume
         }
@@ -233,8 +373,32 @@ bool CapacitusPositionAction::Execute(Event event)
             float x = bot->GetPositionX() + cos(angle) * 10.0f;
             float y = bot->GetPositionY() + sin(angle) * 10.0f;
             float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                        MovementPriority::MOVEMENT_FORCED);
+            Position targetPos(x, y, z, 0.0f);
+            targetPos = ConstrainToRoom(targetPos, botAI);
+            
+            if (IsPositionSafe(targetPos, botAI) && IsPathClear(bot->GetPosition(), targetPos, botAI))
+            {
+                return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY,
+                             targetPos.m_positionZ, false, false, false, true,
+                             MovementPriority::MOVEMENT_NORMAL);
+            }
+            
+            // Fallback: find safe direction
+            for (int i = 0; i < 8; ++i)
+            {
+                float testAngle = (i * M_PI / 4);
+                float testX = bot->GetPositionX() + cos(testAngle) * 8.0f;
+                float testY = bot->GetPositionY() + sin(testAngle) * 8.0f;
+                Position testPos(testX, testY, z, 0.0f);
+                testPos = ConstrainToRoom(testPos, botAI);
+                
+                if (IsPositionSafe(testPos, botAI) && IsPathClear(bot->GetPosition(), testPos, botAI))
+                {
+                    return MoveTo(bot->GetMapId(), testPos.m_positionX, testPos.m_positionY,
+                                 testPos.m_positionZ, false, false, false, true,
+                                 MovementPriority::MOVEMENT_NORMAL);
+                }
+            }
         }
     }
 
@@ -255,57 +419,6 @@ bool CapacitusPositionAction::isUseful()
 }
 
 // ========== NETHERMANCER SEPETHREA ACTIONS ==========
-
-// Room boundaries for safe movement
-const Position MECHANAR_SEPETHREA_CENTER = {290.52f, 11.492f, 25.39f, 0.0f};
-const float MECHANAR_ROOM_MIN_X = 272.0f;
-const float MECHANAR_ROOM_MAX_X = 308.0f;
-const float MECHANAR_ROOM_MIN_Y = -8.0f;
-const float MECHANAR_ROOM_MAX_Y = 31.0f;
-const float MECHANAR_ROOM_MIN_Z = 23.0f;
-const float MECHANAR_ROOM_MAX_Z = 28.0f;
-
-// Boundary validation to prevent out-of-bounds movement with buffer
-bool IsPositionSafe(const Position& pos)
-{
-    // Add 2 yard buffer from walls to prevent clipping
-    const float buffer = 2.0f;
-    return pos.m_positionX >= MECHANAR_ROOM_MIN_X + buffer && pos.m_positionX <= MECHANAR_ROOM_MAX_X - buffer &&
-           pos.m_positionY >= MECHANAR_ROOM_MIN_Y + buffer && pos.m_positionY <= MECHANAR_ROOM_MAX_Y - buffer &&
-           pos.m_positionZ >= MECHANAR_ROOM_MIN_Z && pos.m_positionZ <= MECHANAR_ROOM_MAX_Z;
-}
-
-// Validate movement path doesn't go through walls
-bool IsPathClear(const Position& from, const Position& to)
-{
-    const int steps = 10; // Check 10 points along the path
-    for (int i = 1; i <= steps; ++i)
-    {
-        float t = float(i) / float(steps);
-        Position checkPos;
-        checkPos.m_positionX = from.m_positionX + t * (to.m_positionX - from.m_positionX);
-        checkPos.m_positionY = from.m_positionY + t * (to.m_positionY - from.m_positionY);
-        checkPos.m_positionZ = from.m_positionZ + t * (to.m_positionZ - from.m_positionZ);
-        
-        if (!IsPositionSafe(checkPos))
-            return false;
-    }
-    return true;
-}
-
-// Force position to stay within safe room bounds
-Position ConstrainToRoom(const Position& pos)
-{
-    const float buffer = 3.0f;
-    Position safePos = pos;
-    safePos.m_positionX = std::max(MECHANAR_ROOM_MIN_X + buffer, 
-                                  std::min(MECHANAR_ROOM_MAX_X - buffer, pos.m_positionX));
-    safePos.m_positionY = std::max(MECHANAR_ROOM_MIN_Y + buffer, 
-                                  std::min(MECHANAR_ROOM_MAX_Y - buffer, pos.m_positionY));
-    safePos.m_positionZ = std::max(MECHANAR_ROOM_MIN_Z, 
-                                  std::min(MECHANAR_ROOM_MAX_Z, pos.m_positionZ));
-    return safePos;
-}
 
 bool SepethreaRagingFlamesAction::Execute(Event event)
 {
@@ -350,22 +463,58 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     targetPos.m_positionZ = botPos.m_positionZ;
 
     // Ensure the calculated position is within the room's safe boundaries
-    Position safePos = ConstrainToRoom(targetPos);
+    Position safePos = ConstrainToRoom(targetPos, botAI);
 
     // Check if the path to the safe position is clear of walls
-    if (IsPathClear(botPos, safePos))
+    if (IsPathClear(botPos, safePos, botAI))
     {
         return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY, 
                      safePos.m_positionZ, false, false, false, true, 
-                     MovementPriority::MOVEMENT_FORCED);
+                     MovementPriority::MOVEMENT_NORMAL);
     }
     else
     {
-        // If path is not clear (e.g., cornered), try moving towards the room center as a fallback
-        Position centerPos = MECHANAR_SEPETHREA_CENTER;
-        return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
-                     centerPos.m_positionZ, false, false, false, true,
-                     MovementPriority::MOVEMENT_FORCED);
+        // If path is not clear, find a better escape route
+        Position botPos = bot->GetPosition();
+        float bestAngle = 0.0f;
+        bool foundValidPath = false;
+
+        // Check 8 directions for a clear path
+        for (int i = 0; i < 8; ++i)
+        {
+            float angle = i * (M_PI / 4);
+            Position checkPos;
+            checkPos.m_positionX = botPos.m_positionX + cos(angle) * 15.0f;
+            checkPos.m_positionY = botPos.m_positionY + sin(angle) * 15.0f;
+            checkPos.m_positionZ = botPos.m_positionZ;
+
+            if (IsPathClear(botPos, checkPos, botAI))
+            {
+                bestAngle = angle;
+                foundValidPath = true;
+                break;
+            }
+        }
+
+        if (foundValidPath)
+        {
+            Position newPos;
+            newPos.m_positionX = botPos.m_positionX + cos(bestAngle) * 15.0f;
+            newPos.m_positionY = botPos.m_positionY + sin(bestAngle) * 15.0f;
+            newPos.m_positionZ = botPos.m_positionZ;
+            Position safePos = ConstrainToRoom(newPos);
+            return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
+                         safePos.m_positionZ, false, false, false, true,
+                         MovementPriority::MOVEMENT_NORMAL);
+        }
+        else
+        {
+            // Absolute fallback: move to center if no path found
+            Position centerPos = MECHANAR_SEPETHREA_CENTER;
+            return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
+                         centerPos.m_positionZ, false, false, false, true,
+                         MovementPriority::MOVEMENT_NORMAL);
+        }
     }
 
     return false;
@@ -433,7 +582,7 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
             
             return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
                          safePos.m_positionZ, false, false, false, true,
-                         MovementPriority::MOVEMENT_FORCED);
+                         MovementPriority::MOVEMENT_NORMAL);
         }
     }
 
@@ -590,13 +739,13 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
         float y = bot->GetPositionY() + sin(angle) * -MIN_SAFE_DISTANCE;
         
         Position targetPos(x, y, bot->GetPositionZ(), 0.0f);
-        targetPos = ConstrainToRoom(targetPos); // Keep in bounds
+        targetPos = ConstrainToRoom(targetPos, botAI); // Keep in bounds
         
-        if (IsPositionSafe(targetPos))
+        if (IsPositionSafe(targetPos, botAI))
         {
             return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY, 
                          targetPos.m_positionZ, false, false, false, true, 
-                         MovementPriority::MOVEMENT_FORCED);
+                         MovementPriority::MOVEMENT_NORMAL);
         }
         
         // Fallback: simple flee
@@ -663,9 +812,50 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
     if (!infernoFlame)
         return false;
 
-    // RESEARCHED: boss_nethermancer_sepethrea.cpp:151-157 - Inferno AoE damage
-    // Flee further from Inferno to ensure safety
-    return FleePosition(infernoFlame->GetPosition(), 22.0f, 500U);
+    // Flee from the flame casting inferno
+    float fleeDistance = 22.0f;
+    float angle = bot->GetAngle(infernoFlame) + M_PI;
+
+    Position botPos = bot->GetPosition();
+    Position targetPos;
+    targetPos.m_positionX = botPos.m_positionX + cos(angle) * fleeDistance;
+    targetPos.m_positionY = botPos.m_positionY + sin(angle) * fleeDistance;
+    targetPos.m_positionZ = botPos.m_positionZ;
+
+    Position safePos = ConstrainToRoom(targetPos, botAI);
+
+    if (IsPathClear(botPos, safePos, botAI))
+    {
+        return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY, 
+                     safePos.m_positionZ, false, false, false, true, 
+                     MovementPriority::MOVEMENT_NORMAL);
+    }
+    else
+    {
+        // If path is not clear, find a better escape route
+        for (int i = 0; i < 8; ++i)
+        {
+            float current_angle = i * (M_PI / 4);
+            Position checkPos;
+            checkPos.m_positionX = botPos.m_positionX + cos(current_angle) * 15.0f;
+            checkPos.m_positionY = botPos.m_positionY + sin(current_angle) * 15.0f;
+            checkPos.m_positionZ = botPos.m_positionZ;
+
+            if (IsPathClear(botPos, checkPos, botAI))
+            {
+                Position newPos = ConstrainToRoom(checkPos);
+                return MoveTo(bot->GetMapId(), newPos.m_positionX, newPos.m_positionY,
+                             newPos.m_positionZ, false, false, false, true,
+                             MovementPriority::MOVEMENT_NORMAL);
+            }
+        }
+    }
+
+    // Absolute fallback: move to center if no path found
+    Position centerPos = MECHANAR_SEPETHREA_CENTER;
+    return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
+                    centerPos.m_positionZ, false, false, false, true,
+                    MovementPriority::MOVEMENT_FORCED);
 }
 
 bool SepethreaInfernoAvoidanceAction::isUseful()
@@ -707,41 +897,31 @@ bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
         botAI->InterruptSpell();
     
     botAI->Reset();
-    
-    // Find nearest safe spot away from any fire trail areas
-    const Position centerPos = MECHANAR_SEPETHREA_CENTER;
+
+    // Find a clear path away from the fire
     Position botPos = bot->GetPosition();
-    
-    // Calculate direction to room center
-    float dirX = centerPos.GetPositionX() - botPos.m_positionX;
-    float dirY = centerPos.GetPositionY() - botPos.m_positionY;
-    float length = sqrt(dirX * dirX + dirY * dirY);
-    
-    if (length > 0.1f)
+    for (int i = 0; i < 8; ++i)
     {
-        // Normalize and move toward center
-        dirX /= length;
-        dirY /= length;
-        
-        float targetX = botPos.m_positionX + dirX * 8.0f;
-        float targetY = botPos.m_positionY + dirY * 8.0f;
-        
-        // Ensure within room bounds
-        targetX = std::max(MECHANAR_ROOM_MIN_X + 3.0f, std::min(MECHANAR_ROOM_MAX_X - 3.0f, targetX));
-        targetY = std::max(MECHANAR_ROOM_MIN_Y + 3.0f, std::min(MECHANAR_ROOM_MAX_Y - 3.0f, targetY));
-        
-        Position targetPos(targetX, targetY, bot->GetPositionZ(), 0.0f);
-        
-        // WALL COLLISION CHECK - validate path is clear
-        if (IsPositionSafe(targetPos) && IsPathClear(botPos, targetPos))
+        float angle = i * (M_PI / 4);
+        Position checkPos;
+        checkPos.m_positionX = botPos.m_positionX + cos(angle) * 10.0f;
+        checkPos.m_positionY = botPos.m_positionY + sin(angle) * 10.0f;
+        checkPos.m_positionZ = botPos.m_positionZ;
+
+        if (IsPathClear(botPos, checkPos))
         {
-            return MoveTo(bot->GetMapId(), targetX, targetY, bot->GetPositionZ(),
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            Position newPos = ConstrainToRoom(checkPos);
+            return MoveTo(bot->GetMapId(), newPos.m_positionX, newPos.m_positionY,
+                            newPos.m_positionZ, false, false, false, true,
+                            MovementPriority::MOVEMENT_NORMAL);
         }
     }
-    
-    // Fallback: quick flee from current position
-    return FleePosition(bot->GetPosition(), 10.0f, 100U);
+
+    // Fallback: move to center if no path found
+    Position centerPos = MECHANAR_SEPETHREA_CENTER;
+    return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
+                    centerPos.m_positionZ, false, false, false, true,
+                    MovementPriority::MOVEMENT_FORCED);
 }
 
 bool SepethreaFireTrailAvoidanceAction::isUseful()
@@ -886,8 +1066,32 @@ bool PathaleonArcaneTorrentAction::Execute(Event event)
             float x = bot->GetPositionX() + cos(angle) * 25.0f;
             float y = bot->GetPositionY() + sin(angle) * 25.0f;
             float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                        MovementPriority::MOVEMENT_FORCED);
+            Position targetPos(x, y, z, 0.0f);
+            targetPos = ConstrainToRoom(targetPos, botAI);
+            
+            if (IsPositionSafe(targetPos, botAI) && IsPathClear(bot->GetPosition(), targetPos, botAI))
+            {
+                return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY,
+                             targetPos.m_positionZ, false, false, false, true,
+                             MovementPriority::MOVEMENT_NORMAL);
+            }
+            
+            // Fallback: find safe direction
+            for (int i = 0; i < 8; ++i)
+            {
+                float testAngle = (i * M_PI / 4);
+                float testX = bot->GetPositionX() + cos(testAngle) * 8.0f;
+                float testY = bot->GetPositionY() + sin(testAngle) * 8.0f;
+                Position testPos(testX, testY, z, 0.0f);
+                testPos = ConstrainToRoom(testPos, botAI);
+                
+                if (IsPositionSafe(testPos, botAI) && IsPathClear(bot->GetPosition(), testPos, botAI))
+                {
+                    return MoveTo(bot->GetMapId(), testPos.m_positionX, testPos.m_positionY,
+                                 testPos.m_positionZ, false, false, false, true,
+                                 MovementPriority::MOVEMENT_NORMAL);
+                }
+            }
         }
     }
 
@@ -928,8 +1132,32 @@ bool PathaleonEnrageAction::Execute(Event event)
             float x = bot->GetPositionX() + cos(angle) * 30.0f;
             float y = bot->GetPositionY() + sin(angle) * 30.0f;
             float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                        MovementPriority::MOVEMENT_FORCED);
+            Position targetPos(x, y, z, 0.0f);
+            targetPos = ConstrainToRoom(targetPos, botAI);
+            
+            if (IsPositionSafe(targetPos, botAI) && IsPathClear(bot->GetPosition(), targetPos, botAI))
+            {
+                return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY,
+                             targetPos.m_positionZ, false, false, false, true,
+                             MovementPriority::MOVEMENT_NORMAL);
+            }
+            
+            // Fallback: find safe direction
+            for (int i = 0; i < 8; ++i)
+            {
+                float testAngle = (i * M_PI / 4);
+                float testX = bot->GetPositionX() + cos(testAngle) * 8.0f;
+                float testY = bot->GetPositionY() + sin(testAngle) * 8.0f;
+                Position testPos(testX, testY, z, 0.0f);
+                testPos = ConstrainToRoom(testPos, botAI);
+                
+                if (IsPositionSafe(testPos, botAI) && IsPathClear(bot->GetPosition(), testPos, botAI))
+                {
+                    return MoveTo(bot->GetMapId(), testPos.m_positionX, testPos.m_positionY,
+                                 testPos.m_positionZ, false, false, false, true,
+                                 MovementPriority::MOVEMENT_NORMAL);
+                }
+            }
         }
         
         // Healers focus on tank during enrage
@@ -987,8 +1215,32 @@ bool PathaleonArcaneExplosionAction::Execute(Event event)
             float x = bot->GetPositionX() + cos(angle) * 15.0f;
             float y = bot->GetPositionY() + sin(angle) * 15.0f;
             float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                        MovementPriority::MOVEMENT_FORCED);
+            Position targetPos(x, y, z, 0.0f);
+            targetPos = ConstrainToRoom(targetPos, botAI);
+            
+            if (IsPositionSafe(targetPos, botAI) && IsPathClear(bot->GetPosition(), targetPos, botAI))
+            {
+                return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY,
+                             targetPos.m_positionZ, false, false, false, true,
+                             MovementPriority::MOVEMENT_NORMAL);
+            }
+            
+            // Fallback: find safe direction
+            for (int i = 0; i < 8; ++i)
+            {
+                float testAngle = (i * M_PI / 4);
+                float testX = bot->GetPositionX() + cos(testAngle) * 8.0f;
+                float testY = bot->GetPositionY() + sin(testAngle) * 8.0f;
+                Position testPos(testX, testY, z, 0.0f);
+                testPos = ConstrainToRoom(testPos, botAI);
+                
+                if (IsPositionSafe(testPos, botAI) && IsPathClear(bot->GetPosition(), testPos, botAI))
+                {
+                    return MoveTo(bot->GetMapId(), testPos.m_positionX, testPos.m_positionY,
+                                 testPos.m_positionZ, false, false, false, true,
+                                 MovementPriority::MOVEMENT_NORMAL);
+                }
+            }
         }
     }
 
