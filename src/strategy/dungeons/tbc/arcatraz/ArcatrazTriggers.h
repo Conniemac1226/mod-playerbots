@@ -68,6 +68,13 @@ public:
     bool IsActive() override;
 };
 
+class MellicharImmuneTrigger : public Trigger
+{
+public:
+    MellicharImmuneTrigger(PlayerbotAI* botAI) : Trigger(botAI, "mellichar immune") {}
+    bool IsActive() override;
+};
+
 class SkyrissIllusionTrigger : public Trigger
 {
 public:

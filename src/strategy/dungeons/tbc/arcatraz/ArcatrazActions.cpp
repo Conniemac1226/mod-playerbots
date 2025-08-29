@@ -17,48 +17,35 @@ bool AttackMellicharAddsAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: Pattern from VioletHoldActions.cpp - use "possible targets" not "nearest hostile npcs"
-    // Warden Mellichar spawns adds in waves while immune to damage
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    
-    // WOTLK PATTERN: Use possible targets for better add detection
     GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    
-    // Priority order based on boss script: Phase 1 > Phase 3 > Phase 4 > Phase 5 adds
+
     const uint32 mellicharAdds[] = {
-        NPC_TRICKSTER, NPC_PH_HUNTER,      // Phase 1 - Highest priority
-        NPC_AKKIRIS, NPC_SULFURON,         // Phase 3 - Medium priority  
-        NPC_TW_DRAK, NPC_BL_DRAK,          // Phase 4 - Lower priority
-        NPC_HARBINGER_SKYRISS               // Phase 5 - Final boss
-        // NOTE: NPC_MILLHOUSE excluded - becomes friendly ally!
+        NPC_TRICKSTER, NPC_PH_HUNTER,
+        NPC_AKKIRIS, NPC_SULFURON,
+        NPC_TW_DRAK, NPC_BL_DRAK,
+        NPC_HARBINGER_SKYRISS
     };
-    
+
     for (auto& targetGuid : targets)
     {
         Unit* unit = botAI->GetUnit(targetGuid);
         if (!unit || !unit->IsAlive())
             continue;
 
-        // Check if this is one of Mellichar's priority adds
         for (uint32 addId : mellicharAdds)
         {
             if (unit->GetEntry() == addId)
             {
-                // FORCE TARGET SWITCH: Always attack priority adds over Warden
-                // Only avoid switching if already targeting the EXACT same unit
                 if (currentTarget && currentTarget->GetGUID() == unit->GetGUID())
                 {
-                    return false; // Already targeting this exact unit
+                    return true;
                 }
-                
-                // PRIORITY SWITCH: Target the add immediately
                 return Attack(unit);
             }
         }
     }
-    
-    // No priority adds found - this means we should NOT attack immune Warden
-    // Let other actions handle normal targeting
+
     return false;
 }
 
@@ -77,7 +64,7 @@ bool AttackMellicharAddsAction::isUseful()
         
     // RESEARCHED: arcatraz.cpp - Warden releases hostile adds in sequence
     // NOTE: Millhouse (NPC_MILLHOUSE) is NOT included - he becomes friendly ally!
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "possible targets");
     const uint32 mellicharAdds[] = {
         NPC_TRICKSTER, NPC_PH_HUNTER,      // Wave 1: Random
         NPC_AKKIRIS, NPC_SULFURON,         // Wave 3: Random  
@@ -98,6 +85,23 @@ bool AttackMellicharAddsAction::isUseful()
         }
     }
     
+    return false;
+}
+
+bool MellicharStopAttackAction::Execute(Event event)
+{
+    Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
+    if (!warden)
+        return false;
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->GetGUID() == warden->GetGUID())
+    {
+        botAI->InterruptSpell();
+        bot->SetSelection(ObjectGuid::Empty);
+        return true;
+    }
+
     return false;
 }
 
@@ -459,7 +463,7 @@ bool SkyrissIllusionAction::Execute(Event event)
             // Only avoid switching if already targeting the EXACT same illusion
             if (currentTarget && currentTarget->GetGUID() == unit->GetGUID())
             {
-                return false; // Already targeting this exact illusion
+                return true; // Already targeting this exact illusion
             }
             
             // PRIORITY SWITCH: Target the illusion immediately

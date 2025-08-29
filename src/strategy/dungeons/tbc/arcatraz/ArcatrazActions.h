@@ -47,6 +47,13 @@ public:
     bool isUseful() override;
 };
 
+class MellicharStopAttackAction : public Action
+{
+public:
+    MellicharStopAttackAction(PlayerbotAI* botAI) : Action(botAI, "mellichar stop attack") {}
+    bool Execute(Event event) override;
+};
+
 class AvoidVoidZoneAction : public MovementAction
 {
 public:
