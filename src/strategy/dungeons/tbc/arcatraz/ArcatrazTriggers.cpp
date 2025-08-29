@@ -289,3 +289,13 @@ bool MellicharAddsActiveTrigger::IsActive()
     
     return false;
 }
+
+bool MellicharImmuneTrigger::IsActive()
+{
+    Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
+    if (!warden || !warden->IsAlive() || !warden->IsInCombat())
+        return false;
+
+    // Warden Mellichar is immune when he has the "Banished" aura (spell id 36645)
+    return warden->HasAura(36645);
+}

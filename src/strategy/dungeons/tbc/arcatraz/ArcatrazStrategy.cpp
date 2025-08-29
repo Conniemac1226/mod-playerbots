@@ -31,6 +31,8 @@ void ArcatrazStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
         NextAction::array(0, new NextAction("avoid felfire ground", ACTION_EMERGENCY + 1), nullptr)));
     
     // Warden Mellichar
+    triggers.push_back(new TriggerNode("mellichar immune",
+        NextAction::array(0, new NextAction("mellichar stop attack", ACTION_EMERGENCY + 6), nullptr)));
     triggers.push_back(new TriggerNode("mellichar adds active",
         NextAction::array(0, new NextAction("attack mellichar adds", ACTION_EMERGENCY + 3), nullptr)));
     
