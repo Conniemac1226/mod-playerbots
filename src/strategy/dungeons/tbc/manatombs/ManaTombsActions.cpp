@@ -20,9 +20,6 @@ bool PandemoniusDarkShellAction::Execute(Event event)
         bot->AttackStop();
         bot->InterruptNonMeleeSpells(true);
         
-        // Clear target to prevent auto-attacks
-        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(nullptr);
-        
         // Move away and wait
         if (bot->GetDistance(boss) < 30.0f)
         {
