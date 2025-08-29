@@ -8,7 +8,6 @@
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 
-// RESEARCHED FROM: src/server/scripts/Outland/TempestKeep/Mechanar/mechanar.h
 enum MechanarNpcs
 {
     // Bosses
@@ -31,7 +30,6 @@ enum MechanarNpcs
     NPC_TEMPEST_KEEPER_DESTROYER   = 19735
 };
 
-// RESEARCHED FROM: boss scripts
 enum MechanarSpells
 {
     // Mechano Lord Capacitus
@@ -63,14 +61,12 @@ enum MechanarSpells
     MECH_SPELL_SUICIDE              = 35301
 };
 
-// Per-bot state management for Polarity Shift
 extern std::map<ObjectGuid, uint32> g_capacitus_lastPolarityTime;
 extern std::map<ObjectGuid, bool> g_capacitus_hasPositive;
 extern std::map<ObjectGuid, bool> g_capacitus_hasNegative;
 
 // ========== MECHANO LORD CAPACITUS ACTIONS ==========
 
-// RESEARCHED: boss_mechano_lord_capacitus.cpp:89-96 - Reflective shields on Normal
 class CapacitusReflectiveShieldAction : public Action
 {
 public:
@@ -79,7 +75,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_mechano_lord_capacitus.cpp:78-82 - Polarity Shift on Heroic
 class CapacitusPolarityShiftAction : public MovementAction
 {
 public:
@@ -88,7 +83,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_mechano_lord_capacitus.cpp:64-70 - Nether Charges spawn randomly
 class CapacitusNetherChargeAction : public AttackAction
 {
 public:
@@ -97,7 +91,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_mechano_lord_capacitus.cpp:61 - Headcrack on tank
 class CapacitusPositionAction : public MovementAction
 {
 public:
@@ -108,7 +101,6 @@ public:
 
 // ========== NETHERMANCER SEPETHREA ACTIONS ==========
 
-// FIXED: Raging Flames are IMMUNE - must be KITED continuously, not fought
 class SepethreaRagingFlamesAction : public MovementAction
 {
 public:
@@ -117,7 +109,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_nethermancer_sepethrea.cpp:146-157 - Raging Flames cast Inferno AoE
 class SepethreaInfernoAvoidanceAction : public MovementAction
 {
 public:
@@ -126,7 +117,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: Pattern from WOTLK Halls of Stone AvoidLightningRingAction
 class SepethreaFireTrailAvoidanceAction : public MovementAction
 {
 public:
@@ -135,7 +125,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_nethermancer_sepethrea.cpp:72 - Dragon's Breath frontal cone
 class SepethreaDragonsBreathAction : public MovementAction
 {
 public:
@@ -144,8 +133,6 @@ public:
     bool isUseful() override;
 };
 
-
-// RESEARCHED: boss_nethermancer_sepethrea.cpp:63-68 - Arcane Blast with threat reduction
 class SepethreaArcaneBlastAction : public Action
 {
 public:
@@ -154,7 +141,6 @@ public:
     bool isUseful() override;
 };
 
-// FIXED: Force DPS back to boss when they target flames - focus burn boss while avoiding
 class SepethreaTargetElementalAction : public ai::ChangeTargetAction
 {
 public:
@@ -163,7 +149,6 @@ public:
     bool isUseful() override;
 };
 
-// UNIVERSAL: All bots avoid Raging Flames area aura - based on ICC gas cloud pattern
 class SepethreaAvoidRagingFlamesAction : public MovementAction
 {
 public:
@@ -174,7 +159,6 @@ public:
 
 // ========== PATHALEON THE CALCULATOR ACTIONS ==========
 
-// RESEARCHED: boss_pathaleon_the_calculator.cpp:117-122 - Mind Control (Domination)
 class PathaleonDominationAction : public Action
 {
 public:
@@ -183,7 +167,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_pathaleon_the_calculator.cpp:96-101 - Summons Nether Wraiths
 class PathaleonNetherWraithAction : public AttackAction
 {
 public:
@@ -192,7 +175,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_pathaleon_the_calculator.cpp:113-115 - Arcane Torrent AoE
 class PathaleonArcaneTorrentAction : public MovementAction
 {
 public:
@@ -201,7 +183,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_pathaleon_the_calculator.cpp:84-90 - Enrage at 20% with Suicide
 class PathaleonEnrageAction : public MovementAction
 {
 public:
@@ -210,7 +191,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_pathaleon_the_calculator.cpp:131-135 - Arcane Explosion on Heroic
 class PathaleonArcaneExplosionAction : public MovementAction
 {
 public:
@@ -219,7 +199,6 @@ public:
     bool isUseful() override;
 };
 
-// RESEARCHED: boss_pathaleon_the_calculator.cpp:104-109 - Mana Tap on mana users
 class PathaleonManaTapAction : public Action
 {
 public:
