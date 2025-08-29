@@ -240,9 +240,9 @@ bool VoidTravelerPriorityAction::isUseful()
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
     
-    // If we've been targeting Void Travelers for more than 8 seconds, something is wrong
+    // If we've been targeting Void Travelers for more than 20 seconds, something is wrong
     if (g_voidTraveler_lastSeenTime[botGuid] > 0 && 
-        (currentTime - g_voidTraveler_lastSeenTime[botGuid]) > 8000U)
+        (currentTime - g_voidTraveler_lastSeenTime[botGuid]) > 20000U)
     {
         // Force timeout - let bots resume normal combat
         g_voidTraveler_lastSeenTime[botGuid] = 0;
@@ -402,18 +402,12 @@ bool VoidTravelerPriorityAction::Execute(Event event)
             {
                 g_voidTraveler_stuckTime[botGuid] = currentTime;
             }
-            else if ((currentTime - g_voidTraveler_stuckTime[botGuid]) > 5000U)
+            else if ((currentTime - g_voidTraveler_stuckTime[botGuid]) > 15000U)
             {
-                // Stuck for 5+ seconds - force target switch or fallback to boss
+                // Stuck for 15+ seconds - force target switch or fallback to boss
                 g_voidTraveler_lastTarget[botGuid] = ObjectGuid::Empty;
                 g_voidTraveler_stuckTime[botGuid] = 0;
                 
-                // Try to target boss instead
-                Unit* fallbackBoss = bot->FindNearestCreature(NPC_GRANDMASTER_VORPIL, 100.0f);
-                if (fallbackBoss)
-                {
-                    return Attack(fallbackBoss);
-                }
                 return false;
             }
         }
@@ -658,20 +652,17 @@ bool MurmurThunderingStormAction::Execute(Event event)
             // Tanks and melee move in close
             if (botAI->IsTank(bot) || botAI->IsMelee(bot))
             {
-                if (currentDist > 20.0f)
-                {
-                    // Move closer to boss
-                    return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), 
+                // Move closer to boss
+                return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), 
                                  boss->GetPositionZ(), false, false, false, true, 
                                  MovementPriority::MOVEMENT_FORCED);
-                }
             }
             // Ranged try to get farther if possible
-            else if (currentDist < 95.0f)
+            else
             {
                 float angle = boss->GetAngle(bot) + M_PI;
-                float destX = boss->GetPositionX() + cos(angle) * 102.0f;
-                float destY = boss->GetPositionY() + sin(angle) * 102.0f;
+                float destX = boss->GetPositionX() + cos(angle) * 110.0f;
+                float destY = boss->GetPositionY() + sin(angle) * 110.0f;
                 return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
             }
