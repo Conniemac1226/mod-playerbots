@@ -29,9 +29,9 @@ void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
              NextAction::array(0, new NextAction("ikiss return position", ACTION_MOVE + 3), nullptr)));
 
     // Boss: Anzu - Priority add targeting (banish phases at 66% and 33%)
-    // High priority to kill broods and remove banish
+    // Moderate priority to kill broods without blocking healing/combat
     triggers.push_back(new TriggerNode("brood of anzu nearby",
-             NextAction::array(0, new NextAction("attack brood of anzu", ACTION_EMERGENCY + 4), nullptr)));
+             NextAction::array(0, new NextAction("attack brood of anzu", ACTION_NORMAL + 5), nullptr)));
     
     // NOTE: Anzu spell bomb and cyclone mechanics cannot be implemented without guessing
     // No proven patterns exist for detecting spell bomb targets or cyclone range mechanics
