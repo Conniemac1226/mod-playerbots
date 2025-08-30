@@ -528,6 +528,10 @@ bool AttackBroodOfAnzuAction::isUseful()
     if (!bot)
         return false;
 
+    // Don't switch targets if we're a healer - healers must focus on healing
+    if (botAI->IsHeal(bot))
+        return false;
+
     // PROVEN PATTERN: Exact copy from AttackCharmingTotemAction (lines 59-76)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
