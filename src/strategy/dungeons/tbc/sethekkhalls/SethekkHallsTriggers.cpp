@@ -223,7 +223,7 @@ bool BroodOfAnzuNearbyTrigger::IsActive()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_BROOD_OF_ANZU)
+        if (unit->GetEntry() == NPC_BROOD_OF_ANZU && AttackersValue::IsValidTarget(unit, bot))
             return true;
     }
     
