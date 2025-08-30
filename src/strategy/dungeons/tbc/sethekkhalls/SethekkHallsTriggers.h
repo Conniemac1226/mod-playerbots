@@ -8,14 +8,12 @@
 
 enum SethekkHallsIDs
 {
-    // NPCs - researched from AzerothCore creature.sql and boss scripts
     NPC_TIME_LOST_CONTROLLER        = 18327,  // from creature_template.sql
     NPC_CHARMING_TOTEM             = 20343,  // from creature_template.sql  
     NPC_TALON_KING_IKISS          = 18473,  // confirmed from creature_template.sql - researched from AzerothCore database
     NPC_ANZU                        = 23035,  // from boss_anzu.cpp
     NPC_BROOD_OF_ANZU              = 23132,  // from boss_anzu.cpp
     
-    // Spells - researched from boss_talon_king_ikiss.cpp
     SPELL_SUMMON_CHARMING_TOTEM_N  = 32764,
     SPELL_CHARM_N                  = 35120,
     SPELL_BLINK_N                  = 38194,

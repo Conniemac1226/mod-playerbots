@@ -28,7 +28,16 @@
 #define SPELL_ANZU_CYCLONE          40321  // Renamed to avoid conflict with ICC
 #define SPELL_BANISH_SELF           42354
 
-// TESTED: LoS safe positions behind pillars - coordinates confirmed to break LoS from boss
+// Spell IDs
+#define SPELL_SUMMON_TOTEM          32764  // Time-Lost Controller totem summon
+#define SPELL_ARCANE_BUBBLE         9438   // Ikiss arcane explosion prep
+#define SPELL_BLINK_N               38194  // Ikiss blink
+
+// Search ranges
+#define SEARCH_RANGE_LARGE          50.0f  // General enemy search
+#define SEARCH_RANGE_MEDIUM         30.0f  // Controller interrupt range
+#define SEARCH_RANGE_SMALL          20.0f  // Spirit danger range
+
 const Position IKISS_LOS_SAFE_POSITIONS[4] =
 {
     Position(18.69f, 316.45f, 26.34f),  // Southwest pillar safe spot
@@ -37,7 +46,6 @@ const Position IKISS_LOS_SAFE_POSITIONS[4] =
     Position(73.11f, 259.09f, 27.74f)   // Northeast pillar safe spot
 };
 
-// Per-bot state for preventing repeated movements - using bot GUID as key
 extern std::map<ObjectGuid, uint32> g_ikiss_lastMoveTime;
 extern std::map<ObjectGuid, bool> g_ikiss_inSafePosition;
 
@@ -105,18 +113,5 @@ public:
     bool isUseful() override;
 };
 
-class AnzuParalyzingScreechAction : public MovementAction
-{
-public:
-    AnzuParalyzingScreechAction(PlayerbotAI* ai) : MovementAction(ai, "anzu paralyzing screech") {}
-    bool Execute(Event event) override;
-};
-
-class AnzuCycloneSpreadAction : public MovementAction
-{
-public:
-    AnzuCycloneSpreadAction(PlayerbotAI* ai) : MovementAction(ai, "anzu cyclone spread") {}
-    bool Execute(Event event) override;
-};
 
 #endif

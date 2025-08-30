@@ -1,4 +1,5 @@
 #include "SethekkHallsTriggers.h"
+#include "SethekkHallsActions.h"
 #include "CellImpl.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
@@ -11,14 +12,13 @@ bool CharmingTotemSpawnedTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Don't trigger if we're charmed ourselves
     if (bot->IsCharmed())
         return false;
 
     std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
 
     bool hasTotem = false;
     bool hasCharmedAlly = false;
@@ -29,20 +29,17 @@ bool CharmingTotemSpawnedTrigger::IsActive()
         if (!unit || !unit->IsAlive())
             continue;
 
-        // Check for totem directly - don't use IsValidTarget as it might fail with charmed allies around
         if (unit->GetEntry() == NPC_CHARMING_TOTEM)
         {
             hasTotem = true;
         }
 
-        // Also check if any group member is charmed (indicates totem is active)
         if (unit->IsPlayer() && bot->IsInSameGroupWith(unit->ToPlayer()) && unit->IsCharmed())
         {
             hasCharmedAlly = true;
         }
     }
     
-    // Trigger if totem exists OR if an ally is charmed (totem might be slightly out of range)
     return hasTotem || hasCharmedAlly;
 }
 
@@ -53,9 +50,9 @@ bool TimeLostControllerCastingTotemTrigger::IsActive()
         return false;
 
     std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 30.0f);
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_MEDIUM);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 30.0f);
+    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_MEDIUM);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -65,7 +62,7 @@ bool TimeLostControllerCastingTotemTrigger::IsActive()
 
         if (unit->GetEntry() == NPC_TIME_LOST_CONTROLLER && unit->IsInCombat())
         {
-            if (unit->HasUnitState(UNIT_STATE_CASTING) && unit->FindCurrentSpellBySpellId(32764))
+            if (unit->HasUnitState(UNIT_STATE_CASTING) && unit->FindCurrentSpellBySpellId(SPELL_SUMMON_TOTEM))
             {
                 return true;
             }
@@ -105,11 +102,8 @@ bool IkissArcaneExplosionCastTrigger::IsActive()
     if (!bot)
         return false;
 
-    // RESEARCHED: Pattern from ForgeOfSoulsTriggers.cpp:8 and HallsOfLightningTriggers.cpp
-    // Using AI_VALUE2 to find boss directly
     Unit* boss = AI_VALUE2(Unit*, "find target", "talon king ikiss");
     if (!boss) {
-        // Try alternative method to find boss
         AiObjectContext* context = botAI->GetAiObjectContext();
         if (context) {
             Value<ObjectGuid>* targetValue = context->GetValue<ObjectGuid>("current target");
@@ -128,10 +122,8 @@ bool IkissArcaneExplosionCastTrigger::IsActive()
             return false;
     }
 
-    // Check if boss has Arcane Bubble (preparing to explode)
-    bool hasArcBubble = boss->HasAura(9438); // SPELL_ARCANE_BUBBLE from boss_talon_king_ikiss.cpp:39
+    bool hasArcBubble = boss->HasAura(SPELL_ARCANE_BUBBLE); // SPELL_ARCANE_BUBBLE from boss_talon_king_ikiss.cpp:39
     
-    // Also check for the actual explosion spell
     bool hasExplosion = boss->HasAura(38197) || boss->HasAura(38198); // Normal and Heroic versions
     bool isCasting = boss->HasUnitState(UNIT_STATE_CASTING);
     
@@ -161,11 +153,10 @@ bool IkissArcaneExplosionEndedTrigger::IsActive()
     if (!boss || !boss->IsAlive() || boss->GetEntry() != NPC_TALON_KING_IKISS)
         return false;
 
-    // Per-bot bubble state tracking to ensure all bots detect bubble end independently
     static std::map<ObjectGuid, bool> hadBubbleMap;
     ObjectGuid botGuid = bot->GetGUID();
     
-    bool hasBubble = boss->HasAura(9438); // SPELL_ARCANE_BUBBLE
+    bool hasBubble = boss->HasAura(SPELL_ARCANE_BUBBLE); // SPELL_ARCANE_BUBBLE
     bool hadBubble = hadBubbleMap[botGuid];
     
     
@@ -185,11 +176,10 @@ bool SethekkSpiritNearbyTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Find any Sethekk Spirit within dangerous range (20 yards)
     std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 20.0f);
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_SMALL);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 20.0f);
+    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_SMALL);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
@@ -197,7 +187,6 @@ bool SethekkSpiritNearbyTrigger::IsActive()
         if (!unit || !unit->IsAlive())
             continue;
 
-        // NPC ID 18703 is Sethekk Spirit (ghost that spawns from dead Sethekk Prophets)
         if (unit->GetEntry() == 18703)
             return true;
     }
@@ -211,11 +200,10 @@ bool BroodOfAnzuNearbyTrigger::IsActive()
     if (!bot)
         return false;
 
-    // PROVEN PATTERN: Exact copy from CharmingTotemSpawnedTrigger
     std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
+    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
