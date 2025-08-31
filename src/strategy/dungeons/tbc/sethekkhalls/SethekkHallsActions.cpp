@@ -39,7 +39,7 @@ bool AttackCharmingTotemAction::Execute(Event event)
             hasCharmedAlly = true;
         }
 
-        if (unit->GetEntry() == NPC_CHARMING_TOTEM)
+        if (unit->GetEntry() == NPC_CHARMING_TOTEM && AttackersValue::IsValidTarget(unit, bot))
         {
             float distance = bot->GetDistance(unit);
             if (distance < closestDistance)
@@ -86,7 +86,7 @@ bool AttackCharmingTotemAction::isUseful()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_CHARMING_TOTEM)
+        if (unit->GetEntry() == NPC_CHARMING_TOTEM && AttackersValue::IsValidTarget(unit, bot))
         {
             hasTotem = true;
         }

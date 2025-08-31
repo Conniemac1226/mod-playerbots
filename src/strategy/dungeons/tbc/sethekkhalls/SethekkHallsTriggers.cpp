@@ -29,7 +29,7 @@ bool CharmingTotemSpawnedTrigger::IsActive()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_CHARMING_TOTEM)
+        if (unit->GetEntry() == NPC_CHARMING_TOTEM && AttackersValue::IsValidTarget(unit, bot))
         {
             hasTotem = true;
         }
