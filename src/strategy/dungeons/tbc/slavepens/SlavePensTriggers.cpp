@@ -9,13 +9,13 @@ bool MennuTotemActiveTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if any totems exist
+    // Check if any totems exist and are not being attacked
     uint32 totemIds[] = { NPC_NOVA_TOTEM, NPC_HEALING_WARD, NPC_EARTHGRAB_TOTEM, NPC_STONESKIN_TOTEM };
     
     for (uint32 totemId : totemIds)
     {
         Unit* totem = bot->FindNearestCreature(totemId, 50.0f);
-        if (totem && totem->IsAlive())
+        if (totem && totem->IsAlive() && AI_VALUE(Unit*, "current target") != totem)
             return true;
     }
 
