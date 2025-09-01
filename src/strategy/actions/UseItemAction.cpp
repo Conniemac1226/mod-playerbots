@@ -7,6 +7,7 @@
 
 #include "ChatHelper.h"
 #include "Event.h"
+#include "ItemPackets.h"
 #include "ItemUsageValue.h"
 #include "Playerbots.h"
 
@@ -324,8 +325,8 @@ void UseItemAction::TellConsumableUse(Item* item, std::string const action, floa
 
 bool UseItemAction::SocketItem(Item* item, Item* gem, bool replace)
 {
-    WorldPacket* const packet = new WorldPacket(CMSG_SOCKET_GEMS);
-    *packet << item->GetGUID();
+    WorldPacket* const rawPacket = new WorldPacket(CMSG_SOCKET_GEMS);
+    *rawPacket << item->GetGUID();
 
     bool fits = false;
     for (uint32 enchant_slot = SOCK_ENCHANTMENT_SLOT; enchant_slot < SOCK_ENCHANTMENT_SLOT + MAX_GEM_SOCKETS;
@@ -337,14 +338,14 @@ bool UseItemAction::SocketItem(Item* item, Item* gem, bool replace)
         {
             if (fits)
             {
-                *packet << ObjectGuid::Empty;
+                *rawPacket << ObjectGuid::Empty;
                 continue;
             }
 
             uint32 enchant_id = item->GetEnchantmentId(EnchantmentSlot(enchant_slot));
             if (!enchant_id)
             {
-                *packet << gem->GetGUID();
+                *rawPacket << gem->GetGUID();
                 fits = true;
                 continue;
             }
@@ -352,20 +353,20 @@ bool UseItemAction::SocketItem(Item* item, Item* gem, bool replace)
             SpellItemEnchantmentEntry const* enchantEntry = sSpellItemEnchantmentStore.LookupEntry(enchant_id);
             if (!enchantEntry || !enchantEntry->GemID)
             {
-                *packet << gem->GetGUID();
+                *rawPacket << gem->GetGUID();
                 fits = true;
                 continue;
             }
 
             if (replace && enchantEntry->GemID != gem->GetTemplate()->ItemId)
             {
-                *packet << gem->GetGUID();
+                *rawPacket << gem->GetGUID();
                 fits = true;
                 continue;
             }
         }
 
-        *packet << ObjectGuid::Empty;
+        *rawPacket << ObjectGuid::Empty;
     }
 
     if (fits)
@@ -375,7 +376,10 @@ bool UseItemAction::SocketItem(Item* item, Item* gem, bool replace)
         out << " with " << chat->FormatItem(gem->GetTemplate());
         botAI->TellMaster(out);
 
-        bot->GetSession()->HandleSocketOpcode(*packet);
+        WorldPackets::Item::SocketGems packet(std::move(*rawPacket));
+        delete rawPacket;
+        packet.Read();
+        bot->GetSession()->HandleSocketOpcode(packet);
     }
 
     return fits;

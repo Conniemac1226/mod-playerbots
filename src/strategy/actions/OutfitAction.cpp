@@ -6,6 +6,7 @@
 #include "OutfitAction.h"
 
 #include "Event.h"
+#include "ItemPackets.h"
 #include "ItemVisitors.h"
 #include "Playerbots.h"
 
@@ -68,8 +69,10 @@ bool OutfitAction::Execute(Event event)
                 uint8 bagIndex = pItem->GetBagSlot();
                 uint8 dstBag = NULL_BAG;
 
-                WorldPacket packet(CMSG_AUTOSTORE_BAG_ITEM, 3);
-                packet << bagIndex << slot << dstBag;
+                WorldPacket rawPacket(CMSG_AUTOSTORE_BAG_ITEM, 3);
+                rawPacket << bagIndex << slot << dstBag;
+                WorldPackets::Item::AutoStoreBagItem packet(std::move(rawPacket));
+                packet.Read();
                 bot->GetSession()->HandleAutoStoreBagItemOpcode(packet);
             }
 

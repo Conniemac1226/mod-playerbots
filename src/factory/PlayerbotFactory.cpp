@@ -17,6 +17,7 @@
 #include "GuildMgr.h"
 #include "InventoryAction.h"
 #include "Item.h"
+#include "ItemPackets.h"
 #include "ItemTemplate.h"
 #include "ItemVisitors.h"
 #include "Log.h"
@@ -1894,8 +1895,10 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool second_chance)
             uint8 slot = oldItem->GetSlot();
             uint8 dstBag = NULL_BAG;
 
-            WorldPacket packet(CMSG_AUTOSTORE_BAG_ITEM, 3);
-            packet << bagIndex << slot << dstBag;
+            WorldPacket rawPacket(CMSG_AUTOSTORE_BAG_ITEM, 3);
+            rawPacket << bagIndex << slot << dstBag;
+            WorldPackets::Item::AutoStoreBagItem packet(std::move(rawPacket));
+            packet.Read();
             bot->GetSession()->HandleAutoStoreBagItemOpcode(packet);
         }
 

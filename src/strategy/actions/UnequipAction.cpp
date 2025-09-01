@@ -7,6 +7,7 @@
 
 #include "Event.h"
 #include "ItemCountValue.h"
+#include "ItemPackets.h"
 #include "Playerbots.h"
 
 std::vector<std::string> split(std::string const s, char delim);
@@ -68,8 +69,10 @@ void UnequipAction::UnequipItem(Item* item)
     uint8 slot = item->GetSlot();
     uint8 dstBag = NULL_BAG;
 
-    WorldPacket packet(CMSG_AUTOSTORE_BAG_ITEM, 3);
-    packet << bagIndex << slot << dstBag;
+    WorldPacket rawPacket(CMSG_AUTOSTORE_BAG_ITEM, 3);
+    rawPacket << bagIndex << slot << dstBag;
+    WorldPackets::Item::AutoStoreBagItem packet(std::move(rawPacket));
+    packet.Read();
     bot->GetSession()->HandleAutoStoreBagItemOpcode(packet);
 
     std::ostringstream out;
