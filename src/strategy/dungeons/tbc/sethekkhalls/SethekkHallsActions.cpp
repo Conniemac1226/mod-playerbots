@@ -55,11 +55,6 @@ bool AttackCharmingTotemAction::Execute(Event event)
         return Attack(totem);
     }
     
-    if (hasCharmedAlly)
-    {
-        return false;
-    }
-    
     return false;
 }
 
@@ -97,7 +92,7 @@ bool AttackCharmingTotemAction::isUseful()
         }
     }
     
-    return hasTotem || hasCharmedAlly;
+    return hasTotem;
 }
 
 bool InterruptControllerAction::Execute(Event event)
