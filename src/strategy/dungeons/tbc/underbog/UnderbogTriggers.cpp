@@ -140,3 +140,13 @@ bool BlackStalkerChainLightningTrigger::IsActive()
     // RESEARCHED: Chain Lightning cast check - boss_the_black_stalker.cpp:72
     return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING);
 }
+
+bool BlackStalkerEncounterActiveTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_BLACK_STALKER, 100.0f);
+    return boss && boss->IsAlive() && boss->IsInCombat();
+}

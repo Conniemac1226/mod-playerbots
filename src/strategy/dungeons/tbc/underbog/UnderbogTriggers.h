@@ -79,4 +79,11 @@ public:
     bool IsActive() override;
 };
 
+class BlackStalkerEncounterActiveTrigger : public Trigger
+{
+public:
+    BlackStalkerEncounterActiveTrigger(PlayerbotAI* ai) : Trigger(ai, "black stalker encounter active") {}
+    bool IsActive() override;
+};
+
 #endif

@@ -150,4 +150,12 @@ public:
     bool isUseful() override;
 };
 
+class BlackStalkerSpreadOutAction : public MovementAction
+{
+public:
+    BlackStalkerSpreadOutAction(PlayerbotAI* ai) : MovementAction(ai, "spread out") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 #endif
