@@ -46,4 +46,8 @@ void UnderbogStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "chain lightning casting",
         NextAction::array(0, new NextAction("interrupt chain lightning", ACTION_INTERRUPT + 1), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "black stalker encounter active",
+        NextAction::array(0, new NextAction("spread out", ACTION_MOVE + 4), nullptr)));
 }

@@ -335,10 +335,33 @@ bool AttackSporeStriderAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* strider = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f);
-    if (strider && strider->IsAlive())
+    Unit* target = nullptr;
+    Group* group = bot->GetGroup();
+    if (group)
     {
-        return Attack(strider);
+        for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+        {
+            Player* member = gref->GetSource();
+            if (member && botAI->IsTank(member))
+            {
+                Unit* tankTarget = botAI->GetUnit(member->GetTarget());
+                if (tankTarget && tankTarget->GetEntry() == NPC_SPORE_STRIDER && tankTarget->IsAlive())
+                {
+                    target = tankTarget;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!target)
+    {
+        target = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f, true);
+    }
+
+    if (target && target->IsAlive())
+    {
+        return Attack(target);
     }
 
     return false;
@@ -350,11 +373,10 @@ bool AttackSporeStriderAction::isUseful()
     if (!bot)
         return false;
 
-    // CRITICAL: HEALERS SHOULD NEVER ATTACK ADDS - Always prioritize healing
     if (botAI->IsHeal(bot))
         return false;
 
-    Unit* strider = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f);
+    Unit* strider = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f, true);
     return strider && strider->IsAlive();
 }
 
@@ -369,10 +391,8 @@ bool BlackStalkerChainLightningAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Chain Lightning cast - boss_the_black_stalker.cpp:72
     if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING))
     {
-        // RESEARCHED: Pattern from HellfireRampartsActions.cpp:138-145 - SAFE PATTERN
         Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
         if (spellIdsValue)
         {
@@ -402,4 +422,56 @@ bool BlackStalkerChainLightningAction::isUseful()
         return false;
 
     return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING);
+}
+
+bool BlackStalkerSpreadOutAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+    {
+        Player* member = gref->GetSource();
+        if (member && member != bot && bot->GetDistance(member) < 10.0f)
+        {
+            float angle = bot->GetAngle(member) + M_PI;
+            float x = bot->GetPositionX() + cos(angle) * 15.0f;
+            float y = bot->GetPositionY() + sin(angle) * 15.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        }
+    }
+
+    return false;
+}
+
+bool BlackStalkerSpreadOutAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_BLACK_STALKER, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+    {
+        Player* member = gref->GetSource();
+        if (member && member != bot && bot->GetDistance(member) < 10.0f)
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
