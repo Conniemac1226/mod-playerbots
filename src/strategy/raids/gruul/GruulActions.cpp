@@ -51,14 +51,63 @@ bool GruulGroundSlamAction::Execute(Event event)
     if (!gruul)
         return false;
         
-    // Ground Slam is happening - we're being pulled by tractor beam
-    // Just maintain position, we can't avoid the pull
+    // CRITICAL: Spread IMMEDIATELY on Ground Slam detection!
+    // We have 9.7 seconds before Shatter - this is our ONLY chance to position
     groundSlamTimes[bot->GetGUID()] = time(nullptr);
     
-    // If we have 5 stacks of tractor beam, we'll be petrified
-    // Nothing we can do about it, but prepare for shatter
+    // Find optimal spread position away from other players
+    Group* group = bot->GetGroup();
+    if (group)
+    {
+        Position bestPos;
+        float bestMinDist = 0.0f;
+        float spreadDistance = 30.0f; // Maximum spread distance
+        
+        // Test 8 radial positions around Gruul
+        for (int i = 0; i < 8; ++i)
+        {
+            float angle = 2 * M_PI * i / 8.0f;
+            Position testPos = gruul->GetPosition();
+            testPos.m_positionX += cos(angle) * spreadDistance;
+            testPos.m_positionY += sin(angle) * spreadDistance;
+            
+            // Calculate minimum distance to other group members at this position
+            float minDistToOthers = 100.0f;
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (member && member != bot && member->IsAlive())
+                {
+                    float dist = member->GetDistance2d(testPos.m_positionX, testPos.m_positionY);
+                    if (dist < minDistToOthers)
+                        minDistToOthers = dist;
+                }
+            }
+            
+            // Pick position with maximum distance from nearest player
+            if (minDistToOthers > bestMinDist)
+            {
+                bestMinDist = minDistToOthers;
+                bestPos = testPos;
+            }
+        }
+        
+        if (bestMinDist > 0.0f)
+        {
+            return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY, bestPos.m_positionZ,
+                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        }
+    }
     
-    return true;
+    // Fallback: spread to random position if no group or calculation fails
+    float angle = 2 * M_PI * rand_norm();
+    float distance = 25.0f + frand(0.0f, 10.0f);
+    Position pos = gruul->GetPosition();
+    pos.m_positionX += cos(angle) * distance;
+    pos.m_positionY += sin(angle) * distance;
+    
+    return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                 false, false, false, true, MovementPriority::MOVEMENT_FORCED);
 }
 
 bool GruulGroundSlamAction::isUseful()
@@ -127,7 +176,11 @@ bool GruulShatterPositionAction::Execute(Event event)
 
 bool GruulShatterPositionAction::isUseful()
 {
-    return bot && bot->IsAlive() && !bot->HasAura(SPELL_STONED);
+    // DEPRECATED: Shatter positioning now handled by Ground Slam action
+    // By the time Shatter happens, players are petrified and cannot move
+    // This action kept for compatibility but should rarely trigger
+    return bot && bot->IsAlive() && !bot->HasAura(SPELL_STONED) && 
+           bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f, true) != nullptr;
 }
 
 bool GruulCaveInAction::Execute(Event event)
