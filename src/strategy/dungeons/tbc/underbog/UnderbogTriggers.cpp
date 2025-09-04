@@ -75,7 +75,18 @@ bool WindcallerClawActiveTrigger::IsActive()
         return false;
 
     Unit* bear = bot->FindNearestCreature(NPC_WINDCALLER_CLAW, 100.0f);
-    return bear && bear->IsAlive() && bear->IsInCombat();
+    if (!bear || !bear->IsAlive() || !bear->IsInCombat())
+        return false;
+
+    // IMMEDIATE PRIORITY: Pet must be targeted immediately when found
+    // Don't hesitate - pet is always priority over boss during encounter
+    Unit* boss = bot->FindNearestCreature(NPC_SWAMPLORD_MUSELEK, 100.0f);
+    if (!boss || !boss->IsInCombat())
+        return false; // Only during boss encounter
+    
+    // Trigger immediately if pet is alive and bot isn't already targeting it
+    Unit* currentTarget = bot->GetTarget() ? botAI->GetUnit(bot->GetTarget()) : nullptr;
+    return !currentTarget || currentTarget->GetEntry() != NPC_WINDCALLER_CLAW;
 }
 
 // Freezing Trap being cast

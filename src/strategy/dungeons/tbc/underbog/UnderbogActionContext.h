@@ -19,6 +19,8 @@ public:
         creators["position for levitate"] = &UnderbogActionContext::position_for_levitate;
         creators["attack spore strider"] = &UnderbogActionContext::attack_spore_strider;
         creators["interrupt chain lightning"] = &UnderbogActionContext::interrupt_chain_lightning;
+        creators["spread out"] = &UnderbogActionContext::spread_out;
+        creators["spread for chain lightning"] = &UnderbogActionContext::spread_for_chain_lightning;
     }
 
 private:
@@ -32,6 +34,8 @@ private:
     static Action* position_for_levitate(PlayerbotAI* ai) { return new BlackStalkerLevitateAction(ai); }
     static Action* attack_spore_strider(PlayerbotAI* ai) { return new AttackSporeStriderAction(ai); }
     static Action* interrupt_chain_lightning(PlayerbotAI* ai) { return new BlackStalkerChainLightningAction(ai); }
+    static Action* spread_out(PlayerbotAI* ai) { return new BlackStalkerSpreadOutAction(ai); }
+    static Action* spread_for_chain_lightning(PlayerbotAI* ai) { return new BlackStalkerSpreadChainLightningAction(ai); }
 };
 
 #endif
