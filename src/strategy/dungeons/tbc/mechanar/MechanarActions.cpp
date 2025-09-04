@@ -433,89 +433,18 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (!targetingFlame)
         return false;
 
-    // Stop spellcasting when kiting flames
+    // Stop spellcasting when kiting flames - CRITICAL for kiting success
     if (bot->IsNonMeleeSpellCast(false))
         botAI->InterruptSpell();
     
-    botAI->Reset();
-
-    // INTELLIGENT KITING - use room boundaries
-    float fleeDistance = 20.0f;
-    float angle = bot->GetAngle(targetingFlame) + M_PI; // Angle away from the flame
-
-    Position botPos = bot->GetPosition();
-    Position targetPos;
-    targetPos.m_positionX = botPos.m_positionX + cos(angle) * fleeDistance;
-    targetPos.m_positionY = botPos.m_positionY + sin(angle) * fleeDistance;
-    targetPos.m_positionZ = botPos.m_positionZ;
-
-    // Ensure the calculated position is within the room's safe boundaries
-    Position safePos = ConstrainToRoom(targetPos, botAI);
-
-    // If the safe position is on the edge of the room, move it further in
-    const float edgeBuffer = 5.0f;
-    if (safePos.m_positionX <= MECHANAR_SEPETHREA_MIN_X + 3.0f)
-        safePos.m_positionX += edgeBuffer;
-    if (safePos.m_positionX >= MECHANAR_SEPETHREA_MAX_X - 3.0f)
-        safePos.m_positionX -= edgeBuffer;
-    if (safePos.m_positionY <= MECHANAR_SEPETHREA_MIN_Y + 3.0f)
-        safePos.m_positionY += edgeBuffer;
-    if (safePos.m_positionY >= MECHANAR_SEPETHREA_MAX_Y - 3.0f)
-        safePos.m_positionY -= edgeBuffer;
-
-    // Check if the path to the safe position is clear of walls
-    if (IsPathClear(botPos, safePos, botAI))
-    {
-        return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY, 
-                     safePos.m_positionZ, false, false, false, true, 
-                     MovementPriority::MOVEMENT_NORMAL);
-    }
-    else
-    {
-        // If path is not clear, find a better escape route
-        Position botPos = bot->GetPosition();
-        float bestAngle = 0.0f;
-        bool foundValidPath = false;
-
-        // Check 8 directions for a clear path
-        for (int i = 0; i < 8; ++i)
-        {
-            float angle = i * (M_PI / 4);
-            Position checkPos;
-            checkPos.m_positionX = botPos.m_positionX + cos(angle) * 15.0f;
-            checkPos.m_positionY = botPos.m_positionY + sin(angle) * 15.0f;
-            checkPos.m_positionZ = botPos.m_positionZ;
-
-            if (IsPathClear(botPos, checkPos, botAI))
-            {
-                bestAngle = angle;
-                foundValidPath = true;
-                break;
-            }
-        }
-
-        if (foundValidPath)
-        {
-            Position newPos;
-            newPos.m_positionX = botPos.m_positionX + cos(bestAngle) * 15.0f;
-            newPos.m_positionY = botPos.m_positionY + sin(bestAngle) * 15.0f;
-            newPos.m_positionZ = botPos.m_positionZ;
-            Position safePos = ConstrainToRoom(newPos);
-            return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
-                         safePos.m_positionZ, false, false, false, true,
-                         MovementPriority::MOVEMENT_NORMAL);
-        }
-        else
-        {
-            // Absolute fallback: move to center if no path found
-            Position centerPos = MECHANAR_SEPETHREA_CENTER;
-            return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
-                         centerPos.m_positionZ, false, false, false, true,
-                         MovementPriority::MOVEMENT_NORMAL);
-        }
-    }
-
-    return false;
+    // SIMPLIFIED RELIABLE KITING: Use FleePosition instead of complex MoveTo logic
+    // FleePosition handles pathfinding, boundaries, and continuous movement better
+    float fleeDistance = 20.0f; // Safe distance from area aura + inferno blast
+    uint32 minTime = 2000; // 2 second minimum movement - ensures sustained kiting
+    
+    // PRIMARY KITING METHOD: FleePosition with MOVEMENT_COMBAT priority
+    // This provides uninterrupted movement with automatic pathfinding
+    return FleePosition(targetingFlame->GetPosition(), fleeDistance, minTime);
 }
 
 bool SepethreaRagingFlamesAction::isUseful()
@@ -743,11 +672,11 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
         {
             return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY, 
                          targetPos.m_positionZ, false, false, false, true, 
-                         MovementPriority::MOVEMENT_NORMAL);
+                         MovementPriority::MOVEMENT_COMBAT);
         }
         
-        // Fallback: simple flee
-        return FleePosition(nearestFlame->GetPosition(), 12.0f, 200U);
+        // Fallback: simple flee with proper priority
+        return FleePosition(nearestFlame->GetPosition(), 18.0f, 1500U);
     }
     
     return false;
