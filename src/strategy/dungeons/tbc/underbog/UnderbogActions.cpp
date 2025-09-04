@@ -195,6 +195,8 @@ bool AttackWindcallerClawAction::Execute(Event event)
     Unit* bear = bot->FindNearestCreature(NPC_WINDCALLER_CLAW, 100.0f);
     if (bear && bear->IsAlive() && bear->IsInCombat())
     {
+        // STRATEGY: Pet must die first - it's the primary melee threat
+        // Boss stays ranged while pet attacks group members
         return Attack(bear);
     }
 
@@ -208,7 +210,17 @@ bool AttackWindcallerClawAction::isUseful()
         return false;
 
     Unit* bear = bot->FindNearestCreature(NPC_WINDCALLER_CLAW, 100.0f);
-    return bear && bear->IsAlive() && bear->IsInCombat();
+    if (!bear || !bear->IsAlive() || !bear->IsInCombat())
+        return false;
+
+    // PRIORITY: Always prioritize pet over boss when pet is alive
+    // The bear is the immediate melee threat while boss shoots from range
+    // Only exception: if bot is already attacking the bear, continue
+    Unit* currentTarget = bot->GetTarget() ? botAI->GetUnit(bot->GetTarget()) : nullptr;
+    if (currentTarget && currentTarget->GetEntry() == NPC_WINDCALLER_CLAW)
+        return false; // Already attacking pet, no need to change target
+
+    return true;
 }
 
 // Avoid Freezing Trap
@@ -337,6 +349,8 @@ bool AttackSporeStriderAction::Execute(Event event)
 
     Unit* target = nullptr;
     Group* group = bot->GetGroup();
+    
+    // Priority 1: Tank's target if it's a spore strider
     if (group)
     {
         for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
@@ -354,6 +368,30 @@ bool AttackSporeStriderAction::Execute(Event event)
         }
     }
 
+    // Priority 2: Find the closest spore strider to any group member
+    if (!target && group)
+    {
+        float closestDistance = 50.0f;
+        for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+        {
+            Player* member = gref->GetSource();
+            if (member && member->IsAlive())
+            {
+                Unit* nearbyStrider = member->FindNearestCreature(NPC_SPORE_STRIDER, 30.0f, true);
+                if (nearbyStrider)
+                {
+                    float distance = bot->GetDistance(nearbyStrider);
+                    if (distance < closestDistance)
+                    {
+                        target = nearbyStrider;
+                        closestDistance = distance;
+                    }
+                }
+            }
+        }
+    }
+
+    // Priority 3: Fallback to nearest strider to bot
     if (!target)
     {
         target = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f, true);
@@ -373,8 +411,21 @@ bool AttackSporeStriderAction::isUseful()
     if (!bot)
         return false;
 
+    // Allow healers to help with adds when no healing is immediately needed
     if (botAI->IsHeal(bot))
-        return false;
+    {
+        // Only help with adds if no one needs healing
+        Group* group = bot->GetGroup();
+        if (group)
+        {
+            for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+            {
+                Player* member = gref->GetSource();
+                if (member && member->IsAlive() && member->GetHealthPct() < 80.0f)
+                    return false; // Someone needs healing, focus on that
+            }
+        }
+    }
 
     Unit* strider = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f, true);
     return strider && strider->IsAlive();
@@ -430,6 +481,21 @@ bool BlackStalkerSpreadOutAction::Execute(Event event)
     if (!bot)
         return false;
 
+    // Don't move healers during active healing
+    if (botAI->IsHeal(bot))
+    {
+        Group* group = bot->GetGroup();
+        if (group)
+        {
+            for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+            {
+                Player* member = gref->GetSource();
+                if (member && member->IsAlive() && member->GetHealthPct() < 70.0f)
+                    return false; // Someone needs healing urgently
+            }
+        }
+    }
+
     Group* group = bot->GetGroup();
     if (!group)
         return false;
@@ -437,13 +503,13 @@ bool BlackStalkerSpreadOutAction::Execute(Event event)
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
         Player* member = gref->GetSource();
-        if (member && member != bot && bot->GetDistance(member) < 10.0f)
+        if (member && member != bot && bot->GetDistance(member) < 12.0f)
         {
             float angle = bot->GetAngle(member) + M_PI;
             float x = bot->GetPositionX() + cos(angle) * 15.0f;
             float y = bot->GetPositionY() + sin(angle) * 15.0f;
             float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
         }
     }
 
@@ -467,7 +533,105 @@ bool BlackStalkerSpreadOutAction::isUseful()
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
         Player* member = gref->GetSource();
-        if (member && member != bot && bot->GetDistance(member) < 10.0f)
+        if (member && member != bot && bot->GetDistance(member) < 12.0f)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Chain Lightning specific spread action - triggers immediately on cast
+bool BlackStalkerSpreadChainLightningAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_BLACK_STALKER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Only spread if Chain Lightning is being cast or was recently cast
+    if (!boss->HasUnitState(UNIT_STATE_CASTING) || !boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING))
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    // Find closest group member within chain lightning range
+    Player* closestMember = nullptr;
+    float closestDistance = 15.0f; // Chain lightning jump range
+    
+    for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+    {
+        Player* member = gref->GetSource();
+        if (member && member != bot && member->IsAlive())
+        {
+            float distance = bot->GetDistance(member);
+            if (distance < closestDistance)
+            {
+                closestMember = member;
+                closestDistance = distance;
+            }
+        }
+    }
+
+    if (closestMember)
+    {
+        // Move away from the closest member
+        float angle = bot->GetAngle(closestMember) + M_PI;
+        float x = bot->GetPositionX() + cos(angle) * 18.0f;
+        float y = bot->GetPositionY() + sin(angle) * 18.0f;
+        float z = bot->GetPositionZ();
+        bot->UpdateAllowedPositionZ(x, y, z);
+        
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    return false;
+}
+
+bool BlackStalkerSpreadChainLightningAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Don't move healers if someone is critically low
+    if (botAI->IsHeal(bot))
+    {
+        Group* group = bot->GetGroup();
+        if (group)
+        {
+            for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+            {
+                Player* member = gref->GetSource();
+                if (member && member->IsAlive() && member->GetHealthPct() < 40.0f)
+                    return false; // Someone critically low, healing priority
+            }
+        }
+    }
+
+    Unit* boss = bot->FindNearestCreature(NPC_BLACK_STALKER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Only useful if Chain Lightning is being cast
+    if (!boss->HasUnitState(UNIT_STATE_CASTING) || !boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING))
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    // Check if we're too close to anyone
+    for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+    {
+        Player* member = gref->GetSource();
+        if (member && member != bot && member->IsAlive() && bot->GetDistance(member) < 15.0f)
         {
             return true;
         }

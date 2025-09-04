@@ -158,4 +158,12 @@ public:
     bool isUseful() override;
 };
 
+class BlackStalkerSpreadChainLightningAction : public MovementAction
+{
+public:
+    BlackStalkerSpreadChainLightningAction(PlayerbotAI* ai) : MovementAction(ai, "spread for chain lightning") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 #endif
