@@ -433,17 +433,42 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (!targetingFlame)
         return false;
 
-    // Stop spellcasting when kiting flames - CRITICAL for kiting success
-    if (bot->IsNonMeleeSpellCast(false))
-        botAI->InterruptSpell();
+    // MOVED: Spell interruption logic moved below for smarter handling
     
-    // SIMPLIFIED RELIABLE KITING: Use FleePosition instead of complex MoveTo logic
-    // FleePosition handles pathfinding, boundaries, and continuous movement better
+    // ENHANCED KITING: Check for fire hazards before using FleePosition
     float fleeDistance = 20.0f; // Safe distance from area aura + inferno blast
-    uint32 minTime = 2000; // 2 second minimum movement - ensures sustained kiting
+    uint32 minTime = 1500; // Reduced to 1.5s for better responsiveness
     
-    // PRIMARY KITING METHOD: FleePosition with MOVEMENT_COMBAT priority
-    // This provides uninterrupted movement with automatic pathfinding
+    // SAFETY CHECK: If bot is standing in fire, prioritize getting out immediately
+    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA))
+    {
+        // Emergency fire escape - use simple FleePosition for immediate movement
+        return FleePosition(targetingFlame->GetPosition(), fleeDistance, minTime);
+    }
+    
+    // SMART KITING: Only interrupt spells for instant casts or when in immediate danger
+    if (bot->IsNonMeleeSpellCast(false))
+    {
+        Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+        if (currentSpell)
+        {
+            uint32 castTime = currentSpell->GetCastTime();
+            float distanceToFlame = bot->GetDistance(targetingFlame);
+            
+            // Only interrupt if: instant cast, or flame very close, or long cast time
+            if (castTime == 0 || distanceToFlame < 10.0f || castTime > 3000)
+            {
+                botAI->InterruptSpell();
+            }
+        }
+        else
+        {
+            // Fallback - interrupt if no current spell info available
+            botAI->InterruptSpell();
+        }
+    }
+    
+    // PRIMARY KITING METHOD: FleePosition with smart distance management
     return FleePosition(targetingFlame->GetPosition(), fleeDistance, minTime);
 }
 
@@ -812,7 +837,7 @@ bool SepethreaInfernoAvoidanceAction::isUseful()
     return false;
 }
 
-// Fire trail avoidance for all bots
+// Fire trail avoidance for all bots - ENHANCED VERSION
 bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
@@ -821,34 +846,68 @@ bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
 
     // IMMEDIATE emergency response to standing in fire trail
     if (bot->IsNonMeleeSpellCast(false))
-        botAI->InterruptSpell();
-    
-    botAI->Reset();
-
-    // Find a clear path away from the fire
-    Position botPos = bot->GetPosition();
-    for (int i = 0; i < 8; ++i)
     {
-        float angle = i * (M_PI / 4);
-        Position checkPos;
-        checkPos.m_positionX = botPos.m_positionX + cos(angle) * 10.0f;
-        checkPos.m_positionY = botPos.m_positionY + sin(angle) * 10.0f;
-        checkPos.m_positionZ = botPos.m_positionZ;
-
-        if (IsPathClear(botPos, checkPos))
+        // Only interrupt long casts or if taking heavy damage
+        Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+        if (currentSpell)
         {
-            Position newPos = ConstrainToRoom(checkPos);
-            return MoveTo(bot->GetMapId(), newPos.m_positionX, newPos.m_positionY,
-                            newPos.m_positionZ, false, false, false, true,
-                            MovementPriority::MOVEMENT_NORMAL);
+            uint32 castTime = currentSpell->GetCastTime();
+            float healthPct = bot->GetHealthPct();
+            
+            // Interrupt if: long cast (>2s) or health dropping quickly (<60%)
+            if (castTime > 2000 || healthPct < 60.0f)
+            {
+                botAI->InterruptSpell();
+            }
+        }
+        else
+        {
+            // Fallback - interrupt if no current spell info available
+            botAI->InterruptSpell();
         }
     }
-
-    // Fallback: move to center if no path found
-    Position centerPos = MECHANAR_SEPETHREA_CENTER;
-    return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
-                    centerPos.m_positionZ, false, false, false, true,
-                    MovementPriority::MOVEMENT_FORCED);
+    
+    // ENHANCED FIRE ESCAPE: Use FleePosition instead of complex manual pathfinding
+    // FleePosition automatically handles room boundaries and collision detection
+    
+    // Find all nearby Raging Flames to flee from
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* nearestFlame = nullptr;
+    float closestDistance = 100.0f;
+    
+    for (auto& npc : npcs)
+    {
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
+            continue;
+            
+        float distance = bot->GetDistance(flame);
+        if (distance < closestDistance)
+        {
+            nearestFlame = flame;
+            closestDistance = distance;
+        }
+    }
+    
+    if (nearestFlame)
+    {
+        // SMART ESCAPE: Flee from nearest flame with emergency priority
+        float escapeDistance = 18.0f; // Increased from area aura range
+        uint32 minTime = 1000; // Quick escape time
+        
+        return FleePosition(nearestFlame->GetPosition(), escapeDistance, minTime);
+    }
+    
+    // FALLBACK: If no flames found but still in fire aura, move to room center
+    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA))
+    {
+        Position centerPos = MECHANAR_SEPETHREA_CENTER;
+        return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
+                        centerPos.m_positionZ, false, false, false, true,
+                        MovementPriority::MOVEMENT_FORCED);
+    }
+    
+    return false;
 }
 
 bool SepethreaFireTrailAvoidanceAction::isUseful()
