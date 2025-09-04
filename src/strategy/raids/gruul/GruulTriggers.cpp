@@ -12,6 +12,10 @@
 #include "SpellInfo.h"
 #include "Group.h"
 #include "GroupReference.h"
+#include <map>
+
+// External reference to Ground Slam timing tracker (defined in GruulActions.cpp)
+extern std::map<ObjectGuid, time_t> groundSlamTimes;
 
 // Helper function to check if a unit is casting a specific spell
 static bool IsCastingSpell(Unit* unit, uint32 spellId)
@@ -48,20 +52,47 @@ bool GruulGroundSlamTrigger::IsActive()
         return false;
 
     Unit* gruul = bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f);
-    if (!gruul)
+    if (!gruul || !gruul->IsAlive() || !gruul->IsInCombat())
         return false;
         
-    // Check if Gruul is casting Ground Slam (preemptive detection)
+    // PRIORITY 1: Check if Gruul is casting Ground Slam (CRITICAL - earliest detection)
     if (IsCastingSpell(gruul, SPELL_GROUND_SLAM))
         return true;
         
-    // Check if we're being affected by tractor beam
+    // PRIORITY 2: Check if we're being affected by tractor beam (Ground Slam active)
     if (bot->HasAura(SPELL_TRACTOR_BEAM_PULL))
         return true;
         
-    // Check if we have the Look Around stun (during Ground Slam)
+    // PRIORITY 3: Check if we have the Look Around stun (during Ground Slam sequence)
     if (bot->HasAura(SPELL_LOOK_AROUND))
         return true;
+    
+    // PRIORITY 4: Check recent Ground Slam timing for continuous spreading
+    // Maintain spread position until Shatter completes (9.7+ seconds)
+    auto it = groundSlamTimes.find(bot->GetGUID());
+    if (it != groundSlamTimes.end())
+    {
+        time_t timeSinceSlam = time(nullptr) - it->second;
+        if (timeSinceSlam < 12) // 12 seconds buffer (9.7s + safety margin)
+        {
+            // Only continue if we haven't already spread (distance check)
+            Group* group = bot->GetGroup();
+            if (group)
+            {
+                bool tooCloseToSomeone = false;
+                for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                {
+                    Player* member = ref->GetSource();
+                    if (member && member != bot && member->IsAlive() && bot->GetDistance(member) < 15.0f)
+                    {
+                        tooCloseToSomeone = true;
+                        break;
+                    }
+                }
+                return tooCloseToSomeone; // Keep spreading if still too close
+            }
+        }
+    }
     
     return false;
 }
