@@ -181,11 +181,9 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
 
-    // Polarity Shift - players with same charge stack, opposite charges spread
-    
     bool hasPositive = bot->HasAura(SPELL_POSITIVE_POLARITY);
     bool hasNegative = bot->HasAura(SPELL_NEGATIVE_POLARITY);
-    
+
     if (!hasPositive && !hasNegative)
     {
         g_capacitus_hasPositive[botGuid] = false;
@@ -193,14 +191,52 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
         return false;
     }
 
-    // Update polarity state
     g_capacitus_hasPositive[botGuid] = hasPositive;
     g_capacitus_hasNegative[botGuid] = hasNegative;
     g_capacitus_lastPolarityTime[botGuid] = currentTime;
 
-    // Find other players with same/opposite polarity
     const GuidVector members = AI_VALUE(GuidVector, "group members");
-    
+    Unit* closestSamePolarityAlly = nullptr;
+    float closestSamePolarityDistance = 100.0f;
+
+    // Find the closest ally with the same polarity
+    for (auto& member : members)
+    {
+        Unit* ally = botAI->GetUnit(member);
+        if (!ally || ally == bot || !ally->IsAlive())
+            continue;
+
+        bool allyPositive = ally->HasAura(SPELL_POSITIVE_POLARITY);
+        bool allyNegative = ally->HasAura(SPELL_NEGATIVE_POLARITY);
+
+        if ((hasPositive && allyPositive) || (hasNegative && allyNegative))
+        {
+            float distance = bot->GetDistance(ally);
+            if (distance < closestSamePolarityDistance)
+            {
+                closestSamePolarityAlly = ally;
+                closestSamePolarityDistance = distance;
+            }
+        }
+    }
+
+    // Move to the closest ally with the same polarity if too far
+    if (closestSamePolarityAlly && closestSamePolarityDistance > 8.0f)
+    {
+        return MoveTo(closestSamePolarityAlly, 4.0f);
+    }
+
+    // If close enough to an ally with the same polarity, stop moving
+    if (closestSamePolarityAlly && closestSamePolarityDistance < 7.0f)
+    {
+        if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
+        {
+            bot->GetMotionMaster()->Clear();
+            return true;
+        }
+    }
+
+    // Move away from allies with opposite polarity
     for (auto& member : members)
     {
         Unit* ally = botAI->GetUnit(member);
@@ -210,40 +246,9 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
         bool allyPositive = ally->HasAura(SPELL_POSITIVE_POLARITY);
         bool allyNegative = ally->HasAura(SPELL_NEGATIVE_POLARITY);
         float distance = bot->GetDistance(ally);
-        
-        if ((hasPositive && allyPositive) || (hasNegative && allyNegative))
+
+        if ((hasPositive && allyNegative) || (hasNegative && allyPositive))
         {
-            // Same polarity - move closer if too far
-            if (distance > 8.0f)
-            {
-                // Check if we are already moving to the correct ally
-                if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-                {
-                    float destX, destY, destZ;
-                    if (bot->GetMotionMaster()->GetDestination(destX, destY, destZ))
-                    {
-                        // If already moving, let it continue, unless the target is far off
-                        if (ally->GetDistance(destX, destY, destZ) < 2.0f)
-                        {
-                            return false; // Already moving to the right place
-                        }
-                    }
-                }
-                
-                // If not moving or moving to the wrong place, start moving.
-                return MoveTo(ally, 4.0f); // Move to within 4 yards of the ally
-            }
-            // Already close enough - stop moving and let normal combat resume
-            else if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE && distance < 7.0f)
-            {
-                // If we are moving and get close enough, stop moving to allow casting.
-                bot->GetMotionMaster()->Clear();
-                return true;
-            }
-        }
-        else if ((hasPositive && allyNegative) || (hasNegative && allyPositive))
-        {
-            // Opposite polarity - move away if too close
             if (distance < 8.0f)
             {
                 float angle = bot->GetAngle(ally) + M_PI;
@@ -252,32 +257,14 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
                 float z = bot->GetPositionZ();
                 Position targetPos(x, y, z, 0.0f);
                 targetPos = ConstrainToRoom(targetPos, botAI);
-                
+
                 if (IsPositionSafe(targetPos) && IsPathClear(bot->GetPosition(), targetPos))
                 {
-                    return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY, 
+                    return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY,
                                  targetPos.m_positionZ, false, false, false, true,
                                  MovementPriority::MOVEMENT_NORMAL);
                 }
-                
-                // Fallback: find safe direction
-                for (int i = 0; i < 8; ++i)
-                {
-                    float testAngle = (i * M_PI / 4);
-                    float testX = bot->GetPositionX() + cos(testAngle) * 8.0f;
-                    float testY = bot->GetPositionY() + sin(testAngle) * 8.0f;
-                    Position testPos(testX, testY, z, 0.0f);
-                    testPos = ConstrainToRoom(testPos);
-                    
-                    if (IsPositionSafe(testPos) && IsPathClear(bot->GetPosition(), testPos))
-                    {
-                        return MoveTo(bot->GetMapId(), testPos.m_positionX, testPos.m_positionY,
-                                     testPos.m_positionZ, false, false, false, true,
-                                     MovementPriority::MOVEMENT_NORMAL);
-                    }
-                }
             }
-            // Already far enough - stop moving and let normal combat resume
         }
     }
 
@@ -464,6 +451,17 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
 
     // Ensure the calculated position is within the room's safe boundaries
     Position safePos = ConstrainToRoom(targetPos, botAI);
+
+    // If the safe position is on the edge of the room, move it further in
+    const float edgeBuffer = 5.0f;
+    if (safePos.m_positionX <= MECHANAR_SEPETHREA_MIN_X + 3.0f)
+        safePos.m_positionX += edgeBuffer;
+    if (safePos.m_positionX >= MECHANAR_SEPETHREA_MAX_X - 3.0f)
+        safePos.m_positionX -= edgeBuffer;
+    if (safePos.m_positionY <= MECHANAR_SEPETHREA_MIN_Y + 3.0f)
+        safePos.m_positionY += edgeBuffer;
+    if (safePos.m_positionY >= MECHANAR_SEPETHREA_MAX_Y - 3.0f)
+        safePos.m_positionY -= edgeBuffer;
 
     // Check if the path to the safe position is clear of walls
     if (IsPathClear(botPos, safePos, botAI))
