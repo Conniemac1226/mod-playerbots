@@ -74,6 +74,9 @@ bool InterruptDarkMendingAction::Execute(Event event)
 
 bool InterruptDarkMendingAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->IsWithinMeleeRange(AI_VALUE(Unit*, "current target")) ||
            bot->HasSpell(2139) || // Counterspell
            bot->HasSpell(19647) || // Spell Lock
@@ -221,6 +224,10 @@ bool AvoidQuakeAction::isUseful()
 
 Position AvoidQuakeAction::GetSafePosition()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return Position();
+        
     Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
     if (!magtheridon)
         return bot->GetPosition();
@@ -487,6 +494,10 @@ bool SpreadForCleaveAction::IsTooCloseToTank()
 
 Position SpreadForCleaveAction::GetSpreadPosition()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return Position();
+        
     Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
     if (!magtheridon)
         return bot->GetPosition();
