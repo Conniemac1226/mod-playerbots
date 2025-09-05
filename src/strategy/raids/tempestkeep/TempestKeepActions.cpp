@@ -153,6 +153,9 @@ Position AlarFlameQuillsAction::GetNearestPlatform()
 
 bool AlarFlameQuillsAction::IsOnPlatform()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     // Check if bot is on a platform (elevated position)
     return bot->GetPositionZ() > 15.0f;
 }
