@@ -19,6 +19,7 @@ public:
         creators["moroes engaged"] = &KarazhanTriggerContext::moroes_engaged;
         creators["moroes adds"] = &KarazhanTriggerContext::moroes_adds;
         creators["moroes garrote"] = &KarazhanTriggerContext::moroes_garrote;
+        creators["moroes gouge"] = &KarazhanTriggerContext::moroes_gouge;
         
         // Maiden of Virtue
         creators["maiden engaged"] = &KarazhanTriggerContext::maiden_engaged;
@@ -61,6 +62,13 @@ public:
         creators["nightbane engaged"] = &KarazhanTriggerContext::nightbane_engaged;
         creators["nightbane air phase"] = &KarazhanTriggerContext::nightbane_air_phase;
         creators["nightbane charred earth"] = &KarazhanTriggerContext::nightbane_charred_earth;
+        
+        // Chess Event
+        creators["chess event active"] = &KarazhanTriggerContext::chess_event_active;
+        
+        // Utility Triggers
+        creators["karazhan interrupt needed"] = &KarazhanTriggerContext::karazhan_interrupt_needed;
+        creators["karazhan dispel needed"] = &KarazhanTriggerContext::karazhan_dispel_needed;
     }
 
 private:
@@ -74,6 +82,7 @@ private:
     static Trigger* moroes_engaged(PlayerbotAI* ai) { return new MoroesEngagedTrigger(ai); }
     static Trigger* moroes_adds(PlayerbotAI* ai) { return new MoroesAddsTrigger(ai); }
     static Trigger* moroes_garrote(PlayerbotAI* ai) { return new MoroesGarroteTrigger(ai); }
+    static Trigger* moroes_gouge(PlayerbotAI* ai) { return new MoroesGarroteTrigger(ai); } // Reuse same logic
     
     // Maiden of Virtue
     static Trigger* maiden_engaged(PlayerbotAI* ai) { return new MaidenEngagedTrigger(ai); }
@@ -116,6 +125,13 @@ private:
     static Trigger* nightbane_engaged(PlayerbotAI* ai) { return new NightbaneEngagedTrigger(ai); }
     static Trigger* nightbane_air_phase(PlayerbotAI* ai) { return new NightbaneAirPhaseTrigger(ai); }
     static Trigger* nightbane_charred_earth(PlayerbotAI* ai) { return new NightbaneCharredEarthTrigger(ai); }
+    
+    // Chess Event
+    static Trigger* chess_event_active(PlayerbotAI* ai) { return new MoroesEngagedTrigger(ai); } // Placeholder
+    
+    // Utility Triggers
+    static Trigger* karazhan_interrupt_needed(PlayerbotAI* ai) { return new MoroesEngagedTrigger(ai); } // Placeholder
+    static Trigger* karazhan_dispel_needed(PlayerbotAI* ai) { return new MoroesGarroteTrigger(ai); } // Use Garrote trigger
 };
 
 #endif

@@ -17,6 +17,7 @@ public:
         creators["moroes focus adds"] = &KarazhanActionContext::moroes_focus_adds;
         creators["moroes position"] = &KarazhanActionContext::moroes_position;
         creators["moroes crowd control"] = &KarazhanActionContext::moroes_crowd_control;
+        creators["moroes tank swap"] = &KarazhanActionContext::moroes_tank_swap;
         
         // Maiden of Virtue
         creators["maiden repentance"] = &KarazhanActionContext::maiden_repentance;
@@ -51,6 +52,14 @@ public:
         creators["nightbane position"] = &KarazhanActionContext::nightbane_position;
         creators["nightbane charred earth"] = &KarazhanActionContext::nightbane_charred_earth;
         creators["nightbane air phase"] = &KarazhanActionContext::nightbane_air_phase;
+        
+        // Chess Event
+        creators["chess event move"] = &KarazhanActionContext::chess_event_move;
+        creators["chess event ability"] = &KarazhanActionContext::chess_event_ability;
+        
+        // Utility Actions
+        creators["karazhan interrupt rotation"] = &KarazhanActionContext::karazhan_interrupt_rotation;
+        creators["karazhan dispel"] = &KarazhanActionContext::karazhan_dispel;
     }
 
 private:
@@ -62,6 +71,7 @@ private:
     static Action* moroes_focus_adds(PlayerbotAI* ai) { return new MoroesFocusAddsAction(ai); }
     static Action* moroes_position(PlayerbotAI* ai) { return new MoroesPositionAction(ai); }
     static Action* moroes_crowd_control(PlayerbotAI* ai) { return new MoroesCrowdControlAction(ai); }
+    static Action* moroes_tank_swap(PlayerbotAI* ai) { return new MoroesTankSwapAction(ai); }
     
     // Maiden of Virtue
     static Action* maiden_repentance(PlayerbotAI* ai) { return new MaidenRepentanceAction(ai); }
@@ -96,6 +106,14 @@ private:
     static Action* nightbane_position(PlayerbotAI* ai) { return new NightbanePositionAction(ai); }
     static Action* nightbane_charred_earth(PlayerbotAI* ai) { return new NightbaneCharredEarthAction(ai); }
     static Action* nightbane_air_phase(PlayerbotAI* ai) { return new NightbaneAirPhaseAction(ai); }
+    
+    // Chess Event
+    static Action* chess_event_move(PlayerbotAI* ai) { return new ChessEventMoveAction(ai); }
+    static Action* chess_event_ability(PlayerbotAI* ai) { return new ChessEventAbilityAction(ai); }
+    
+    // Utility Actions
+    static Action* karazhan_interrupt_rotation(PlayerbotAI* ai) { return new KarazhanInterruptRotationAction(ai); }
+    static Action* karazhan_dispel(PlayerbotAI* ai) { return new KarazhanDispelAction(ai); }
 };
 
 #endif

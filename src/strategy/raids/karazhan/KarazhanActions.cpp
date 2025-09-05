@@ -285,6 +285,9 @@ bool MoroesPositionAction::Execute(Event event)
 
 bool MoroesPositionAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->FindNearestCreature(NPC_MOROES, 100.0f) != nullptr;
 }
 
@@ -416,7 +419,42 @@ bool MoroesCrowdControlAction::Execute(Event event)
 
 bool MoroesCrowdControlAction::isUseful()
 {
-    return bot->getClass() == CLASS_PRIEST && bot->HasSpell(9484);
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+    
+    // Check if any adds are alive
+    uint32 addIds[] = {
+        NPC_BARONESS_DOROTHEA, NPC_LADY_CATRIONA, NPC_LADY_KEIRA,
+        NPC_LORD_ROBIN, NPC_LORD_CRISPIN, NPC_BARON_RAFE
+    };
+
+    for (uint32 npcId : addIds)
+    {
+        if (bot->FindNearestCreature(npcId, 100.0f, true))
+        {
+            // Check if bot has appropriate CC abilities
+            switch (bot->getClass())
+            {
+                case CLASS_PRIEST:
+                    return bot->HasSpell(9484); // Shackle Undead
+                case CLASS_MAGE:
+                    return bot->HasSpell(118); // Polymorph
+                case CLASS_HUNTER:
+                    return bot->HasSpell(14311); // Freezing Trap
+                case CLASS_ROGUE:
+                    return bot->HasSpell(6770) || bot->HasSpell(2094); // Sap or Blind
+                case CLASS_PALADIN:
+                    return bot->HasSpell(5484); // Turn Undead
+                case CLASS_WARLOCK:
+                    return bot->HasSpell(5782); // Fear
+                default:
+                    return false;
+            }
+        }
+    }
+    
+    return false;
 }
 
 // Maiden of Virtue Actions
@@ -458,6 +496,9 @@ bool MaidenRepentanceAction::Execute(Event event)
 
 bool MaidenRepentanceAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->FindNearestCreature(NPC_MAIDEN_OF_VIRTUE, 100.0f) != nullptr;
 }
 
@@ -484,6 +525,9 @@ bool MaidenHolyGroundAction::Execute(Event event)
 
 bool MaidenHolyGroundAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->HasAura(SPELL_HOLY_GROUND);
 }
 
@@ -563,6 +607,9 @@ bool OperaPositionAction::Execute(Event event)
 
 bool OperaPositionAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->HasAura(30753); // Red Riding Hood
 }
 
@@ -660,6 +707,10 @@ bool OperaFocusTargetAction::Execute(Event event)
 
 bool OperaFocusTargetAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+        
     uint32 operaNpcs[] = {
         NPC_DOROTHEE, NPC_ROAR, NPC_STRAWMAN, NPC_TINHEAD, NPC_CRONE,
         NPC_ROMULO, NPC_JULIANNE, NPC_BIG_BAD_WOLF
@@ -697,6 +748,9 @@ bool CuratorFlareAction::Execute(Event event)
 
 bool CuratorFlareAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->FindNearestCreature(NPC_ASTRAL_FLARE, 100.0f, true) != nullptr;
 }
 
@@ -726,6 +780,9 @@ bool CuratorEvocationAction::Execute(Event event)
 
 bool CuratorEvocationAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     Unit* curator = bot->FindNearestCreature(NPC_CURATOR, 100.0f);
     return curator && curator->HasAura(SPELL_CURATOR_EVOCATION);
 }
@@ -768,6 +825,9 @@ bool AranFlameWreathAction::Execute(Event event)
 
 bool AranFlameWreathAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->HasAura(SPELL_FLAME_WREATH);
 }
 
@@ -793,6 +853,9 @@ bool AranBlizzardAction::Execute(Event event)
 
 bool AranBlizzardAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->HasAura(SPELL_CIRCULAR_BLIZZARD);
 }
 
@@ -822,6 +885,9 @@ bool AranDragonsBreathAction::Execute(Event event)
 
 bool AranDragonsBreathAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     Unit* aran = bot->FindNearestCreature(NPC_SHADE_OF_ARAN, 100.0f);
     return aran && bot->GetDistance(aran) < 15.0f;
 }
@@ -849,6 +915,9 @@ bool IllhoofDemonChainsAction::Execute(Event event)
 
 bool IllhoofDemonChainsAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->FindNearestCreature(NPC_DEMON_CHAINS, 100.0f, true) != nullptr;
 }
 
@@ -884,6 +953,9 @@ bool IllhoofImpsAction::Execute(Event event)
 
 bool IllhoofImpsAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->FindNearestCreature(NPC_FIENDISH_IMP, 30.0f, true) != nullptr;
 }
 
@@ -1041,6 +1113,9 @@ bool NetherspiteBeamAction::Execute(Event event)
 
 bool NetherspiteBeamAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f) != nullptr;
 }
 
@@ -1066,6 +1141,9 @@ bool NetherspiteVoidZoneAction::Execute(Event event)
 
 bool NetherspiteVoidZoneAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->HasAura(SPELL_VOID_ZONE);
 }
 
@@ -1120,6 +1198,9 @@ bool MalchezaarInfernalAction::Execute(Event event)
 
 bool MalchezaarInfernalAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->FindNearestCreature(NPC_NETHERSPITE_INFERNAL, 15.0f, true) != nullptr;
 }
 
@@ -1150,6 +1231,9 @@ bool MalchezaarEnfeebleAction::Execute(Event event)
 
 bool MalchezaarEnfeebleAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->HasAura(30843); // Enfeeble
 }
 
@@ -1186,6 +1270,9 @@ bool NightbanePositionAction::Execute(Event event)
 
 bool NightbanePositionAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f) != nullptr;
 }
 
@@ -1211,6 +1298,9 @@ bool NightbaneCharredEarthAction::Execute(Event event)
 
 bool NightbaneCharredEarthAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->HasAura(SPELL_CHARRED_EARTH);
 }
 
@@ -1252,6 +1342,9 @@ bool NightbaneAirPhaseAction::Execute(Event event)
 
 bool NightbaneAirPhaseAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f);
     return nightbane && !nightbane->IsWithinMeleeRange(bot);
 }
@@ -1312,6 +1405,9 @@ bool ChessEventMoveAction::Execute(Event event)
 
 bool ChessEventMoveAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->GetVehicleBase() != nullptr;
 }
 
@@ -1394,6 +1490,9 @@ bool ChessEventAbilityAction::Execute(Event event)
 
 bool ChessEventAbilityAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return bot->GetVehicleBase() != nullptr;
 }
 
@@ -1435,6 +1534,9 @@ bool MoroesTankSwapAction::Execute(Event event)
 
 bool MoroesTankSwapAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     return botAI->IsTank(bot) && bot->FindNearestCreature(NPC_MOROES, 100.0f) != nullptr;
 }
 
@@ -1531,6 +1633,9 @@ bool KarazhanInterruptRotationAction::Execute(Event event)
 
 bool KarazhanInterruptRotationAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     // Only classes with interrupts
     uint32 botClass = bot->getClass();
     return (botClass == CLASS_WARRIOR || botClass == CLASS_ROGUE || 
@@ -1609,6 +1714,9 @@ bool KarazhanDispelAction::Execute(Event event)
 
 bool KarazhanDispelAction::isUseful()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
     uint32 botClass = bot->getClass();
     return (botClass == CLASS_PRIEST || botClass == CLASS_PALADIN || 
             botClass == CLASS_SHAMAN || botClass == CLASS_MAGE || 
