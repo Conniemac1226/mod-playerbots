@@ -160,7 +160,12 @@ bool MoroesEngagedTrigger::IsActive()
     if (!bot)
         return false;
 
-    return bot->FindNearestCreature(NPC_MOROES, 100.0f, true) != nullptr;
+    Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f, true);
+    if (!moroes)
+        return false;
+        
+    // Only activate when Moroes is actually in combat, not just present
+    return moroes->IsInCombat() && moroes->GetVictim() != nullptr;
 }
 
 bool MoroesAddsTrigger::IsActive()
@@ -292,7 +297,8 @@ bool OperaEngagedTrigger::IsActive()
 
     for (uint32 npcId : operaNpcs)
     {
-        if (bot->FindNearestCreature(npcId, 100.0f, true))
+        Unit* operaNpc = bot->FindNearestCreature(npcId, 100.0f, true);
+        if (operaNpc && operaNpc->IsInCombat() && operaNpc->GetVictim())
             return true;
     }
     
@@ -311,7 +317,8 @@ bool OperaOzEngagedTrigger::IsActive()
 
     for (uint32 npcId : ozNpcs)
     {
-        if (bot->FindNearestCreature(npcId, 100.0f, true))
+        Unit* operaNpc = bot->FindNearestCreature(npcId, 100.0f, true);
+        if (operaNpc && operaNpc->IsInCombat() && operaNpc->GetVictim())
             return true;
     }
     
@@ -324,8 +331,11 @@ bool OperaRomuloJulianneTrigger::IsActive()
     if (!bot)
         return false;
 
-    return (bot->FindNearestCreature(NPC_ROMULO, 100.0f, true) != nullptr ||
-            bot->FindNearestCreature(NPC_JULIANNE, 100.0f, true) != nullptr);
+    Unit* romulo = bot->FindNearestCreature(NPC_ROMULO, 100.0f, true);
+    Unit* julianne = bot->FindNearestCreature(NPC_JULIANNE, 100.0f, true);
+    
+    return (romulo && romulo->IsInCombat() && romulo->GetVictim()) ||
+           (julianne && julianne->IsInCombat() && julianne->GetVictim());
 }
 
 bool OperaWolfTrigger::IsActive()
@@ -334,8 +344,9 @@ bool OperaWolfTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if we have Red Riding Hood debuff and wolf is active
-    return bot->HasAura(30753) && bot->FindNearestCreature(NPC_BIG_BAD_WOLF, 100.0f, true) != nullptr;
+    // Check if we have Red Riding Hood debuff and wolf is in combat
+    Unit* wolf = bot->FindNearestCreature(NPC_BIG_BAD_WOLF, 100.0f, true);
+    return bot->HasAura(30753) && wolf && wolf->IsInCombat() && wolf->GetVictim();
 }
 
 // Curator triggers
