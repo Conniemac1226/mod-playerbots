@@ -15,7 +15,7 @@ void KarazhanStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     
     // Moroes
     triggers.push_back(new TriggerNode("moroes engaged",
-        NextAction::array(0, new NextAction("moroes position", ACTION_MOVE + 1), nullptr)));
+        NextAction::array(0, new NextAction("moroes position", ACTION_HIGH + 2), nullptr)));
     triggers.push_back(new TriggerNode("moroes adds",
         NextAction::array(0, new NextAction("moroes focus adds", ACTION_EMERGENCY - 1), nullptr)));
     triggers.push_back(new TriggerNode("moroes garrote",
@@ -31,13 +31,13 @@ void KarazhanStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     
     // Opera Event
     triggers.push_back(new TriggerNode("opera engaged",
-        NextAction::array(0, new NextAction("opera position", ACTION_MOVE + 1), nullptr)));
+        NextAction::array(0, new NextAction("opera position", ACTION_HIGH + 2), nullptr)));
     triggers.push_back(new TriggerNode("opera oz engaged",
         NextAction::array(0, new NextAction("opera focus target", ACTION_HIGH + 3), nullptr)));
     triggers.push_back(new TriggerNode("opera romulo julianne",
         NextAction::array(0, new NextAction("opera focus target", ACTION_HIGH + 3), nullptr)));
     triggers.push_back(new TriggerNode("opera wolf",
-        NextAction::array(0, new NextAction("opera position", ACTION_MOVE + 2), nullptr)));
+        NextAction::array(0, new NextAction("opera position", ACTION_HIGH + 2), nullptr)));
     
     // Curator
     triggers.push_back(new TriggerNode("curator engaged",

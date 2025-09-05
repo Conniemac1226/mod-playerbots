@@ -68,7 +68,7 @@ bool AttumenAvoidChargeAction::Execute(Event event)
             float y = boss->GetPositionY() + sin(angle) * 5.0f;
             float z = boss->GetPositionZ();
             
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
         }
         // Ranged should move further away
         else
@@ -79,7 +79,7 @@ bool AttumenAvoidChargeAction::Execute(Event event)
             float y = bot->GetPositionY() + sin(angle) * 10.0f;
             float z = bot->GetPositionZ();
             
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
         }
     }
     
@@ -147,7 +147,7 @@ bool AttumenPositionAction::Execute(Event event)
                     float y = attumen->GetPositionY() + sin(angle) * 10.0f;
                     float z = attumen->GetPositionZ();
                     
-                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
                 }
             }
         }
@@ -162,7 +162,7 @@ bool AttumenPositionAction::Execute(Event event)
                 float y = attumen->GetPositionY() + sin(angle) * 5.0f;
                 float z = attumen->GetPositionZ();
                 
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
             }
         }
     }
@@ -266,6 +266,8 @@ bool MoroesPositionAction::Execute(Event event)
     if (!moroes)
         return false;
 
+    float distanceToMoroes = bot->GetDistance(moroes);
+    
     // Melee should stay behind to avoid Gouge
     if (botAI->IsMelee(bot) && !botAI->IsTank(bot))
     {
@@ -276,7 +278,16 @@ bool MoroesPositionAction::Execute(Event event)
             float y = moroes->GetPositionY() + sin(angle) * 3.0f;
             float z = moroes->GetPositionZ();
             
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        }
+    }
+    // Ranged and healers just need to be in reasonable range to participate
+    else if (!botAI->IsMelee(bot))
+    {
+        // If too far, just get closer
+        if (distanceToMoroes > 25.0f)
+        {
+            return MoveTo(moroes->GetMapId(), moroes->GetPositionX(), moroes->GetPositionY(), moroes->GetPositionZ(), false, false, false, false);
         }
     }
     
@@ -486,7 +497,7 @@ bool MaidenRepentanceAction::Execute(Event event)
                 float y = bot->GetPositionY() + sin(angle) * 10.0f;
                 float z = bot->GetPositionZ();
                 
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
             }
         }
     }
@@ -517,7 +528,7 @@ bool MaidenHolyGroundAction::Execute(Event event)
         float y = bot->GetPositionY() + sin(angle) * 10.0f;
         float z = bot->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -528,7 +539,15 @@ bool MaidenHolyGroundAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->HasAura(SPELL_HOLY_GROUND);
+    
+    // Active when Maiden is present and holy ground effects are active
+    Unit* maiden = bot->FindNearestCreature(NPC_MAIDEN_OF_VIRTUE, 100.0f);
+    if (!maiden)
+        return false;
+        
+    // Check if maiden is casting holy ground or if bot is affected
+    return maiden->FindCurrentSpellBySpellId(SPELL_HOLY_GROUND) || 
+           bot->HasAura(SPELL_HOLY_GROUND);
 }
 
 // Opera Event Actions
@@ -552,7 +571,7 @@ bool OperaPositionAction::Execute(Event event)
         float y = centerY + sin(newAngle) * 20.0f;
         float z = bot->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     // Wizard of Oz - Spread for Dorothee's fear
@@ -573,7 +592,7 @@ bool OperaPositionAction::Execute(Event event)
                     float y = bot->GetPositionY() + sin(angle) * 5.0f;
                     float z = bot->GetPositionZ();
                     
-                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
                 }
             }
         }
@@ -597,7 +616,7 @@ bool OperaPositionAction::Execute(Event event)
                 float y = myTarget->GetPositionY() + sin(angle) * 10.0f;
                 float z = myTarget->GetPositionZ();
                 
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
             }
         }
     }
@@ -610,7 +629,20 @@ bool OperaPositionAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->HasAura(30753); // Red Riding Hood
+        
+    // Check if any Opera boss is present
+    uint32 operaNpcs[] = {
+        NPC_DOROTHEE, NPC_ROAR, NPC_STRAWMAN, NPC_TINHEAD, NPC_CRONE,
+        NPC_ROMULO, NPC_JULIANNE, NPC_BIG_BAD_WOLF
+    };
+
+    for (uint32 npcId : operaNpcs)
+    {
+        if (bot->FindNearestCreature(npcId, 100.0f, true))
+            return true;
+    }
+    
+    return false;
 }
 
 bool OperaFocusTargetAction::Execute(Event event)
@@ -828,6 +860,24 @@ bool AranFlameWreathAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
+    
+    // Active when Aran is present and anyone in raid has flame wreath
+    Unit* aran = bot->FindNearestCreature(NPC_SHADE_OF_ARAN, 100.0f);
+    if (!aran)
+        return false;
+        
+    // Check if any party member has flame wreath or if bot has it
+    Group* group = bot->GetGroup();
+    if (group)
+    {
+        for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+        {
+            Player* member = itr->GetSource();
+            if (member && member->HasAura(SPELL_FLAME_WREATH))
+                return true;
+        }
+    }
+    
     return bot->HasAura(SPELL_FLAME_WREATH);
 }
 
@@ -845,7 +895,7 @@ bool AranBlizzardAction::Execute(Event event)
         float centerY = -1902.0f;
         float centerZ = 232.0f;
         
-        return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -856,7 +906,14 @@ bool AranBlizzardAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->HasAura(SPELL_CIRCULAR_BLIZZARD);
+    
+    // Active when Aran is casting or has cast Blizzard
+    Unit* aran = bot->FindNearestCreature(NPC_SHADE_OF_ARAN, 100.0f);
+    if (!aran)
+        return false;
+        
+    // Check if Aran is casting blizzard or if bot is affected
+    return aran->FindCurrentSpellBySpellId(SPELL_CIRCULAR_BLIZZARD) || bot->HasAura(SPELL_CIRCULAR_BLIZZARD);
 }
 
 bool AranDragonsBreathAction::Execute(Event event)
@@ -877,7 +934,7 @@ bool AranDragonsBreathAction::Execute(Event event)
         float y = aran->GetPositionY() + sin(angle) * 10.0f;
         float z = aran->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1072,7 +1129,7 @@ bool NetherspiteBeamAction::Execute(Event event)
         float y = (NETHERSPITE_RED_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
         float z = netherspite->GetPositionZ();
         
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
+        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL))
         {
             beamState.redBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1086,7 +1143,7 @@ bool NetherspiteBeamAction::Execute(Event event)
         float y = (NETHERSPITE_BLUE_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
         float z = netherspite->GetPositionZ();
         
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
+        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL))
         {
             beamState.blueBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1100,7 +1157,7 @@ bool NetherspiteBeamAction::Execute(Event event)
         float y = (NETHERSPITE_GREEN_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
         float z = netherspite->GetPositionZ();
         
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
+        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL))
         {
             beamState.greenBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1133,7 +1190,7 @@ bool NetherspiteVoidZoneAction::Execute(Event event)
         float y = bot->GetPositionY() + sin(angle) * 10.0f;
         float z = bot->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1144,7 +1201,15 @@ bool NetherspiteVoidZoneAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->HasAura(SPELL_VOID_ZONE);
+    
+    // Active when Netherspite is present and void zones exist
+    Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
+    if (!netherspite)
+        return false;
+        
+    // Check if bot is in void zone or void zones are nearby
+    return bot->HasAura(SPELL_VOID_ZONE) || 
+           bot->FindNearestCreature(17470, 30.0f); // Void Zone creature ID
 }
 
 // Prince Malchezaar Actions
@@ -1172,7 +1237,7 @@ bool MalchezaarInfernalAction::Execute(Event event)
         float z = bot->GetPositionZ();
         
         g_karazhan_lastMoveTime[botGuid] = currentTime;
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     // Also check if Malchezaar is casting Infernal summon
@@ -1190,7 +1255,7 @@ bool MalchezaarInfernalAction::Execute(Event event)
         float z = bot->GetPositionZ();
         
         g_karazhan_lastMoveTime[botGuid] = currentTime;
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1222,7 +1287,7 @@ bool MalchezaarEnfeebleAction::Execute(Event event)
             float y = bot->GetPositionY() + sin(angle) * 30.0f;
             float z = bot->GetPositionZ();
             
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
         }
     }
     
@@ -1262,7 +1327,7 @@ bool NightbanePositionAction::Execute(Event event)
         float y = nightbane->GetPositionY() + sin(angle) * 10.0f;
         float z = nightbane->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1290,7 +1355,7 @@ bool NightbaneCharredEarthAction::Execute(Event event)
         float y = bot->GetPositionY() + sin(angle) * 15.0f;
         float z = bot->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1301,7 +1366,15 @@ bool NightbaneCharredEarthAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->HasAura(SPELL_CHARRED_EARTH);
+    
+    // Active when Nightbane is present and charred earth effects are active
+    Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f);
+    if (!nightbane)
+        return false;
+        
+    // Check if nightbane is casting charred earth or if bot is affected
+    return nightbane->FindCurrentSpellBySpellId(SPELL_CHARRED_EARTH) || 
+           bot->HasAura(SPELL_CHARRED_EARTH);
 }
 
 bool NightbaneAirPhaseAction::Execute(Event event)
@@ -1331,7 +1404,7 @@ bool NightbaneAirPhaseAction::Execute(Event event)
                     float y = bot->GetPositionY() + sin(angle) * 15.0f;
                     float z = bot->GetPositionZ();
                     
-                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
                 }
             }
         }
