@@ -106,7 +106,6 @@ class AttackWindcallerClawAction : public AttackAction
 public:
     AttackWindcallerClawAction(PlayerbotAI* ai) : AttackAction(ai, "attack windcaller claw") {}
     bool Execute(Event event) override;
-    bool isUseful() override;
 };
 
 class MuselekFreezingTrapAction : public MovementAction
@@ -139,7 +138,6 @@ class AttackSporeStriderAction : public AttackAction
 public:
     AttackSporeStriderAction(PlayerbotAI* ai) : AttackAction(ai, "attack spore strider") {}
     bool Execute(Event event) override;
-    bool isUseful() override;
 };
 
 class BlackStalkerChainLightningAction : public Action

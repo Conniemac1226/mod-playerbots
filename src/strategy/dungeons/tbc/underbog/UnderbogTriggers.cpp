@@ -75,18 +75,7 @@ bool WindcallerClawActiveTrigger::IsActive()
         return false;
 
     Unit* bear = bot->FindNearestCreature(NPC_WINDCALLER_CLAW, 100.0f);
-    if (!bear || !bear->IsAlive() || !bear->IsInCombat())
-        return false;
-
-    // IMMEDIATE PRIORITY: Pet must be targeted immediately when found
-    // Don't hesitate - pet is always priority over boss during encounter
-    Unit* boss = bot->FindNearestCreature(NPC_SWAMPLORD_MUSELEK, 100.0f);
-    if (!boss || !boss->IsInCombat())
-        return false; // Only during boss encounter
-    
-    // Trigger immediately if pet is alive and bot isn't already targeting it
-    Unit* currentTarget = bot->GetTarget() ? botAI->GetUnit(bot->GetTarget()) : nullptr;
-    return !currentTarget || currentTarget->GetEntry() != NPC_WINDCALLER_CLAW;
+    return bear && bear->IsAlive();
 }
 
 // Freezing Trap being cast
@@ -133,8 +122,12 @@ bool SporeStriderActiveTrigger::IsActive()
     if (!bot)
         return false;
 
-    Unit* strider = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f);
-    return strider && strider->IsAlive();
+    // WotLK Pattern: Simple boss existence check - action handles the logic
+    Unit* boss = AI_VALUE2(Unit*, "find target", "the black stalker");
+    if (!boss)
+        return false;
+
+    return !botAI->IsHeal(bot); // All except healers attack adds
 }
 
 // Chain Lightning being cast

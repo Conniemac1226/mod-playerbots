@@ -139,33 +139,35 @@ bool AttackFiendishHoundAction::Execute(Event event)
     Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
     if (!boss)
         return false;
-        
-    
-    // ONLY prioritize hounds during shield phase when Omor is immune
-    if (boss->HasAura(SPELL_DEMONIC_SHIELD))
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+
+    // WotLK Pattern: Target stability - don't keep swapping between hounds
+    // Dynamic targeting of spawned adds - exact WotLK Violet Hold pattern
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto i = targets.begin(); i != targets.end(); ++i)
     {
-        Unit* hound = AI_VALUE2(Unit*, "find target", "fiendish hound");
-        if (hound && hound->IsAlive() && hound->IsInCombat())
+        Unit* unit = botAI->GetUnit(*i);
+        if (unit && unit->GetEntry() == NPC_FIENDISH_HOUND)
         {
-            return Attack(hound);
+            // Don't retarget if already attacking a hound
+            if (currentTarget && currentTarget->GetEntry() == NPC_FIENDISH_HOUND)
+            {
+                return false;
+            }
+            return Attack(unit);
         }
+    }
+    
+    // No hounds left alive, fall back to targeting boss
+    if (currentTarget != boss)
+    {
+        return Attack(boss);
     }
 
     return false;
 }
 
-bool AttackFiendishHoundAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* hound = AI_VALUE2(Unit*, "find target", "fiendish hound");
-    if (hound && hound->IsAlive() && hound->IsInCombat())
-        return true;
-
-    return false;
-}
 
 // Interrupt Omor's Shadow Bolt
 bool OmorShadowBoltInterruptAction::Execute(Event event)
@@ -266,12 +268,13 @@ bool OmorDemonicShieldAction::Execute(Event event)
     if (boss->HasAura(SPELL_DEMONIC_SHIELD))
     {
         // Stop attacking Omor during shield, focus adds if any
-        Unit* hound = AI_VALUE2(Unit*, "find target", "fiendish hound");
-        if (hound && hound->IsAlive())
-        {
-            // Set new target using proper API
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(hound);
-            return true;
+        const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+        for (const auto& guid : targets) {
+            Unit* unit = botAI->GetUnit(guid);
+            if (unit && unit->IsAlive() && unit->GetEntry() == NPC_FIENDISH_HOUND) {
+                botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(unit);
+                return true;
+            }
         }
         
         // NO ADDS: Don't block other actions - let bots continue normal behavior
