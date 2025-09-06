@@ -1509,6 +1509,7 @@ std::vector<std::string> PlayerbotAI::GetStrategies(BotState type)
 
 void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
 {
+        
     std::string strategyName;
     switch (mapId)
     {
@@ -1664,6 +1665,7 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
     }
     if (strategyName.empty())
         return;
+        
     engines[BOT_STATE_COMBAT]->addStrategy(strategyName);
     engines[BOT_STATE_NON_COMBAT]->addStrategy(strategyName);
     if (tellMaster && !strategyName.empty())
