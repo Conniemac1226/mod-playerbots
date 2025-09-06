@@ -62,16 +62,18 @@ bool FiendishHoundActiveTrigger::IsActive()
     if (!bot)
         return false;
 
-    // RESEARCHED: Fiendish Hounds spawn throughout fight - boss_omor_the_unscarred.cpp:78-85
-    // RESEARCHED: Demonic Shield at 21% makes Omor immune - boss_omor_the_unscarred.cpp:56-62
-    // Only prioritize hounds when Omor has shield (immune to damage)
-    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat() || !boss->HasAura(SPELL_DEMONIC_SHIELD))
-        return false;
-        
-    Unit* hound = bot->FindNearestCreature(NPC_FIENDISH_HOUND, 50.0f);
-    return hound && hound->IsAlive() && hound->IsInCombat();
+    if (!botAI->IsDps(bot)) { return false; }
 
+    // ACTUAL WotLK Pattern: Search for adds in the trigger like Gundrak/Halls of Lightning
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_FIENDISH_HOUND)
+        {
+            return true;
+        }
+    }
     return false;
 }
 

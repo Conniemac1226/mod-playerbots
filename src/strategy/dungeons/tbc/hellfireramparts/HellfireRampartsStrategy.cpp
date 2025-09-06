@@ -22,7 +22,7 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("omor demonic shield",
              NextAction::array(0, new NextAction("omor demonic shield", ACTION_EMERGENCY), nullptr)));
     
-    // Fiendish Hounds - ESSENTIAL during shield phase
+    // Fiendish Hounds - exact WotLK pattern priority
     triggers.push_back(new TriggerNode("fiendish hound active",
              NextAction::array(0, new NextAction("attack fiendish hound", ACTION_RAID + 1), nullptr)));
     

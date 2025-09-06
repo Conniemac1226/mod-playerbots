@@ -203,25 +203,6 @@ bool AttackWindcallerClawAction::Execute(Event event)
     return false;
 }
 
-bool AttackWindcallerClawAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* bear = bot->FindNearestCreature(NPC_WINDCALLER_CLAW, 100.0f);
-    if (!bear || !bear->IsAlive() || !bear->IsInCombat())
-        return false;
-
-    // PRIORITY: Always prioritize pet over boss when pet is alive
-    // The bear is the immediate melee threat while boss shoots from range
-    // Only exception: if bot is already attacking the bear, continue
-    Unit* currentTarget = bot->GetTarget() ? botAI->GetUnit(bot->GetTarget()) : nullptr;
-    if (currentTarget && currentTarget->GetEntry() == NPC_WINDCALLER_CLAW)
-        return false; // Already attacking pet, no need to change target
-
-    return true;
-}
 
 // Avoid Freezing Trap
 bool MuselekFreezingTrapAction::Execute(Event event)
@@ -347,89 +328,38 @@ bool AttackSporeStriderAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* target = nullptr;
-    Group* group = bot->GetGroup();
+    Unit* boss = AI_VALUE2(Unit*, "find target", "the black stalker");
+    if (!boss)
+        return false;
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+
+    // WotLK Pattern: Target stability - don't keep swapping between striders
+    // Dynamic targeting of spawned adds - exact WotLK pattern
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = botAI->GetUnit(*i);
+        if (unit && unit->GetEntry() == NPC_SPORE_STRIDER)
+        {
+            // Don't retarget if already attacking a strider
+            if (currentTarget && currentTarget->GetEntry() == NPC_SPORE_STRIDER)
+            {
+                return false;
+            }
+            return Attack(unit);
+        }
+    }
     
-    // Priority 1: Tank's target if it's a spore strider
-    if (group)
+    // No striders left alive, fall back to targeting boss
+    if (currentTarget != boss)
     {
-        for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
-        {
-            Player* member = gref->GetSource();
-            if (member && botAI->IsTank(member))
-            {
-                Unit* tankTarget = botAI->GetUnit(member->GetTarget());
-                if (tankTarget && tankTarget->GetEntry() == NPC_SPORE_STRIDER && tankTarget->IsAlive())
-                {
-                    target = tankTarget;
-                    break;
-                }
-            }
-        }
-    }
-
-    // Priority 2: Find the closest spore strider to any group member
-    if (!target && group)
-    {
-        float closestDistance = 50.0f;
-        for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
-        {
-            Player* member = gref->GetSource();
-            if (member && member->IsAlive())
-            {
-                Unit* nearbyStrider = member->FindNearestCreature(NPC_SPORE_STRIDER, 30.0f, true);
-                if (nearbyStrider)
-                {
-                    float distance = bot->GetDistance(nearbyStrider);
-                    if (distance < closestDistance)
-                    {
-                        target = nearbyStrider;
-                        closestDistance = distance;
-                    }
-                }
-            }
-        }
-    }
-
-    // Priority 3: Fallback to nearest strider to bot
-    if (!target)
-    {
-        target = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f, true);
-    }
-
-    if (target && target->IsAlive())
-    {
-        return Attack(target);
+        return Attack(boss);
     }
 
     return false;
 }
 
-bool AttackSporeStriderAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    // Allow healers to help with adds when no healing is immediately needed
-    if (botAI->IsHeal(bot))
-    {
-        // Only help with adds if no one needs healing
-        Group* group = bot->GetGroup();
-        if (group)
-        {
-            for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
-            {
-                Player* member = gref->GetSource();
-                if (member && member->IsAlive() && member->GetHealthPct() < 80.0f)
-                    return false; // Someone needs healing, focus on that
-            }
-        }
-    }
-
-    Unit* strider = bot->FindNearestCreature(NPC_SPORE_STRIDER, 50.0f, true);
-    return strider && strider->IsAlive();
-}
 
 // Interrupt Chain Lightning
 bool BlackStalkerChainLightningAction::Execute(Event event)
