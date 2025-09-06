@@ -2,6 +2,7 @@
 #define _PLAYERBOT_KARAZHANACTIONS_H
 
 #include "Action.h"
+#include "AttackAction.h"
 #include "MovementActions.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
@@ -157,12 +158,11 @@ public:
 };
 
 // Moroes
-class MoroesFocusAddsAction : public Action
+class MoroesFocusAddsAction : public AttackAction
 {
 public:
-    MoroesFocusAddsAction(PlayerbotAI* ai) : Action(ai, "moroes focus adds") {}
+    MoroesFocusAddsAction(PlayerbotAI* ai) : AttackAction(ai, "moroes focus adds") {}
     bool Execute(Event event) override;
-    bool isUseful() override;
 };
 
 class MoroesPositionAction : public MovementAction
@@ -185,6 +185,14 @@ class MoroesTankSwapAction : public Action
 {
 public:
     MoroesTankSwapAction(PlayerbotAI* ai) : Action(ai, "moroes tank swap") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class MoroesAttackAction : public Action
+{
+public:
+    MoroesAttackAction(PlayerbotAI* ai) : Action(ai, "moroes attack") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
@@ -215,12 +223,11 @@ public:
     bool isUseful() override;
 };
 
-class OperaFocusTargetAction : public Action
+class OperaFocusTargetAction : public AttackAction
 {
 public:
-    OperaFocusTargetAction(PlayerbotAI* ai) : Action(ai, "opera focus target") {}
+    OperaFocusTargetAction(PlayerbotAI* ai) : AttackAction(ai, "opera focus target") {}
     bool Execute(Event event) override;
-    bool isUseful() override;
 };
 
 // Curator

@@ -12,6 +12,8 @@
 #include "SpellInfo.h"
 #include "Group.h"
 #include "GroupReference.h"
+#include <set>
+
 
 // Helper function to check if a unit is casting a specific spell
 static bool IsCastingSpell(Unit* unit, uint32 spellId)
@@ -49,6 +51,7 @@ bool AttumenEngagedTrigger::IsActive()
     if (!bot)
         return false;
 
+
     // Check if Attumen has spawned (phase 2 started)
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
@@ -61,10 +64,9 @@ bool AttumenEngagedTrigger::IsActive()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_ATTUMEN_UNMOUNTED && unit->IsInCombat())
+        if (unit->GetEntry() == NPC_ATTUMEN_UNMOUNTED)
             return true;
     }
-    
     return false;
 }
 
@@ -87,9 +89,10 @@ bool AttumenMountedTrigger::IsActive()
             continue;
 
         if (unit->GetEntry() == NPC_ATTUMEN_MOUNTED)
+        {
             return true;
+        }
     }
-    
     return false;
 }
 
@@ -161,17 +164,22 @@ bool MoroesEngagedTrigger::IsActive()
         return false;
 
     Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f, true);
-    if (!moroes)
-        return false;
-        
-    // Only activate when Moroes is actually in combat, not just present
-    return moroes->IsInCombat() && moroes->GetVictim() != nullptr;
+    return (moroes != nullptr);
 }
 
 bool MoroesAddsTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
+        return false;
+
+    // WotLK Pattern: Check if Moroes is in combat first (tank has engaged)
+    Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f, true);
+    if (!moroes || !moroes->IsAlive() || !moroes->IsInCombat())
+        return false;
+    
+    // Additional check: Ensure tank has aggro before allowing DPS
+    if (!moroes->GetVictim())
         return false;
 
     uint32 addIds[] = {
@@ -213,7 +221,15 @@ bool MaidenEngagedTrigger::IsActive()
     if (!bot)
         return false;
 
-    return bot->FindNearestCreature(NPC_MAIDEN_OF_VIRTUE, 100.0f, true) != nullptr;
+    Unit* maiden = bot->FindNearestCreature(NPC_MAIDEN_OF_VIRTUE, 100.0f, true);
+    bool result = (maiden != nullptr);
+    
+    if (maiden)
+    {
+        // Less restrictive - just need the boss to exist and be alive
+        return true;
+    }
+    return false;
 }
 
 bool MaidenRepentanceTrigger::IsActive()
@@ -299,9 +315,10 @@ bool OperaEngagedTrigger::IsActive()
     {
         Unit* operaNpc = bot->FindNearestCreature(npcId, 100.0f, true);
         if (operaNpc && operaNpc->IsInCombat() && operaNpc->GetVictim())
+        {
             return true;
+        }
     }
-    
     return false;
 }
 
@@ -356,7 +373,14 @@ bool CuratorEngagedTrigger::IsActive()
     if (!bot)
         return false;
 
-    return bot->FindNearestCreature(NPC_CURATOR, 100.0f, true) != nullptr;
+    Unit* curator = bot->FindNearestCreature(NPC_CURATOR, 100.0f, true);
+    bool result = (curator != nullptr);
+    
+    if (curator)
+    {
+        return true;
+    }
+    return false;
 }
 
 bool CuratorFlareTrigger::IsActive()
@@ -408,7 +432,14 @@ bool AranEngagedTrigger::IsActive()
     if (!bot)
         return false;
 
-    return bot->FindNearestCreature(NPC_SHADE_OF_ARAN, 100.0f, true) != nullptr;
+    Unit* aran = bot->FindNearestCreature(NPC_SHADE_OF_ARAN, 100.0f, true);
+    bool result = (aran != nullptr);
+    
+    if (aran)
+    {
+        return true;
+    }
+    return false;
 }
 
 bool AranFlameWreathTrigger::IsActive()
