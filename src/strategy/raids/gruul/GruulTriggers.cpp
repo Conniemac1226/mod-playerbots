@@ -67,30 +67,16 @@ bool GruulGroundSlamTrigger::IsActive()
     if (bot->HasAura(SPELL_LOOK_AROUND))
         return true;
     
-    // PRIORITY 4: Check recent Ground Slam timing for continuous spreading
-    // Maintain spread position until Shatter completes (9.7+ seconds)
+    // PRIORITY 4: WotLK Pattern - Check if disperse distance is active
+    // Continue spreading while Ground Slam mechanics are active
     auto it = groundSlamTimes.find(bot->GetGUID());
     if (it != groundSlamTimes.end())
     {
         time_t timeSinceSlam = time(nullptr) - it->second;
         if (timeSinceSlam < 12) // 12 seconds buffer (9.7s + safety margin)
         {
-            // Only continue if we haven't already spread (distance check)
-            Group* group = bot->GetGroup();
-            if (group)
-            {
-                bool tooCloseToSomeone = false;
-                for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
-                {
-                    Player* member = ref->GetSource();
-                    if (member && member != bot && member->IsAlive() && bot->GetDistance(member) < 15.0f)
-                    {
-                        tooCloseToSomeone = true;
-                        break;
-                    }
-                }
-                return tooCloseToSomeone; // Keep spreading if still too close
-            }
+            // Use WotLK pattern: check if we need to maintain spread distance
+            return AI_VALUE(float, "disperse distance") == 0.0f; // Trigger if not spreading
         }
     }
     
@@ -237,6 +223,13 @@ bool MaulgarCouncilTrigger::IsActive()
     if (!bot)
         return false;
 
+    // WotLK Pattern: Check if Maulgar is in combat first (tank has engaged)
+    Unit* maulgar = bot->FindNearestCreature(NPC_HIGH_KING_MAULGAR, 150.0f, true);
+    if (!maulgar || !maulgar->IsAlive() || !maulgar->IsInCombat())
+        return false;
+    if (!maulgar->GetVictim()) // Ensure tank has aggro
+        return false;
+
     uint32 councilIds[] = {
         NPC_KROSH_FIREHAND,
         NPC_OLM_THE_SUMMONER,
@@ -246,7 +239,8 @@ bool MaulgarCouncilTrigger::IsActive()
     
     for (uint32 npcId : councilIds)
     {
-        if (bot->FindNearestCreature(npcId, 150.0f, true))
+        Unit* council = bot->FindNearestCreature(npcId, 150.0f, true);
+        if (council && council->IsAlive() && council->IsInCombat())
             return true;
     }
     

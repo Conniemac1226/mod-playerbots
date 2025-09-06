@@ -55,59 +55,11 @@ bool GruulGroundSlamAction::Execute(Event event)
     // We have 9.7 seconds before Shatter - this is our ONLY chance to position
     groundSlamTimes[bot->GetGUID()] = time(nullptr);
     
-    // Find optimal spread position away from other players
-    Group* group = bot->GetGroup();
-    if (group)
-    {
-        Position bestPos;
-        float bestMinDist = 0.0f;
-        float spreadDistance = 30.0f; // Maximum spread distance
-        
-        // Test 8 radial positions around Gruul
-        for (int i = 0; i < 8; ++i)
-        {
-            float angle = 2 * M_PI * i / 8.0f;
-            Position testPos = gruul->GetPosition();
-            testPos.m_positionX += cos(angle) * spreadDistance;
-            testPos.m_positionY += sin(angle) * spreadDistance;
-            
-            // Calculate minimum distance to other group members at this position
-            float minDistToOthers = 100.0f;
-            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
-            {
-                Player* member = ref->GetSource();
-                if (member && member != bot && member->IsAlive())
-                {
-                    float dist = member->GetDistance2d(testPos.m_positionX, testPos.m_positionY);
-                    if (dist < minDistToOthers)
-                        minDistToOthers = dist;
-                }
-            }
-            
-            // Pick position with maximum distance from nearest player
-            if (minDistToOthers > bestMinDist)
-            {
-                bestMinDist = minDistToOthers;
-                bestPos = testPos;
-            }
-        }
-        
-        if (bestMinDist > 0.0f)
-        {
-            return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY, bestPos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-        }
-    }
+    // WotLK Standard Pattern: Use disperse distance AI value system
+    // This leverages the proven spreading AI used in Ulduar, ICC, etc.
+    SET_AI_VALUE(float, "disperse distance", 15.0f); // 15 yards spread for Gruul
     
-    // Fallback: spread to random position if no group or calculation fails
-    float angle = 2 * M_PI * rand_norm();
-    float distance = 25.0f + frand(0.0f, 10.0f);
-    Position pos = gruul->GetPosition();
-    pos.m_positionX += cos(angle) * distance;
-    pos.m_positionY += sin(angle) * distance;
-    
-    return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
-                 false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+    return true;
 }
 
 bool GruulGroundSlamAction::isUseful()
@@ -122,56 +74,17 @@ bool GruulShatterPositionAction::Execute(Event event)
         return false;
         
     // Shatter happens 9.7 seconds after Ground Slam
-    // Damage is based on distance between players
-    // Spread out as much as possible
+    // By this time, bots should already be spread out and will be petrified
+    // Clear the spread distance as positioning is complete
     
-    float maxDistance = 30.0f;
-    float angle = 2 * M_PI * rand_norm();
-    float distance = 25.0f + frand(0.0f, 5.0f);
-    
-    Position pos = gruul->GetPosition();
-    pos.m_positionX += cos(angle) * distance;
-    pos.m_positionY += sin(angle) * distance;
-    
-    // Find a position away from other players
-    Group* group = bot->GetGroup();
-    if (group)
+    // WotLK Standard Pattern: Clear disperse distance after spread complete
+    if (AI_VALUE(float, "disperse distance") > 0.0f)
     {
-        Position bestPos = pos;
-        float bestMinDist = 0.0f;
-        
-        for (int i = 0; i < 8; ++i)
-        {
-            angle = 2 * M_PI * i / 8.0f;
-            pos = gruul->GetPosition();
-            pos.m_positionX += cos(angle) * distance;
-            pos.m_positionY += sin(angle) * distance;
-            
-            float minDist = 100.0f;
-            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
-            {
-                Player* member = ref->GetSource();
-                if (member && member != bot && member->IsAlive())
-                {
-                    float dist = member->GetDistance2d(pos.m_positionX, pos.m_positionY);
-                    if (dist < minDist)
-                        minDist = dist;
-                }
-            }
-            
-            if (minDist > bestMinDist)
-            {
-                bestMinDist = minDist;
-                bestPos = pos;
-            }
-        }
-        
-        return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY, bestPos.m_positionZ,
-                     false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        SET_AI_VALUE(float, "disperse distance", 0.0f);
+        return true;
     }
     
-    return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
-                 false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+    return false;
 }
 
 bool GruulShatterPositionAction::isUseful()
@@ -262,22 +175,18 @@ bool GruulHurtfulStrikeAction::isUseful()
 // High King Maulgar Actions
 bool MaulgarFocusTargetAction::Execute(Event event)
 {
-    // Follow kill order
+    // Follow kill order with priority targeting
     for (uint32 npcId : councilKillOrder)
     {
-        if (Unit* target = bot->FindNearestCreature(npcId, 150.0f, true))
+        Unit* target = bot->FindNearestCreature(npcId, 150.0f, true);
+        if (target && target->IsAlive() && target->IsInCombat())
         {
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
-            return true;
+            // Use WotLK pattern: AttackAction::Attack()
+            return Attack(target);
         }
     }
     
     return false;
-}
-
-bool MaulgarFocusTargetAction::isUseful()
-{
-    return bot && bot->IsAlive();
 }
 
 bool MaulgarPositionAction::Execute(Event event)

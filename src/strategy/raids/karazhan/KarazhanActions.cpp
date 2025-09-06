@@ -52,6 +52,8 @@ bool AttumenAvoidChargeAction::Execute(Event event)
     if (!boss)
         return false;
 
+    std::string roleStr = botAI->IsMelee(bot) ? "Melee" : (botAI->IsHeal(bot) ? "Healer" : "Ranged");
+
     // During mounted phase, stay within 8 yards (melee) or beyond 25 yards (ranged)
     // to avoid charge which targets players between 8-25 yards
     float distance = bot->GetDistance(boss);
@@ -224,37 +226,21 @@ bool MoroesFocusAddsAction::Execute(Event event)
         Unit* add = bot->FindNearestCreature(npcId, 100.0f, true);
         if (add && add->IsAlive() && add->IsInCombat())
         {
-            if (botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() != add)
-            {
-                botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(add);
-                return true;
-            }
+            // Use WotLK pattern: AttackAction::Attack()
+            return Attack(add);
         }
     }
     
-    return false;
-}
-
-bool MoroesFocusAddsAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    // Check if any adds are alive
-    uint32 addIds[] = {
-        NPC_BARONESS_DOROTHEA, NPC_LADY_CATRIONA, NPC_LADY_KEIRA,
-        NPC_LORD_ROBIN, NPC_LORD_CRISPIN, NPC_BARON_RAFE
-    };
-
-    for (uint32 npcId : addIds)
+    // Fall back to Moroes if no adds
+    Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f, true);
+    if (moroes && moroes->IsAlive())
     {
-        if (bot->FindNearestCreature(npcId, 100.0f, true))
-            return true;
+        return Attack(moroes);
     }
     
     return false;
 }
+
 
 bool MoroesPositionAction::Execute(Event event)
 {
@@ -267,11 +253,13 @@ bool MoroesPositionAction::Execute(Event event)
         return false;
 
     float distanceToMoroes = bot->GetDistance(moroes);
+    std::string roleStr = botAI->IsMelee(bot) ? "Melee" : (botAI->IsHeal(bot) ? "Healer" : "Ranged");
     
     // Melee should stay behind to avoid Gouge
     if (botAI->IsMelee(bot) && !botAI->IsTank(bot))
     {
-        if (moroes->HasInArc(M_PI / 2, bot))
+        bool inArc = moroes->HasInArc(M_PI / 2, bot);
+        if (inArc)
         {
             float angle = moroes->GetOrientation() + M_PI;
             float x = moroes->GetPositionX() + cos(angle) * 3.0f;
@@ -284,7 +272,6 @@ bool MoroesPositionAction::Execute(Event event)
     // Ranged and healers just need to be in reasonable range to participate
     else if (!botAI->IsMelee(bot))
     {
-        // If too far, just get closer
         if (distanceToMoroes > 25.0f)
         {
             return MoveTo(moroes->GetMapId(), moroes->GetPositionX(), moroes->GetPositionY(), moroes->GetPositionZ(), false, false, false, false);
@@ -299,7 +286,28 @@ bool MoroesPositionAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->FindNearestCreature(NPC_MOROES, 100.0f) != nullptr;
+        
+    Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f);
+    if (!moroes)
+        return false;
+    
+    // Only useful for positioning if we're in a bad position, not just because boss exists
+    // Let normal combat handle basic engagement
+    float distance = bot->GetDistance(moroes);
+    bool needsReposition = false;
+    
+    // Melee need repositioning if in front arc (gouge danger)  
+    if (botAI->IsMelee(bot) && !botAI->IsTank(bot))
+    {
+        needsReposition = moroes->HasInArc(M_PI / 2, bot);
+    }
+    // Ranged need repositioning if too close
+    else if (!botAI->IsMelee(bot) && !botAI->IsHeal(bot))
+    {
+        needsReposition = (distance < 15.0f);
+    }
+    
+    return needsReposition;
 }
 
 bool MoroesCrowdControlAction::Execute(Event event)
@@ -557,6 +565,7 @@ bool OperaPositionAction::Execute(Event event)
     if (!bot)
         return false;
 
+
     // Big Bad Wolf Event - Kite if Red Riding Hood
     Unit* wolf = bot->FindNearestCreature(NPC_BIG_BAD_WOLF, 100.0f);
     if (wolf && bot->HasAura(30753)) // Red Riding Hood debuff
@@ -638,7 +647,8 @@ bool OperaPositionAction::isUseful()
 
     for (uint32 npcId : operaNpcs)
     {
-        if (bot->FindNearestCreature(npcId, 100.0f, true))
+        Unit* boss = bot->FindNearestCreature(npcId, 100.0f, true);
+        if (boss)
             return true;
     }
     
@@ -669,27 +679,18 @@ bool OperaFocusTargetAction::Execute(Event event)
             if (npcId == NPC_STRAWMAN && bot->getClass() == CLASS_MAGE)
             {
                 // Strawman vulnerable to fire - mages priority
-                if (botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() != target)
-                {
-                    botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
-                    return true;
-                }
+                return Attack(target);
             }
             else if (npcId == NPC_TINHEAD && (bot->getClass() == CLASS_MAGE || 
                                                bot->getClass() == CLASS_WARLOCK ||
                                                bot->getClass() == CLASS_PRIEST))
             {
                 // Tinhead has high armor - casters priority
-                if (botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() != target)
-                {
-                    botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
-                    return true;
-                }
+                return Attack(target);
             }
-            else if (botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() != target)
+            else
             {
-                botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
-                return true;
+                return Attack(target);
             }
         }
     }
@@ -716,10 +717,9 @@ bool OperaFocusTargetAction::Execute(Event event)
             target = (getMSTime() / 5000 % 2 == 0) ? romulo : julianne;
         }
         
-        if (target && botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() != target)
+        if (target)
         {
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
-            return true;
+            return Attack(target);
         }
     }
     
@@ -727,35 +727,12 @@ bool OperaFocusTargetAction::Execute(Event event)
     Unit* wolf = bot->FindNearestCreature(NPC_BIG_BAD_WOLF, 100.0f);
     if (wolf && wolf->IsAlive())
     {
-        if (botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() != wolf)
-        {
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(wolf);
-            return true;
-        }
+        return Attack(wolf);
     }
     
     return false;
 }
 
-bool OperaFocusTargetAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-        
-    uint32 operaNpcs[] = {
-        NPC_DOROTHEE, NPC_ROAR, NPC_STRAWMAN, NPC_TINHEAD, NPC_CRONE,
-        NPC_ROMULO, NPC_JULIANNE, NPC_BIG_BAD_WOLF
-    };
-
-    for (uint32 npcId : operaNpcs)
-    {
-        if (bot->FindNearestCreature(npcId, 100.0f, true))
-            return true;
-    }
-    
-    return false;
-}
 
 // Curator Actions
 bool CuratorFlareAction::Execute(Event event)
@@ -1611,6 +1588,36 @@ bool MoroesTankSwapAction::isUseful()
     if (!bot)
         return false;
     return botAI->IsTank(bot) && bot->FindNearestCreature(NPC_MOROES, 100.0f) != nullptr;
+}
+
+bool MoroesAttackAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f);
+    if (!moroes)
+        return false;
+
+    Unit* currentTarget = botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
+    // Set target without recursion
+    if (currentTarget != moroes)
+    {
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(moroes);
+    }
+
+    // DON'T call DoNextAction() - that causes infinite recursion
+    return false; // Let normal combat actions take over
+}
+
+bool MoroesAttackAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    return bot->FindNearestCreature(NPC_MOROES, 100.0f, true) != nullptr;
 }
 
 // Interrupt Rotation System

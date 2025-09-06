@@ -18,6 +18,7 @@ public:
         creators["moroes position"] = &KarazhanActionContext::moroes_position;
         creators["moroes crowd control"] = &KarazhanActionContext::moroes_crowd_control;
         creators["moroes tank swap"] = &KarazhanActionContext::moroes_tank_swap;
+        creators["moroes attack"] = &KarazhanActionContext::moroes_attack;
         
         // Maiden of Virtue
         creators["maiden repentance"] = &KarazhanActionContext::maiden_repentance;
@@ -72,6 +73,7 @@ private:
     static Action* moroes_position(PlayerbotAI* ai) { return new MoroesPositionAction(ai); }
     static Action* moroes_crowd_control(PlayerbotAI* ai) { return new MoroesCrowdControlAction(ai); }
     static Action* moroes_tank_swap(PlayerbotAI* ai) { return new MoroesTankSwapAction(ai); }
+    static Action* moroes_attack(PlayerbotAI* ai) { return new MoroesAttackAction(ai); }
     
     // Maiden of Virtue
     static Action* maiden_repentance(PlayerbotAI* ai) { return new MaidenRepentanceAction(ai); }
