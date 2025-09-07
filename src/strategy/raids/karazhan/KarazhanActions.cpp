@@ -741,15 +741,22 @@ bool CuratorFlareAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Focus Astral Flares immediately
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
+        return false;
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    
+    // Anti-ping-pong: if attacking flare already, don't switch - CLAUDE.md:722-738
+    if (currentTarget && currentTarget->GetEntry() == NPC_ASTRAL_FLARE)
+        return false;
+
+    // Find nearest Astral Flare
     Unit* flare = bot->FindNearestCreature(NPC_ASTRAL_FLARE, 100.0f, true);
-    if (flare && flare->IsAlive())
+    if (flare && flare->IsAlive() && flare->IsInCombat())
     {
-        if (botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() != flare)
-        {
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(flare);
-            return true;
-        }
+        // WotLK pattern: AttackAction inheritance enables actual combat
+        return Attack(flare);
     }
     
     return false;
@@ -933,15 +940,31 @@ bool IllhoofDemonChainsAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Attack Demon Chains to free players
-    Unit* chains = bot->FindNearestCreature(NPC_DEMON_CHAINS, 100.0f, true);
-    if (chains && chains->IsAlive())
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
+        return false;
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    
+    // Priority targeting: Kilrek > Demon Chains > Illhoof
+    // 1. Kilrek (imp companion) - kill first for Broken Pact damage
+    Unit* kilrek = bot->FindNearestCreature(NPC_KILTREK, 100.0f, true);
+    if (kilrek && kilrek->IsAlive() && kilrek->IsInCombat())
     {
-        if (botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() != chains)
-        {
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(chains);
-            return true;
-        }
+        // Anti-ping-pong: if attacking Kilrek already, don't switch
+        if (currentTarget && currentTarget->GetEntry() == NPC_KILTREK)
+            return false;
+        return Attack(kilrek);
+    }
+    
+    // 2. Demon Chains - emergency priority to free chained players
+    Unit* chains = bot->FindNearestCreature(NPC_DEMON_CHAINS, 100.0f, true);
+    if (chains && chains->IsAlive() && chains->IsInCombat())
+    {
+        // Anti-ping-pong: if attacking chains already, don't switch
+        if (currentTarget && currentTarget->GetEntry() == NPC_DEMON_CHAINS)
+            return false;
+        return Attack(chains);
     }
     
     return false;
@@ -961,25 +984,22 @@ bool IllhoofImpsAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // AOE the Fiendish Imps
+    // Exclude healers - WotLK pattern per CLAUDE.md:705  
+    if (botAI->IsHeal(bot))
+        return false;
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    
+    // Anti-ping-pong: if attacking imp already, don't switch
+    if (currentTarget && currentTarget->GetEntry() == NPC_FIENDISH_IMP)
+        return false;
+
+    // Target nearest Fiendish Imp
     Unit* imp = bot->FindNearestCreature(NPC_FIENDISH_IMP, 30.0f, true);
-    if (imp && imp->IsAlive())
+    if (imp && imp->IsAlive() && imp->IsInCombat())
     {
-        // Use AOE abilities if available
-        if (bot->getClass() == CLASS_MAGE && bot->HasSpell(10161)) // Cone of Cold
-        {
-            return botAI->CastSpell(10161, imp);
-        }
-        else if (bot->getClass() == CLASS_WARLOCK && bot->HasSpell(30283)) // Shadowfury
-        {
-            return botAI->CastSpell(30283, imp);
-        }
-        // Target imp for single target if no AOE
-        else if (botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() != imp)
-        {
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(imp);
-            return true;
-        }
+        // WotLK pattern: AttackAction inheritance enables actual combat
+        return Attack(imp);
     }
     
     return false;

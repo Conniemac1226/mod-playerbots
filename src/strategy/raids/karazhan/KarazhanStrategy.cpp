@@ -44,13 +44,11 @@ void KarazhanStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("aran dragons breath",
         NextAction::array(0, new NextAction("aran dragons breath", ACTION_MOVE + 4), nullptr)));
     
-    // Terestian Illhoof - MULTI-NPC encounter (with imps) - commenting out problematic triggers  
-    /*
+    // Terestian Illhoof - MULTI-NPC encounter (with adds) - fixed with WotLK AttackAction pattern
     triggers.push_back(new TriggerNode("illhoof demon chains",
         NextAction::array(0, new NextAction("illhoof demon chains", ACTION_EMERGENCY - 1), nullptr)));
     triggers.push_back(new TriggerNode("illhoof imps",
         NextAction::array(0, new NextAction("illhoof imps", ACTION_HIGH + 4), nullptr)));
-    */
     
     // Netherspite - SINGLE BOSS - keeping triggers
     triggers.push_back(new TriggerNode("netherspite beams",
@@ -84,5 +82,10 @@ void KarazhanStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 
 void KarazhanStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
 {
+    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation  
+    // Following HallsOfLightningStrategy.cpp:37-40 pattern per CLAUDE.md:782-786
+    multipliers.push_back(new CuratorAddMultiplier(botAI));
+    multipliers.push_back(new IllhoofAddMultiplier(botAI));
+    
     // multipliers.push_back(new AttumenMultiplier(botAI));
 }

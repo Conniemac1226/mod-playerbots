@@ -262,4 +262,12 @@ public:
     bool IsActive() override;
 };
 
+// Chess Event triggers
+class ChessEventActiveTrigger : public Trigger
+{
+public:
+    ChessEventActiveTrigger(PlayerbotAI* ai) : Trigger(ai, "chess event active") {}
+    bool IsActive() override;
+};
+
 #endif

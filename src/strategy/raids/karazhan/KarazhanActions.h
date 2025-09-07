@@ -137,7 +137,10 @@ enum KarazhanSpells
     SPELL_TAIL_SWEEP           = 25653,
     SPELL_RAIN_OF_BONES        = 37098,
     SPELL_SMOKING_BLAST        = 37057,
-    SPELL_FIREBALL_BARRAGE     = 30282
+    SPELL_FIREBALL_BARRAGE     = 30282,
+    
+    // Chess Event
+    SPELL_GAME_IN_SESSION      = 39331
 };
 
 // Attumen the Huntsman
@@ -231,10 +234,10 @@ public:
 };
 
 // Curator
-class CuratorFlareAction : public Action
+class CuratorFlareAction : public AttackAction
 {
 public:
-    CuratorFlareAction(PlayerbotAI* ai) : Action(ai, "curator flare") {}
+    CuratorFlareAction(PlayerbotAI* ai) : AttackAction(ai, "curator flare") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
@@ -273,18 +276,18 @@ public:
 };
 
 // Terestian Illhoof
-class IllhoofDemonChainsAction : public Action
+class IllhoofDemonChainsAction : public AttackAction
 {
 public:
-    IllhoofDemonChainsAction(PlayerbotAI* ai) : Action(ai, "illhoof demon chains") {}
+    IllhoofDemonChainsAction(PlayerbotAI* ai) : AttackAction(ai, "illhoof demon chains") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
 
-class IllhoofImpsAction : public Action
+class IllhoofImpsAction : public AttackAction
 {
 public:
-    IllhoofImpsAction(PlayerbotAI* ai) : Action(ai, "illhoof imps") {}
+    IllhoofImpsAction(PlayerbotAI* ai) : AttackAction(ai, "illhoof imps") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

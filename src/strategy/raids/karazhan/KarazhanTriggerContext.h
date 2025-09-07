@@ -127,7 +127,7 @@ private:
     static Trigger* nightbane_charred_earth(PlayerbotAI* ai) { return new NightbaneCharredEarthTrigger(ai); }
     
     // Chess Event
-    static Trigger* chess_event_active(PlayerbotAI* ai) { return new MoroesEngagedTrigger(ai); } // Placeholder
+    static Trigger* chess_event_active(PlayerbotAI* ai) { return new ChessEventActiveTrigger(ai); }
     
     // Utility Triggers
     static Trigger* karazhan_interrupt_needed(PlayerbotAI* ai) { return new MoroesEngagedTrigger(ai); } // Placeholder
