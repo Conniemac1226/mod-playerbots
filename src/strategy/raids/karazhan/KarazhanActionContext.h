@@ -50,6 +50,7 @@ public:
         creators["malchezaar enfeeble"] = &KarazhanActionContext::malchezaar_enfeeble;
         
         // Nightbane
+        creators["nightbane skeleton"] = &KarazhanActionContext::nightbane_skeleton;
         creators["nightbane position"] = &KarazhanActionContext::nightbane_position;
         creators["nightbane charred earth"] = &KarazhanActionContext::nightbane_charred_earth;
         creators["nightbane air phase"] = &KarazhanActionContext::nightbane_air_phase;
@@ -105,6 +106,7 @@ private:
     static Action* malchezaar_enfeeble(PlayerbotAI* ai) { return new MalchezaarEnfeebleAction(ai); }
     
     // Nightbane
+    static Action* nightbane_skeleton(PlayerbotAI* ai) { return new NightbaneSkeletonAction(ai); }
     static Action* nightbane_position(PlayerbotAI* ai) { return new NightbanePositionAction(ai); }
     static Action* nightbane_charred_earth(PlayerbotAI* ai) { return new NightbaneCharredEarthAction(ai); }
     static Action* nightbane_air_phase(PlayerbotAI* ai) { return new NightbaneAirPhaseAction(ai); }

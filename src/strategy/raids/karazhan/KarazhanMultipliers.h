@@ -24,4 +24,18 @@ public:
     float GetValue(Action* action) override;
 };
 
+class MalchezaarAddMultiplier : public Multiplier
+{
+public:
+    MalchezaarAddMultiplier(PlayerbotAI* ai) : Multiplier(ai, "malchezaar add") {}
+    float GetValue(Action* action) override;
+};
+
+class NightbaneAddMultiplier : public Multiplier
+{
+public:
+    NightbaneAddMultiplier(PlayerbotAI* ai) : Multiplier(ai, "nightbane add") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

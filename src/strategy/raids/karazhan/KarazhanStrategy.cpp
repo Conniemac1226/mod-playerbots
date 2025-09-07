@@ -56,13 +56,15 @@ void KarazhanStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("netherspite void zone",
         NextAction::array(0, new NextAction("netherspite void zone", ACTION_MOVE + 5), nullptr)));
     
-    // Prince Malchezaar - SINGLE BOSS - keeping triggers
+    // Prince Malchezaar - SPAWNED ADDS ENCOUNTER - per CLAUDE.md:645-658
     triggers.push_back(new TriggerNode("malchezaar infernal",
-        NextAction::array(0, new NextAction("malchezaar infernal", ACTION_MOVE + 5), nullptr)));
+        NextAction::array(0, new NextAction("malchezaar infernal", ACTION_RAID + 4), nullptr)));
     triggers.push_back(new TriggerNode("malchezaar enfeeble",
         NextAction::array(0, new NextAction("malchezaar enfeeble", ACTION_EMERGENCY - 1), nullptr)));
     
-    // Nightbane - SINGLE BOSS - keeping triggers
+    // Nightbane - SPAWNED ADDS ENCOUNTER - per CLAUDE.md:645-658
+    triggers.push_back(new TriggerNode("nightbane skeleton",
+        NextAction::array(0, new NextAction("nightbane skeleton", ACTION_RAID + 3), nullptr)));
     triggers.push_back(new TriggerNode("nightbane air phase",
         NextAction::array(0, new NextAction("nightbane air phase", ACTION_HIGH + 3), nullptr)));
     triggers.push_back(new TriggerNode("nightbane charred earth",
@@ -86,6 +88,8 @@ void KarazhanStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
     // Following HallsOfLightningStrategy.cpp:37-40 pattern per CLAUDE.md:782-786
     multipliers.push_back(new CuratorAddMultiplier(botAI));
     multipliers.push_back(new IllhoofAddMultiplier(botAI));
+    multipliers.push_back(new MalchezaarAddMultiplier(botAI));
+    multipliers.push_back(new NightbaneAddMultiplier(botAI));
     
     // multipliers.push_back(new AttumenMultiplier(botAI));
 }

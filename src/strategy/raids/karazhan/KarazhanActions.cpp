@@ -1213,48 +1213,37 @@ bool NetherspiteVoidZoneAction::isUseful()
 bool MalchezaarInfernalAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot) return false;
+    
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
         return false;
-    
-    ObjectGuid botGuid = bot->GetGUID();
-    uint32 currentTime = getMSTime();
 
-    // Avoid Infernals and their Hellfire
-    Unit* infernal = bot->FindNearestCreature(NPC_NETHERSPITE_INFERNAL, 20.0f, true);
-    if (infernal && infernal->IsAlive())
+    // CRITICAL: Boss combat validation required per CLAUDE.md:590-592
+    Unit* malchezaar = bot->FindNearestCreature(NPC_PRINCE_MALCHEZAAR, 100.0f, true);
+    if (!malchezaar || !malchezaar->IsAlive()) return false;
+    
+    // Anti-ping-pong: Don't switch between infernals if already attacking one
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->GetEntry() == NPC_NETHERSPITE_INFERNAL)
     {
-        // Check cooldown to prevent spam
-        if (g_karazhan_lastMoveTime[botGuid] + 1000 > currentTime)
-            return false;
-            
-        // Move away from infernal with wider berth for Hellfire
-        float angle = bot->GetAngle(infernal) + M_PI;
-        float x = bot->GetPositionX() + cos(angle) * 25.0f; // Increased distance
-        float y = bot->GetPositionY() + sin(angle) * 25.0f;
-        float z = bot->GetPositionZ();
-        
-        g_karazhan_lastMoveTime[botGuid] = currentTime;
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        return false;
+    }
+
+    // SPAWNED ADD TARGETING: Dynamic targeting per CLAUDE.md:602-608
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets) {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_NETHERSPITE_INFERNAL && unit->IsInCombat()) {
+            // WotLK pattern: AttackAction inheritance enables actual combat per CLAUDE.md:607
+            return Attack(unit);
+        }
     }
     
-    // Also check if Malchezaar is casting Infernal summon
-    Unit* malchezaar = bot->FindNearestCreature(NPC_PRINCE_MALCHEZAAR, 100.0f);
-    if (malchezaar && IsCastingSpell(malchezaar, SPELL_INFERNAL_RELAY))
-    {
-        // Preemptively spread out
-        if (g_karazhan_lastMoveTime[botGuid] + 2000 > currentTime)
-            return false;
-            
-        // Move to a safer position away from raid stack
-        float angle = bot->GetOrientation() + frand(-M_PI/3, M_PI/3);
-        float x = bot->GetPositionX() + cos(angle) * 15.0f;
-        float y = bot->GetPositionY() + sin(angle) * 15.0f;
-        float z = bot->GetPositionZ();
-        
-        g_karazhan_lastMoveTime[botGuid] = currentTime;
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+    // Fallback to main boss when no spawned infernals per CLAUDE.md:612-615
+    if (malchezaar && malchezaar->IsAlive()) {
+        return Attack(malchezaar);
     }
-    
     return false;
 }
 
@@ -1417,6 +1406,53 @@ bool NightbaneAirPhaseAction::isUseful()
         return false;
     Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f);
     return nightbane && !nightbane->IsWithinMeleeRange(bot);
+}
+
+bool NightbaneSkeletonAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot) return false;
+    
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
+        return false;
+
+    // CRITICAL: Boss combat validation required per CLAUDE.md:590-592
+    Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f, true);
+    if (!nightbane || !nightbane->IsAlive()) return false;
+    
+    // Anti-ping-pong: Don't switch between skeletons if already attacking one
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->GetEntry() == NPC_RESTLESS_SKELETON)
+    {
+        return false;
+    }
+
+    // SPAWNED ADD TARGETING: Dynamic targeting per CLAUDE.md:602-608
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets) {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_RESTLESS_SKELETON && unit->IsInCombat()) {
+            // WotLK pattern: AttackAction inheritance enables actual combat per CLAUDE.md:607
+            return Attack(unit);
+        }
+    }
+    
+    // Fallback to main boss when no spawned skeletons per CLAUDE.md:612-615
+    if (nightbane && nightbane->IsAlive()) {
+        return Attack(nightbane);
+    }
+    return false;
+}
+
+bool NightbaneSkeletonAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot) return false;
+    
+    // Only useful when Nightbane is present and in combat
+    Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f, true);
+    return nightbane && nightbane->IsAlive() && nightbane->IsInCombat();
 }
 
 // Chess Event Actions
