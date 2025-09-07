@@ -272,41 +272,38 @@ bool TavarokArcingSmashAction::isUseful()
 // Nexus-Prince Shaffar - Attack Ethereal Beacons
 bool AttackEtherealBeaconAction::Execute(Event event)
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
+    Unit* beacon = nullptr;
 
-    // RESEARCHED: Beacons spawn every 10s - boss_nexusprince_shaffar.cpp:86-93
-    // Priority target - they spawn adds if not killed quickly
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    
-    // Find the nearest beacon to prioritize
-    Unit* nearestBeacon = bot->FindNearestCreature(NPC_ETHEREAL_BEACON, 50.0f);
-    if (nearestBeacon && nearestBeacon->IsAlive())
+    // WotLK pattern for spawned adds
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& target : targets)
     {
-        // Always attack beacons with highest priority
-        if (currentTarget != nearestBeacon)
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_ETHEREAL_BEACON)
         {
-            return Attack(nearestBeacon);
-        }
-        else
-        {
-            // Already targeting a beacon - continue attacking it
-            return Attack(nearestBeacon);
+            beacon = unit;
+            break;
         }
     }
 
-    return false;
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    // Prevent ping-pong between multiple beacons if attacking one already
+    if (beacon && currentTarget && currentTarget->GetEntry() == NPC_ETHEREAL_BEACON)
+    {
+        return false;
+    }
+
+    if (!beacon || AI_VALUE(Unit*, "current target") == beacon)
+    {
+        return false;
+    }
+    
+    return Attack(beacon);
 }
 
 bool AttackEtherealBeaconAction::isUseful()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* beacon = bot->FindNearestCreature(NPC_ETHEREAL_BEACON, 50.0f);
-    return beacon && beacon->IsAlive();
+    return !botAI->IsHeal(bot);
 }
 
 // Avoid Frost Nova

@@ -50,4 +50,6 @@ void ShadowLabyrinthStrategy::InitMultipliers(std::vector<Multiplier*> &multipli
     multipliers.push_back(new BlackheartMultiplier(botAI));
     multipliers.push_back(new VorpilMultiplier(botAI));
     multipliers.push_back(new MurmurMultiplier(botAI));
+    // CRITICAL: Block DpsAssist when Void Travelers present - prevents boss/add oscillation
+    multipliers.push_back(new VorpilVoidTravelerMultiplier(botAI));
 }

@@ -3,7 +3,13 @@
 
 #include "Multiplier.h"
 
-// Placeholder for future multipliers if needed
-// Following proven pattern of minimal multipliers to avoid priority violations
+class KelidanChannelerMultiplier : public Multiplier
+{
+    public:
+        KelidanChannelerMultiplier(PlayerbotAI* ai) : Multiplier(ai, "kelidan channeler") {}
+
+    public:
+        virtual float GetValue(Action* action);
+};
 
 #endif

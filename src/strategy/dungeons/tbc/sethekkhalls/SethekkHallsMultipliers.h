@@ -17,4 +17,11 @@ public:
     float GetValue(Action* action) override;
 };
 
+class BroodOfAnzuMultiplier : public Multiplier
+{
+public:
+    BroodOfAnzuMultiplier(PlayerbotAI* ai) : Multiplier(ai, "brood of anzu") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

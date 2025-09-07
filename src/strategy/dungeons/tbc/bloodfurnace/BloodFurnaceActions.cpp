@@ -316,59 +316,17 @@ bool BroggokAvoidSlimeSprayAction::isUseful()
 // Kelidan - Attack Shadowmoon Channelers first
 bool AttackShadowmoonChannelerAction::Execute(Event event)
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
+    Unit* channeler = AI_VALUE2(Unit*, "find target", "shadowmoon channeler");
+    if (!channeler || AI_VALUE(Unit*, "current target") == channeler)
+    {
         return false;
-
-    // RESEARCHED: Kelidan immune until all channelers dead - boss_kelidan_the_breaker.cpp:111-118
-    // Find and prioritize channelers
-    std::list<Creature*> channelerList;
-    bot->GetCreatureListWithEntryInGrid(channelerList, NPC_SHADOWMOON_CHANNELER, 100.0f);
-    
-    Creature* nearestChanneler = nullptr;
-    float minDist = 100.0f;
-    
-    for (Creature* channeler : channelerList)
-    {
-        if (channeler && channeler->IsAlive())
-        {
-            float dist = bot->GetExactDist(channeler);
-            if (dist < minDist)
-            {
-                minDist = dist;
-                nearestChanneler = channeler;
-            }
-        }
     }
-    
-    if (nearestChanneler)
-    {
-        return Attack(nearestChanneler);
-    }
-
-    return false;
+    return Attack(channeler);
 }
 
-bool AttackShadowmoonChannelerAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    // Check if Kelidan encounter is active and channelers exist
-    Unit* boss = AI_VALUE2(Unit*, "find target", "kelidan the breaker");
-    if (!boss || !boss->IsInCombat())
-        return false;
-
-    Unit* channeler = AI_VALUE2(Unit*, "find target", "shadowmoon channeler");
-    if (channeler && channeler->IsAlive())
-    {
-        // Current target should not be a channeler already
-        Unit* currentTarget = AI_VALUE(Unit*, "current target");
-        return !currentTarget || currentTarget->GetEntry() != NPC_SHADOWMOON_CHANNELER;
-    }
-
-    return false;
+bool AttackShadowmoonChannelerAction::isUseful() 
+{ 
+    return !botAI->IsHeal(bot); 
 }
 
 // Avoid Burning Nova area damage

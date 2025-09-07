@@ -33,4 +33,11 @@ public:
     float GetValue(Action* action) override;
 };
 
+class MellicharAddMultiplier : public Multiplier
+{
+public:
+    MellicharAddMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "mellichar add") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

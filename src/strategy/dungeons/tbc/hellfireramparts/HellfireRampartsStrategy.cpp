@@ -24,7 +24,7 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     
     // Fiendish Hounds - exact WotLK pattern priority
     triggers.push_back(new TriggerNode("fiendish hound active",
-             NextAction::array(0, new NextAction("attack fiendish hound", ACTION_RAID + 1), nullptr)));
+             NextAction::array(0, new NextAction("attack fiendish hound", ACTION_RAID + 5), nullptr)));
     
     // Interrupt Shadow Bolt - ESSENTIAL to prevent damage
     triggers.push_back(new TriggerNode("omor shadow bolt cast",
@@ -59,6 +59,7 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 
 void TbcDungeonHRStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
 {
-    // No multipliers needed - using direct priorities like WotLK dungeons
-    // RESEARCHED: Following SethekkHallsStrategy.cpp:41-45 pattern
+    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
+    // RESEARCHED: Following HallsOfLightningStrategy.cpp:37-40 pattern
+    multipliers.push_back(new OmorAddMultiplier(botAI));
 }

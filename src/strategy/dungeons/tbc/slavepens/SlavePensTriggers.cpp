@@ -5,20 +5,26 @@
 // Mennu the Betrayer - Totems active
 bool MennuTotemActiveTrigger::IsActive()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
+    if (botAI->IsHeal(bot)) { return false; }
 
-    // Check if any totems exist and are not being attacked
+    // WotLK pattern for spawned adds - check for any totem type
     uint32 totemIds[] = { NPC_NOVA_TOTEM, NPC_HEALING_WARD, NPC_EARTHGRAB_TOTEM, NPC_STONESKIN_TOTEM };
     
-    for (uint32 totemId : totemIds)
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& target : targets)
     {
-        Unit* totem = bot->FindNearestCreature(totemId, 50.0f);
-        if (totem && totem->IsAlive() && AI_VALUE(Unit*, "current target") != totem)
-            return true;
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat())
+        {
+            for (uint32 totemId : totemIds)
+            {
+                if (unit->GetEntry() == totemId)
+                {
+                    return true;
+                }
+            }
+        }
     }
-
     return false;
 }
 

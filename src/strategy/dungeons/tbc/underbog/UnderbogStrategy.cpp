@@ -1,5 +1,6 @@
 #include "UnderbogStrategy.h"
 #include "UnderbogTriggers.h"
+#include "UnderbogMultipliers.h"
 
 void UnderbogStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
@@ -24,7 +25,7 @@ void UnderbogStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     // Swamplord Musel'ek
     triggers.push_back(new TriggerNode(
         "windcaller claw active",
-        NextAction::array(0, new NextAction("attack windcaller claw", ACTION_HIGH + 5), nullptr)));
+        NextAction::array(0, new NextAction("attack windcaller claw", ACTION_RAID + 4), nullptr)));
     
     triggers.push_back(new TriggerNode(
         "freezing trap incoming",
@@ -41,7 +42,7 @@ void UnderbogStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     
     triggers.push_back(new TriggerNode(
         "spore strider active",
-        NextAction::array(0, new NextAction("attack spore strider", ACTION_RAID + 1), nullptr)));
+        NextAction::array(0, new NextAction("attack spore strider", ACTION_RAID + 5), nullptr)));
     
     triggers.push_back(new TriggerNode(
         "chain lightning casting",
@@ -51,4 +52,11 @@ void UnderbogStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "black stalker encounter active",
         NextAction::array(0, new NextAction("spread out", ACTION_MOVE + 4), nullptr)));
+}
+
+void UnderbogStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
+{
+    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
+    // RESEARCHED: Following HallsOfLightningStrategy.cpp:37-40 pattern
+    multipliers.push_back(new BlackStalkerAddMultiplier(botAI));
 }

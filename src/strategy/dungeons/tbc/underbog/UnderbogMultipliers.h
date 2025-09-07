@@ -10,4 +10,13 @@ public:
     float GetValue(Action* action) override;
 };
 
+class BlackStalkerAddMultiplier : public Multiplier
+{
+    public:
+        BlackStalkerAddMultiplier(PlayerbotAI* ai) : Multiplier(ai, "black stalker add") {}
+
+    public:
+        virtual float GetValue(Action* action);
+};
+
 #endif

@@ -168,3 +168,25 @@ float MurmurMultiplier::GetValue(Action* action)
     
     return 1.0f;
 }
+
+float VorpilVoidTravelerMultiplier::GetValue(Action* action)
+{
+    if (!action || action->getName() != "dps assist")
+        return 1.0f;
+
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return 1.0f;
+
+    // WotLK pattern - check for Void Traveler add present
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_VOID_TRAVELER)
+        {
+            return 0.0f; // Block DpsAssist when Void Traveler present
+        }
+    }
+    return 1.0f;
+}

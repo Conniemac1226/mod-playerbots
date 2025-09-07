@@ -61,4 +61,7 @@ void MagistersTerraceStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 void MagistersTerraceStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new MagistersTerraceMultiplier(botAI));
+    multipliers.push_back(new VexallusPureEnergyMultiplier(botAI));
+    multipliers.push_back(new SelinFelCrystalMultiplier(botAI));
+    multipliers.push_back(new DelrissaAddMultiplier(botAI));
 }

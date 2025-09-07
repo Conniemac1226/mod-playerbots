@@ -48,6 +48,7 @@ void BloodFurnaceStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 
 void BloodFurnaceStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
-    // Add any specific multipliers for Blood Furnace encounters
-    // Following proven pattern of keeping multipliers minimal to avoid priority issues
+    // CRITICAL: Block DpsAssist when channelers present - prevents boss/add oscillation
+    // RESEARCHED: Following HallsOfLightningStrategy.cpp:37-40 pattern
+    multipliers.push_back(new KelidanChannelerMultiplier(botAI));
 }

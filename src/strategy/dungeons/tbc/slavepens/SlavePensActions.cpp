@@ -5,51 +5,61 @@
 // Mennu the Betrayer - Attack totems with priority
 bool AttackMennuTotemAction::Execute(Event event)
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
     // RESEARCHED: Totems spawn pattern - boss_mennu_the_betrayer.cpp:71-83
     // Priority: Nova (explosion) > Healing (60% hp) > Earthgrab (root) > Stoneskin (armor)
     uint32 totemPriority[] = { NPC_NOVA_TOTEM, NPC_HEALING_WARD, NPC_EARTHGRAB_TOTEM, NPC_STONESKIN_TOTEM };
     
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    Unit* priorityTotem = nullptr;
     
+    // WotLK pattern with priority - find highest priority totem
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
     for (uint32 totemId : totemPriority)
     {
-        std::list<Creature*> totemList;
-        bot->GetCreatureListWithEntryInGrid(totemList, totemId, 50.0f);
-        
-        for (Creature* totem : totemList)
+        for (auto& target : targets)
         {
-            if (totem && totem->IsAlive() && AI_VALUE(Unit*, "current target") != totem)
+            Unit* unit = botAI->GetUnit(target);
+            if (unit && unit->IsInCombat() && unit->GetEntry() == totemId)
             {
-                // Always attack the highest priority totem
-                Attack(totem);
+                priorityTotem = unit;
+                break; // Found highest priority, stop searching
             }
+        }
+        if (priorityTotem) break; // Found totem, stop checking lower priorities
+    }
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    // Prevent ping-pong between totems if attacking one already (unless higher priority found)
+    if (priorityTotem && currentTarget)
+    {
+        // Check if current target is a totem
+        bool currentIsTotem = false;
+        for (uint32 totemId : totemPriority)
+        {
+            if (currentTarget->GetEntry() == totemId)
+            {
+                currentIsTotem = true;
+                break;
+            }
+        }
+        
+        // If attacking a totem and found same/lower priority, don't switch
+        if (currentIsTotem && priorityTotem == currentTarget)
+        {
+            return false;
         }
     }
 
-    return false;
+    if (!priorityTotem || AI_VALUE(Unit*, "current target") == priorityTotem)
+    {
+        return false;
+    }
+    
+    return Attack(priorityTotem);
 }
 
 bool AttackMennuTotemAction::isUseful()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    // Check if any totems exist and are not being attacked
-    uint32 totemIds[] = { NPC_NOVA_TOTEM, NPC_HEALING_WARD, NPC_EARTHGRAB_TOTEM, NPC_STONESKIN_TOTEM };
-    
-    for (uint32 totemId : totemIds)
-    {
-        Unit* totem = bot->FindNearestCreature(totemId, 50.0f);
-        if (totem && totem->IsAlive() && AI_VALUE(Unit*, "current target") != totem)
-            return true;
-    }
-
-    return false;
+    return !botAI->IsHeal(bot);
 }
 
 // Interrupt Mennu's Lightning Bolt
