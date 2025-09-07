@@ -1,5 +1,6 @@
 #include "SlavePensStrategy.h"
 #include "SlavePensTriggers.h"
+#include "SlavePensMultipliers.h"
 
 void SlavePensStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
@@ -45,4 +46,9 @@ void SlavePensStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "quagmirran cleave positioning",
         NextAction::array(0, new NextAction("avoid quagmirran cleave", ACTION_MOVE + 1), nullptr)));
+}
+
+void SlavePensStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
+{
+    multipliers.push_back(new MennuTotemMultiplier(botAI));
 }

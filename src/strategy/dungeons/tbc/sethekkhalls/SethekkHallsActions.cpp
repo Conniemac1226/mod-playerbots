@@ -12,87 +12,41 @@ std::map<ObjectGuid, bool> g_ikiss_inSafePosition;
 
 bool AttackCharmingTotemAction::Execute(Event event)
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
     if (bot->IsCharmed())
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
-
     Unit* totem = nullptr;
-    float closestDistance = SEARCH_RANGE_LARGE;
-    bool hasCharmedAlly = false;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    // WotLK pattern for spawned adds
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& target : targets)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->IsPlayer() && bot->IsInSameGroupWith(unit->ToPlayer()) && unit->IsCharmed())
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_CHARMING_TOTEM)
         {
-            hasCharmedAlly = true;
-        }
-
-        if (unit->GetEntry() == NPC_CHARMING_TOTEM && AttackersValue::IsValidTarget(unit, bot))
-        {
-            float distance = bot->GetDistance(unit);
-            if (distance < closestDistance)
-            {
-                totem = unit;
-                closestDistance = distance;
-            }
+            totem = unit;
+            break;
         }
     }
 
-    if (totem)
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    // Prevent ping-pong between multiple totems if attacking one already
+    if (totem && currentTarget && currentTarget->GetEntry() == NPC_CHARMING_TOTEM)
     {
-        return Attack(totem);
+        return false;
+    }
+
+    if (!totem || AI_VALUE(Unit*, "current target") == totem)
+    {
+        return false;
     }
     
-    return false;
+    return Attack(totem);
 }
 
 bool AttackCharmingTotemAction::isUseful()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    if (bot->IsCharmed())
-        return false;
-
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
-
-    bool hasTotem = false;
-    bool hasCharmedAlly = false;
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_CHARMING_TOTEM && AttackersValue::IsValidTarget(unit, bot))
-        {
-            hasTotem = true;
-        }
-
-        if (unit->IsPlayer() && bot->IsInSameGroupWith(unit->ToPlayer()) && unit->IsCharmed())
-        {
-            hasCharmedAlly = true;
-        }
-    }
-    
-    return hasTotem;
+    return !botAI->IsHeal(bot) && !bot->IsCharmed();
 }
 
 bool InterruptControllerAction::Execute(Event event)
@@ -440,41 +394,33 @@ bool FleeSpiritAction::isUseful()
 
 bool AttackBroodOfAnzuAction::Execute(Event event)
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
-
     Unit* brood = nullptr;
-    float closestDistance = SEARCH_RANGE_LARGE;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    // WotLK pattern for spawned adds
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& target : targets)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_BROOD_OF_ANZU && AttackersValue::IsValidTarget(unit, bot))
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_BROOD_OF_ANZU)
         {
-            float distance = bot->GetDistance(unit);
-            if (distance < closestDistance)
-            {
-                brood = unit;
-                closestDistance = distance;
-            }
+            brood = unit;
+            break;
         }
     }
 
-    if (brood)
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    // Prevent ping-pong between multiple brood if attacking one already
+    if (brood && currentTarget && currentTarget->GetEntry() == NPC_BROOD_OF_ANZU)
     {
-        return Attack(brood);
+        return false;
+    }
+
+    if (!brood || AI_VALUE(Unit*, "current target") == brood)
+    {
+        return false;
     }
     
-    return false;
+    return Attack(brood);
 }
 
 bool AttackBroodOfAnzuAction::isUseful()

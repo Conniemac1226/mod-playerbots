@@ -10,4 +10,11 @@ public:
     float GetValue(Action* action) override;
 };
 
+class EtherealBeaconMultiplier : public Multiplier
+{
+public:
+    EtherealBeaconMultiplier(PlayerbotAI* ai) : Multiplier(ai, "ethereal beacon") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

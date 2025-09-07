@@ -70,12 +70,12 @@ bool GhazanTailSweepTrigger::IsActive()
 // Swamplord - Windcaller Claw bear pet
 bool WindcallerClawActiveTrigger::IsActive()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
+    if (botAI->IsHeal(bot)) { return false; }
 
-    Unit* bear = bot->FindNearestCreature(NPC_WINDCALLER_CLAW, 100.0f);
-    return bear && bear->IsAlive();
+    Unit* boss = AI_VALUE2(Unit*, "find target", "swamplord musel'ek");
+    Unit* bear = AI_VALUE2(Unit*, "find target", "windcaller claw");
+
+    return boss && bear;
 }
 
 // Freezing Trap being cast
@@ -118,16 +118,21 @@ bool BlackStalkerLevitateTrigger::IsActive()
 // Spore Striders spawned
 bool SporeStriderActiveTrigger::IsActive()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
+    if (botAI->IsHeal(bot)) { return false; }
 
-    // WotLK Pattern: Simple boss existence check - action handles the logic
-    Unit* boss = AI_VALUE2(Unit*, "find target", "the black stalker");
-    if (!boss)
-        return false;
+    // Target is not findable from threat table using AI_VALUE2(),
+    // therefore need to search manually for the unit name
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
 
-    return !botAI->IsHeal(bot); // All except healers attack adds
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->GetEntry() == NPC_SPORE_STRIDER)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 // Chain Lightning being cast

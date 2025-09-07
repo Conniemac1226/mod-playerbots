@@ -9,6 +9,7 @@ public:
     SlavePensStrategy(PlayerbotAI* ai) : Strategy(ai) {}
     std::string const getName() override { return "slave pens"; }
     void InitTriggers(std::vector<TriggerNode*>& triggers) override;
+    void InitMultipliers(std::vector<Multiplier*>& multipliers) override;
 };
 
 #endif

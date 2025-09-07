@@ -3,7 +3,13 @@
 
 #include "Multiplier.h"
 
-// No multipliers used - following WotLK dungeon pattern
-// All priorities are set directly in strategy triggers
+class OmorAddMultiplier : public Multiplier
+{
+    public:
+        OmorAddMultiplier(PlayerbotAI* ai) : Multiplier(ai, "omor add") {}
+
+    public:
+        virtual float GetValue(Action* action);
+};
 
 #endif

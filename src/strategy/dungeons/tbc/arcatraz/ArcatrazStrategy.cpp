@@ -53,4 +53,5 @@ void ArcatrazStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
     multipliers.push_back(new DalliahMultiplier(botAI));
     multipliers.push_back(new SoccothratesMultiplier(botAI));
     multipliers.push_back(new SkyrissMultiplier(botAI));
+    multipliers.push_back(new MellicharAddMultiplier(botAI));
 }

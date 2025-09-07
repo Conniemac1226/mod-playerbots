@@ -49,4 +49,7 @@ void BotanicaStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
     multipliers.push_back(new LajMultiplier(botAI));
     multipliers.push_back(new ThorngrinMultiplier(botAI));
     multipliers.push_back(new WarpSplinterMultiplier(botAI));
+    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
+    multipliers.push_back(new SarannisAddMultiplier(botAI));
+    multipliers.push_back(new FreywinnAddMultiplier(botAI));
 }

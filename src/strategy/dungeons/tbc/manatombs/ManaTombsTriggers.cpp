@@ -102,13 +102,19 @@ bool TavarokArcingSmashTrigger::IsActive()
 // Ethereal Beacon spawned
 bool EtherealBeaconActiveTrigger::IsActive()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
+    if (botAI->IsHeal(bot)) { return false; }
 
-    // RESEARCHED: Ethereal Beacon spawn check - boss_nexusprince_shaffar.cpp:92
-    Unit* beacon = bot->FindNearestCreature(NPC_ETHEREAL_BEACON, 50.0f);
-    return beacon && beacon->IsAlive();
+    // WotLK pattern for spawned adds
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_ETHEREAL_BEACON)
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 // Frost Nova danger zone

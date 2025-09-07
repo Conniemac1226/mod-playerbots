@@ -186,21 +186,15 @@ bool GhazanTailSweepAction::isUseful()
 }
 
 // Swamplord Musel'ek - Attack bear pet first
+bool AttackWindcallerClawAction::isUseful() { return !botAI->IsHeal(bot); }
 bool AttackWindcallerClawAction::Execute(Event event)
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* bear = bot->FindNearestCreature(NPC_WINDCALLER_CLAW, 100.0f);
-    if (bear && bear->IsAlive() && bear->IsInCombat())
+    Unit* target = AI_VALUE2(Unit*, "find target", "windcaller claw");
+    if (!target || AI_VALUE(Unit*, "current target") == target)
     {
-        // STRATEGY: Pet must die first - it's the primary melee threat
-        // Boss stays ranged while pet attacks group members
-        return Attack(bear);
+        return false;
     }
-
-    return false;
+    return Attack(target);
 }
 
 
@@ -322,42 +316,38 @@ bool BlackStalkerLevitateAction::isUseful()
 }
 
 // Attack Spore Striders
+bool AttackSporeStriderAction::isUseful() { return !botAI->IsHeal(bot); }
 bool AttackSporeStriderAction::Execute(Event event)
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
+    Unit* strider = nullptr;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "the black stalker");
-    if (!boss)
-        return false;
-
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-
-    // WotLK Pattern: Target stability - don't keep swapping between striders
-    // Dynamic targeting of spawned adds - exact WotLK pattern
+    // Target is not findable from threat table using AI_VALUE2(),
+    // therefore need to search manually for the unit name
     GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (auto i = targets.begin(); i != targets.end(); ++i)
+
+    for (auto& target : targets)
     {
-        Unit* unit = botAI->GetUnit(*i);
+        Unit* unit = botAI->GetUnit(target);
         if (unit && unit->GetEntry() == NPC_SPORE_STRIDER)
         {
-            // Don't retarget if already attacking a strider
-            if (currentTarget && currentTarget->GetEntry() == NPC_SPORE_STRIDER)
-            {
-                return false;
-            }
-            return Attack(unit);
+            strider = unit;
+            break;
         }
     }
-    
-    // No striders left alive, fall back to targeting boss
-    if (currentTarget != boss)
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    // Prevent ping-pong between multiple striders if we're attacking one already
+    if (strider && currentTarget && currentTarget->GetEntry() == NPC_SPORE_STRIDER)
     {
-        return Attack(boss);
+        return false;
     }
 
-    return false;
+    if (!strider || AI_VALUE(Unit*, "current target") == strider)
+    {
+        return false;
+    }
+    
+    return Attack(strider);
 }
 
 

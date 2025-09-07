@@ -77,3 +77,46 @@ void BlackMorassStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "aeonus enraged",
         NextAction::array(0, new NextAction("handle aeonus enrage", ACTION_CRITICAL_HEAL + 1), nullptr)));
 }
+
+float PortalAddMultiplier::GetValue(Action* action)
+{
+    if (!action || action->getName() != "dps assist")
+        return 1.0f;
+
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return 1.0f;
+
+    // WotLK pattern - check for any Portal Add present
+    const uint32 portalAddIds[] = {
+        NPC_RIFT_LORD, NPC_RIFT_LORD_2,           // Highest priority
+        NPC_RIFT_KEEPER_WARLOCK, NPC_RIFT_KEEPER_MAGE,
+        NPC_INFINITE_EXECUTIONER, NPC_INFINITE_VANQUISHER,
+        NPC_INFINITE_CHRONOMANCER, NPC_INFINITE_ASSASSIN,
+        NPC_INFINITE_WHELP                        // Lowest priority
+    };
+    
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat())
+        {
+            for (uint32 addId : portalAddIds)
+            {
+                if (unit->GetEntry() == addId)
+                {
+                    return 0.0f; // Block DpsAssist when any Portal Add present
+                }
+            }
+        }
+    }
+    return 1.0f;
+}
+
+void BlackMorassStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
+{
+    // CRITICAL: Block DpsAssist when portal adds present - prevents boss/add oscillation
+    // CLAUDE.MD COMPLIANCE: This multiplier is MANDATORY for add encounters
+    multipliers.push_back(new PortalAddMultiplier(botAI));
+}

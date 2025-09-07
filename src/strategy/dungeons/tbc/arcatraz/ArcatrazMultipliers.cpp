@@ -204,3 +204,38 @@ float SkyrissMultiplier::GetValue(Action* action)
     
     return 1.0f;
 }
+
+float MellicharAddMultiplier::GetValue(Action* action)
+{
+    if (!action || action->getName() != "dps assist")
+        return 1.0f;
+
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return 1.0f;
+
+    // WotLK pattern - check for any Mellichar spawned add present
+    const uint32 mellicharAdds[] = {
+        NPC_TRICKSTER, NPC_PH_HUNTER,      // Wave 1: Random
+        NPC_AKKIRIS, NPC_SULFURON,         // Wave 3: Random  
+        NPC_TW_DRAK, NPC_BL_DRAK,          // Wave 4: Random
+        NPC_HARBINGER_SKYRISS               // Wave 5: Final boss
+    };
+    
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat())
+        {
+            for (uint32 addId : mellicharAdds)
+            {
+                if (unit->GetEntry() == addId)
+                {
+                    return 0.0f; // Block DpsAssist when any Mellichar add present
+                }
+            }
+        }
+    }
+    return 1.0f;
+}

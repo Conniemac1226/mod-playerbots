@@ -130,42 +130,38 @@ bool GargolmarSurgeAction::isUseful()
 }
 
 // Omor the Unscarred - Attack Fiendish Hounds
+bool AttackFiendishHoundAction::isUseful() { return !botAI->IsHeal(bot); }
 bool AttackFiendishHoundAction::Execute(Event event)
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
+    Unit* hound = nullptr;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
-    if (!boss)
-        return false;
-
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-
-    // WotLK Pattern: Target stability - don't keep swapping between hounds
-    // Dynamic targeting of spawned adds - exact WotLK Violet Hold pattern
+    // Target is not findable from threat table using AI_VALUE2(),
+    // therefore need to search manually for the unit name
     GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (auto i = targets.begin(); i != targets.end(); ++i)
+
+    for (auto& target : targets)
     {
-        Unit* unit = botAI->GetUnit(*i);
-        if (unit && unit->GetEntry() == NPC_FIENDISH_HOUND)
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_FIENDISH_HOUND)
         {
-            // Don't retarget if already attacking a hound
-            if (currentTarget && currentTarget->GetEntry() == NPC_FIENDISH_HOUND)
-            {
-                return false;
-            }
-            return Attack(unit);
+            hound = unit;
+            break;
         }
     }
-    
-    // No hounds left alive, fall back to targeting boss
-    if (currentTarget != boss)
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    // Prevent ping-pong between multiple hounds if we're attacking one already
+    if (hound && currentTarget && currentTarget->GetEntry() == NPC_FIENDISH_HOUND)
     {
-        return Attack(boss);
+        return false;
     }
 
-    return false;
+    if (!hound || AI_VALUE(Unit*, "current target") == hound)
+    {
+        return false;
+    }
+    
+    return Attack(hound);
 }
 
 

@@ -58,14 +58,12 @@ bool GargolmarSurgeTrigger::IsActive()
 // Omor - Fiendish Hounds summoned
 bool FiendishHoundActiveTrigger::IsActive()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
+    if (botAI->IsHeal(bot)) { return false; }
 
-    if (!botAI->IsDps(bot)) { return false; }
-
-    // ACTUAL WotLK Pattern: Search for adds in the trigger like Gundrak/Halls of Lightning
+    // Target is not findable from threat table using AI_VALUE2(),
+    // therefore need to search manually for the unit name
     GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+
     for (auto& target : targets)
     {
         Unit* unit = botAI->GetUnit(target);

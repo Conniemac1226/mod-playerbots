@@ -1,5 +1,6 @@
 #include "ManaTombsStrategy.h"
 #include "ManaTombsTriggers.h"
+#include "ManaTombsMultipliers.h"
 
 void ManaTombsStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
@@ -46,4 +47,11 @@ void ManaTombsStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "stomp danger",
         NextAction::array(0, new NextAction("avoid stomp", ACTION_MOVE + 3), nullptr)));
+}
+
+void ManaTombsStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
+{
+    // CRITICAL: Block DpsAssist when beacons present - prevents boss/add oscillation
+    // RESEARCHED: Following HallsOfLightningStrategy.cpp:37-40 pattern
+    multipliers.push_back(new EtherealBeaconMultiplier(botAI));
 }

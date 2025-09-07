@@ -10,4 +10,11 @@ public:
     float GetValue(Action* action) override;
 };
 
+class MennuTotemMultiplier : public Multiplier
+{
+public:
+    MennuTotemMultiplier(PlayerbotAI* ai) : Multiplier(ai, "mennu totem") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

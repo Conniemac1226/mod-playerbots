@@ -1,4 +1,5 @@
 #include "SethekkHallsStrategy.h"
+#include "SethekkHallsMultipliers.h"
 
 void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
@@ -30,4 +31,8 @@ void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 
 void TbcDungeonSHStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
 {
+    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
+    // RESEARCHED: Following HallsOfLightningStrategy.cpp:37-40 pattern
+    multipliers.push_back(new CharmingTotemMultiplier(botAI));
+    multipliers.push_back(new BroodOfAnzuMultiplier(botAI));
 }

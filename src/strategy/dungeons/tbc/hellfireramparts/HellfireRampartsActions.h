@@ -79,6 +79,7 @@ class AttackFiendishHoundAction : public AttackAction
 public:
     AttackFiendishHoundAction(PlayerbotAI* ai) : AttackAction(ai, "attack fiendish hound") {}
     bool Execute(Event event) override;
+    bool isUseful() override;
 };
 
 class OmorShadowBoltInterruptAction : public Action
