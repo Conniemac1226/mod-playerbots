@@ -708,7 +708,28 @@ bool MalchezaarInfernalTrigger::IsActive()
     if (!bot)
         return false;
 
-    return bot->FindNearestCreature(NPC_NETHERSPITE_INFERNAL, 15.0f, true) != nullptr;
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
+        return false;
+
+    // CRITICAL: Check Malchezaar combat state first - WotLK standard per CLAUDE.md:590-592
+    Unit* malchezaar = bot->FindNearestCreature(NPC_PRINCE_MALCHEZAAR, 100.0f, true);
+    if (!malchezaar || !malchezaar->IsAlive() || !malchezaar->IsInCombat())
+        return false;
+        
+    // Ensure tank has aggro before allowing DPS - CLAUDE.md:595-597
+    if (!malchezaar->GetVictim())
+        return false;
+
+    // SPAWNED ADD DETECTION: Use dynamic detection per CLAUDE.md:602-603
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets) {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_NETHERSPITE_INFERNAL && unit->IsInCombat()) {
+            return true; // Found spawned infernal
+        }
+    }
+    return false;
 }
 
 bool MalchezaarEnfeebleTrigger::IsActive()
@@ -783,6 +804,36 @@ bool NightbaneCharredEarthTrigger::IsActive()
         return false;
 
     return bot->HasAura(SPELL_CHARRED_EARTH);
+}
+
+bool NightbaneSkeletonTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
+        return false;
+
+    // CRITICAL: Check Nightbane combat state first - WotLK standard per CLAUDE.md:590-592
+    Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f, true);
+    if (!nightbane || !nightbane->IsAlive() || !nightbane->IsInCombat())
+        return false;
+        
+    // Ensure tank has aggro before allowing DPS - CLAUDE.md:595-597
+    if (!nightbane->GetVictim())
+        return false;
+
+    // SPAWNED ADD DETECTION: Use dynamic detection per CLAUDE.md:602-603
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets) {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_RESTLESS_SKELETON && unit->IsInCombat()) {
+            return true; // Found spawned skeleton
+        }
+    }
+    return false;
 }
 
 // Chess Event triggers

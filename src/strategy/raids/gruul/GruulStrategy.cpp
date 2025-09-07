@@ -56,5 +56,9 @@ void GruulStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 
 void GruulStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
 {
+    // CRITICAL: Block DpsAssist when council present - prevents boss/add oscillation  
+    // Following CLAUDE.md:678-702 pattern
+    multipliers.push_back(new MaulgarAddMultiplier(botAI));
+    
     // multipliers.push_back(new GruulMultiplier(botAI));
 }

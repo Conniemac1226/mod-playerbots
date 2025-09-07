@@ -73,3 +73,59 @@ float IllhoofAddMultiplier::GetValue(Action* action)
     
     return 1.0f;
 }
+
+float MalchezaarAddMultiplier::GetValue(Action* action)
+{
+    // Block DpsAssist when Netherspite Infernals are present - prevents boss/add oscillation
+    // Following proven pattern from CLAUDE.md:678-702
+    if (botAI->IsHeal(bot)) { return 1.0f; }
+    
+    // Check for spawned infernals using same pattern as trigger
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    bool infernalPresent = false;
+    
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_NETHERSPITE_INFERNAL)
+        {
+            infernalPresent = true;
+            break;
+        }
+    }
+    
+    if (infernalPresent && dynamic_cast<DpsAssistAction*>(action))
+    {
+        return 0.0f; // Block DpsAssist when infernals present
+    }
+    
+    return 1.0f;
+}
+
+float NightbaneAddMultiplier::GetValue(Action* action)
+{
+    // Block DpsAssist when Restless Skeletons are present - prevents boss/add oscillation
+    // Following proven pattern from CLAUDE.md:678-702
+    if (botAI->IsHeal(bot)) { return 1.0f; }
+    
+    // Check for spawned skeletons using same pattern as trigger
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    bool skeletonPresent = false;
+    
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_RESTLESS_SKELETON)
+        {
+            skeletonPresent = true;
+            break;
+        }
+    }
+    
+    if (skeletonPresent && dynamic_cast<DpsAssistAction*>(action))
+    {
+        return 0.0f; // Block DpsAssist when skeletons present
+    }
+    
+    return 1.0f;
+}

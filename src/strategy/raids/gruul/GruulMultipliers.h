@@ -15,4 +15,11 @@ public:
     }
 };
 
+class MaulgarAddMultiplier : public Multiplier
+{
+public:
+    MaulgarAddMultiplier(PlayerbotAI* ai) : Multiplier(ai, "maulgar add") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

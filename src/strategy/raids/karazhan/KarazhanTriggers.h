@@ -262,6 +262,13 @@ public:
     bool IsActive() override;
 };
 
+class NightbaneSkeletonTrigger : public Trigger
+{
+public:
+    NightbaneSkeletonTrigger(PlayerbotAI* ai) : Trigger(ai, "nightbane skeleton") {}
+    bool IsActive() override;
+};
+
 // Chess Event triggers
 class ChessEventActiveTrigger : public Trigger
 {

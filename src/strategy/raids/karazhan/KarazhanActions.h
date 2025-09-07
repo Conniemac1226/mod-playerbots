@@ -73,7 +73,8 @@ enum KarazhanNPCs
     NPC_NETHERSPITE_INFERNAL   = 17646,
     
     // Nightbane
-    NPC_NIGHTBANE              = 17225
+    NPC_NIGHTBANE              = 17225,
+    NPC_RESTLESS_SKELETON      = 17261
 };
 
 enum KarazhanSpells
@@ -327,10 +328,10 @@ public:
 };
 
 // Prince Malchezaar
-class MalchezaarInfernalAction : public MovementAction
+class MalchezaarInfernalAction : public AttackAction
 {
 public:
-    MalchezaarInfernalAction(PlayerbotAI* ai) : MovementAction(ai, "malchezaar infernal") {}
+    MalchezaarInfernalAction(PlayerbotAI* ai) : AttackAction(ai, "malchezaar infernal") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
@@ -364,6 +365,14 @@ class NightbaneAirPhaseAction : public MovementAction
 {
 public:
     NightbaneAirPhaseAction(PlayerbotAI* ai) : MovementAction(ai, "nightbane air phase") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class NightbaneSkeletonAction : public AttackAction
+{
+public:
+    NightbaneSkeletonAction(PlayerbotAI* ai) : AttackAction(ai, "nightbane skeleton") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

@@ -60,6 +60,7 @@ public:
         
         // Nightbane
         creators["nightbane engaged"] = &KarazhanTriggerContext::nightbane_engaged;
+        creators["nightbane skeleton"] = &KarazhanTriggerContext::nightbane_skeleton;
         creators["nightbane air phase"] = &KarazhanTriggerContext::nightbane_air_phase;
         creators["nightbane charred earth"] = &KarazhanTriggerContext::nightbane_charred_earth;
         
@@ -123,6 +124,7 @@ private:
     
     // Nightbane
     static Trigger* nightbane_engaged(PlayerbotAI* ai) { return new NightbaneEngagedTrigger(ai); }
+    static Trigger* nightbane_skeleton(PlayerbotAI* ai) { return new NightbaneSkeletonTrigger(ai); }
     static Trigger* nightbane_air_phase(PlayerbotAI* ai) { return new NightbaneAirPhaseTrigger(ai); }
     static Trigger* nightbane_charred_earth(PlayerbotAI* ai) { return new NightbaneCharredEarthTrigger(ai); }
     
