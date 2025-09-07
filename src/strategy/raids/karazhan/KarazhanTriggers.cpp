@@ -389,7 +389,22 @@ bool CuratorFlareTrigger::IsActive()
     if (!bot)
         return false;
 
-    return bot->FindNearestCreature(NPC_ASTRAL_FLARE, 100.0f, true) != nullptr;
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
+        return false;
+
+    // CRITICAL: Check Curator combat state first - WotLK standard per CLAUDE.md:251-254
+    Unit* curator = bot->FindNearestCreature(NPC_CURATOR, 100.0f, true);
+    if (!curator || !curator->IsAlive() || !curator->IsInCombat())
+        return false;
+    
+    // Ensure tank has aggro before allowing DPS - CLAUDE.md:256-258
+    if (!curator->GetVictim())
+        return false;
+
+    // NOW check for flares (only after combat initiated)
+    Unit* flare = bot->FindNearestCreature(NPC_ASTRAL_FLARE, 100.0f, true);
+    return flare && flare->IsAlive() && flare->IsInCombat();
 }
 
 bool CuratorEvocationTrigger::IsActive()
@@ -568,13 +583,30 @@ bool IllhoofDemonChainsTrigger::IsActive()
     if (!bot)
         return false;
 
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
+        return false;
+
+    // CRITICAL: Check Illhoof combat state first - WotLK standard per CLAUDE.md:251-254
+    Unit* illhoof = bot->FindNearestCreature(NPC_TERESTIAN_ILLHOOF, 100.0f, true);
+    if (!illhoof || !illhoof->IsAlive() || !illhoof->IsInCombat())
+        return false;
+    
+    // Ensure tank has aggro before allowing DPS - CLAUDE.md:256-258
+    if (!illhoof->GetVictim())
+        return false;
+
+    // Check for Kilrek first (priority target)
+    if (bot->FindNearestCreature(NPC_KILTREK, 100.0f, true))
+        return true;
+
     // Check if Demon Chains exist
-    if (bot->FindNearestCreature(NPC_DEMON_CHAINS, 100.0f, true))
+    Unit* chains = bot->FindNearestCreature(NPC_DEMON_CHAINS, 100.0f, true);
+    if (chains && chains->IsAlive() && chains->IsInCombat())
         return true;
         
     // Check if Illhoof is casting Sacrifice (creates chains)
-    Unit* illhoof = bot->FindNearestCreature(NPC_TERESTIAN_ILLHOOF, 100.0f);
-    if (illhoof && illhoof->HasUnitState(UNIT_STATE_CASTING))
+    if (illhoof->HasUnitState(UNIT_STATE_CASTING))
     {
         CurrentSpellTypes spellType = CURRENT_GENERIC_SPELL;
         if (illhoof->GetCurrentSpell(spellType))
@@ -594,7 +626,22 @@ bool IllhoofImpsTrigger::IsActive()
     if (!bot)
         return false;
 
-    return bot->FindNearestCreature(NPC_FIENDISH_IMP, 30.0f, true) != nullptr;
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
+        return false;
+
+    // CRITICAL: Check Illhoof combat state first - WotLK standard per CLAUDE.md:251-254
+    Unit* illhoof = bot->FindNearestCreature(NPC_TERESTIAN_ILLHOOF, 100.0f, true);
+    if (!illhoof || !illhoof->IsAlive() || !illhoof->IsInCombat())
+        return false;
+    
+    // Ensure tank has aggro before allowing DPS - CLAUDE.md:256-258
+    if (!illhoof->GetVictim())
+        return false;
+
+    // NOW check for imps (only after combat initiated)
+    Unit* imp = bot->FindNearestCreature(NPC_FIENDISH_IMP, 30.0f, true);
+    return imp && imp->IsAlive() && imp->IsInCombat();
 }
 
 // Netherspite triggers
@@ -736,4 +783,27 @@ bool NightbaneCharredEarthTrigger::IsActive()
         return false;
 
     return bot->HasAura(SPELL_CHARRED_EARTH);
+}
+
+// Chess Event triggers
+bool ChessEventActiveTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if Echo of Medivh is present (Chess Event controller)
+    Unit* medivh = bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 100.0f, true);
+    if (!medivh)
+        return false;
+
+    // Check if bot is possessing a chess piece (vehicle system)
+    if (bot->GetVehicleBase())
+        return true;
+
+    // Check if chess event is in progress (Game in Session aura on Medivh)
+    if (medivh->HasAura(SPELL_GAME_IN_SESSION))
+        return true;
+
+    return false;
 }
