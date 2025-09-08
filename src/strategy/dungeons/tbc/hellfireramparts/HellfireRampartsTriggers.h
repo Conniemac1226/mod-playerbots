@@ -58,10 +58,24 @@ public:
 };
 
 
-class OmorProactiveSpreadTrigger : public Trigger
+class OmorTreacheryCastTrigger : public Trigger
 {
 public:
-    OmorProactiveSpreadTrigger(PlayerbotAI* ai) : Trigger(ai, "omor proactive spread") {}
+    OmorTreacheryCastTrigger(PlayerbotAI* ai) : Trigger(ai, "omor treachery cast") {}
+    bool IsActive() override;
+};
+
+class OmorDebuffAvoidanceTrigger : public Trigger
+{
+public:
+    OmorDebuffAvoidanceTrigger(PlayerbotAI* ai) : Trigger(ai, "omor debuff avoidance") {}
+    bool IsActive() override;
+};
+
+class OmorClearSpreadTrigger : public Trigger
+{
+public:
+    OmorClearSpreadTrigger(PlayerbotAI* ai) : Trigger(ai, "omor clear spread") {}
     bool IsActive() override;
 };
 
