@@ -1011,8 +1011,8 @@ AiPlayerbot.ZoneBracket.4197 = 79,80
 AiPlayerbot.RandomBotMaps = 0,1,530,571
 
 # Probabilty bots teleport to banker (city)
-# Default: 0.25
-AiPlayerbot.ProbTeleToBankers = 0.25
+# Default tuned down for large deployments
+AiPlayerbot.ProbTeleToBankers = 0.05
 
 # Control probability weights for bots teleporting to Capital city bankers
 # Sum of weights need not be 100. Set to 0 to disable teleporting to the city.
@@ -1158,8 +1158,8 @@ AiPlayerbot.MaxRandomBotRandomizeTime = 1209600
 AiPlayerbot.RandomBotsPerInterval = 60
 AiPlayerbot.MinRandomBotReviveTime = 60
 AiPlayerbot.MaxRandomBotReviveTime = 300
-AiPlayerbot.MinRandomBotTeleportInterval = 3600
-AiPlayerbot.MaxRandomBotTeleportInterval = 18000
+AiPlayerbot.MinRandomBotTeleportInterval = 7200
+AiPlayerbot.MaxRandomBotTeleportInterval = 21600
 AiPlayerbot.PermanantlyInWorldTime = 31104000
 
 #
