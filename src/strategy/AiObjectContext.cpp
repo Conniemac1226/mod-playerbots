@@ -73,6 +73,8 @@
 #include "raids/icecrown/RaidIccTriggerContext.h"
 #include "raids/karazhan/KarazhanActionContext.h"
 #include "raids/karazhan/KarazhanTriggerContext.h"
+#include "raids/gruul/GruulActionContext.h"
+#include "raids/gruul/GruulTriggerContext.h"
 #include "raids/blacktemple/BlackTempleActionContext.h"
 #include "raids/blacktemple/BlackTempleTriggerContext.h"
 #include "raids/serpentshrine/SerpentshrineActionContext.h"
@@ -158,6 +160,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidUlduarActionContext());
     actionContexts.Add(new RaidIccActionContext());
     actionContexts.Add(new KarazhanActionContext());
+    actionContexts.Add(new GruulActionContext());
     actionContexts.Add(new RaidBtActionContext());
     actionContexts.Add(new SerpentshrineActionContext());
     actionContexts.Add(new TempestKeepActionContext());
@@ -211,6 +214,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidUlduarTriggerContext());
     triggerContexts.Add(new RaidIccTriggerContext());
     triggerContexts.Add(new KarazhanTriggerContext());
+    triggerContexts.Add(new GruulTriggerContext());
     triggerContexts.Add(new RaidBtTriggerContext());
     triggerContexts.Add(new SerpentshrineTriggerContext());
     triggerContexts.Add(new TempestKeepTriggerContext());

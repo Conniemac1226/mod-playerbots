@@ -15,7 +15,7 @@
 #include <vector>
 
 // Track Ground Slam timing for shatter positioning
-static std::map<ObjectGuid, time_t> groundSlamTimes;
+std::map<ObjectGuid, time_t> groundSlamTimes;
 
 // Track kill order for council
 static std::vector<uint32> councilKillOrder = {
@@ -92,7 +92,7 @@ bool GruulShatterPositionAction::isUseful()
     // DEPRECATED: Shatter positioning now handled by Ground Slam action
     // By the time Shatter happens, players are petrified and cannot move
     // This action kept for compatibility but should rarely trigger
-    return bot && bot->IsAlive() && !bot->HasAura(SPELL_STONED) && 
+    return bot && bot->IsAlive() && !bot->HasAura(GRUUL_SPELL_STONED) && 
            bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f, true) != nullptr;
 }
 
@@ -233,7 +233,7 @@ bool MaulgarWhirlwindAction::Execute(Event event)
         pos.m_positionY += sin(angle) * 15.0f;
         
         return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
-                     false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                     false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -281,7 +281,7 @@ bool KroshSpellstealAction::Execute(Event event)
         return false;
         
     // Mage should spellsteal the shield
-    if (krosh->HasAura(SPELL_SPELLSHIELD))
+    if (krosh->HasAura(KROSH_SPELL_SPELLSHIELD))
     {
         if (botAI->CanCastSpell(30449, krosh)) // Spellsteal spell ID
         {
@@ -301,7 +301,7 @@ bool KroshSpellstealAction::isUseful()
 bool KigglerPolymorphAction::Execute(Event event)
 {
     // Dispel polymorph if possible
-    if (bot->HasAura(SPELL_GREATER_POLYMORPH))
+    if (bot->HasAura(KIGGLER_SPELL_GREATER_POLYMORPH))
     {
         // Request dispel from healers
         return true;
@@ -315,21 +315,37 @@ bool KigglerPolymorphAction::isUseful()
     return bot && bot->IsAlive();
 }
 
-bool OlmPetAction::Execute(Event event)
+bool OlmWildFelStalkerAction::Execute(Event event)
 {
-    // Focus Wild Fel Stalker pets
-    if (Unit* pet = bot->FindNearestCreature(NPC_WILD_FEL_STALKER, 100.0f, true))
+    Player* bot = botAI->GetBot();
+    if (!bot) 
+        return false;
+        
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    
+    // Anti-ping-pong: Don't switch between Wild Fel Stalkers if already attacking one
+    if (currentTarget && currentTarget->GetEntry() == NPC_WILD_FEL_STALKER)
     {
-        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(pet);
-        return true;
+        return false;
+    }
+    
+    // ICC Pattern: Simple spawned add targeting
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_WILD_FEL_STALKER)
+        {
+            return Attack(unit); // AttackAction inheritance pattern
+        }
     }
     
     return false;
 }
 
-bool OlmPetAction::isUseful()
+bool OlmWildFelStalkerAction::isUseful()
 {
-    return bot && bot->IsAlive();
+    return bot && bot->IsAlive() && !botAI->IsHeal(bot);
 }
 
 bool BlindeyeInterruptAction::Execute(Event event)
@@ -339,7 +355,7 @@ bool BlindeyeInterruptAction::Execute(Event event)
         return false;
         
     // Interrupt heals
-    if (IsCastingSpell(blindeye, SPELL_HEAL) || IsCastingSpell(blindeye, SPELL_PRAYER_OH))
+    if (IsCastingSpell(blindeye, BLINDEYE_SPELL_HEAL) || IsCastingSpell(blindeye, BLINDEYE_SPELL_PRAYER_OH))
     {
         // Use class interrupt abilities
         uint32 interruptSpells[] = {
@@ -378,7 +394,7 @@ bool GruulTankSwapAction::Execute(Event event)
         return false;
         
     // Tank swap for Growth stacks
-    if (Aura* growth = gruul->GetAura(SPELL_GROWTH))
+    if (Aura* growth = gruul->GetAura(GRUUL_SPELL_GROWTH))
     {
         uint32 stacks = growth->GetStackAmount();
         if (stacks >= 15 && botAI->IsTank(bot))
@@ -433,7 +449,7 @@ bool GruulDispelAction::Execute(Event event)
             continue;
             
         // Dispel Greater Polymorph
-        if (member->HasAura(SPELL_GREATER_POLYMORPH))
+        if (member->HasAura(KIGGLER_SPELL_GREATER_POLYMORPH))
         {
             if (botAI->CanCastSpell(988, member)) // Dispel Magic
             {

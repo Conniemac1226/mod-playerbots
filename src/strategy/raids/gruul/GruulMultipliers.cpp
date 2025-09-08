@@ -6,8 +6,8 @@
 
 float MaulgarAddMultiplier::GetValue(Action* action)
 {
-    // Block DpsAssist when council members are present - prevents boss/add oscillation
-    // Following proven pattern from CLAUDE.md:678-702
+    // Block DpsAssist when council members OR spawned adds are present
+    // Following proven pattern from CLAUDE.md:753-778
     if (botAI->IsHeal(bot)) { return 1.0f; }
     
     // Check for council members using same pattern as trigger
@@ -18,20 +18,35 @@ float MaulgarAddMultiplier::GetValue(Action* action)
         18836  // NPC_BLINDEYE_THE_SEER
     };
     
-    bool councilPresent = false;
+    bool addPresent = false;
     for (uint32 npcId : councilIds)
     {
         Unit* council = bot->FindNearestCreature(npcId, 150.0f, true);
         if (council && council->IsAlive() && council->IsInCombat())
         {
-            councilPresent = true;
+            addPresent = true;
             break;
         }
     }
     
-    if (councilPresent && dynamic_cast<DpsAssistAction*>(action))
+    // ALSO check for spawned Wild Fel Stalkers (critical for proper targeting)
+    if (!addPresent)
     {
-        return 0.0f; // Block DpsAssist when council present
+        const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+        for (const auto& guid : targets)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (unit && unit->IsAlive() && unit->GetEntry() == 18847) // NPC_WILD_FEL_STALKER
+            {
+                addPresent = true;
+                break;
+            }
+        }
+    }
+    
+    if (addPresent && dynamic_cast<DpsAssistAction*>(action))
+    {
+        return 0.0f; // Block DpsAssist when any adds present
     }
     
     return 1.0f;

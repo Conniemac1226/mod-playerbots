@@ -29,7 +29,7 @@ public:
         creators["kiggler polymorph"] = &GruulTriggerContext::kiggler_polymorph;
         creators["kiggler arcane explosion"] = &GruulTriggerContext::kiggler_arcane_explosion;
         
-        creators["olm summon"] = &GruulTriggerContext::olm_summon;
+        creators["olm wild fel stalker"] = &GruulTriggerContext::olm_wild_fel_stalker;
         
         creators["blindeye heal"] = &GruulTriggerContext::blindeye_heal;
         creators["blindeye shield"] = &GruulTriggerContext::blindeye_shield;
@@ -57,7 +57,7 @@ private:
     static Trigger* krosh_blast_wave(PlayerbotAI* ai) { return new KroshBlastWaveTrigger(ai); }
     static Trigger* kiggler_polymorph(PlayerbotAI* ai) { return new KigglerPolymorphTrigger(ai); }
     static Trigger* kiggler_arcane_explosion(PlayerbotAI* ai) { return new KigglerArcaneExplosionTrigger(ai); }
-    static Trigger* olm_summon(PlayerbotAI* ai) { return new OlmSummonTrigger(ai); }
+    static Trigger* olm_wild_fel_stalker(PlayerbotAI* ai) { return new OlmWildFelStalkerTrigger(ai); }
     static Trigger* blindeye_heal(PlayerbotAI* ai) { return new BlindeyeHealTrigger(ai); }
     static Trigger* blindeye_shield(PlayerbotAI* ai) { return new BlindeyeShieldTrigger(ai); }
 };

@@ -25,45 +25,45 @@ enum GruulNPCs
 enum GruulSpells
 {
     // Gruul the Dragonkiller
-    SPELL_GROWTH                = 36300,
-    SPELL_CAVE_IN               = 36240,
-    SPELL_GROUND_SLAM           = 33525,
-    SPELL_REVERBERATION         = 36297,
-    SPELL_HURTFUL_STRIKE        = 33813,
-    SPELL_SHATTER               = 33654,
-    SPELL_SHATTER_EFFECT        = 33671,
-    SPELL_STONED                = 33652,
-    SPELL_LOOK_AROUND           = 33965,
-    SPELL_TRACTOR_BEAM_PULL     = 33497,
+    GRUUL_SPELL_GROWTH                = 36300,
+    GRUUL_SPELL_CAVE_IN               = 36240,
+    GRUUL_SPELL_GROUND_SLAM           = 33525,
+    GRUUL_SPELL_REVERBERATION         = 36297,
+    GRUUL_SPELL_HURTFUL_STRIKE        = 33813,
+    GRUUL_SPELL_SHATTER               = 33654,
+    GRUUL_SPELL_SHATTER_EFFECT        = 33671,
+    GRUUL_SPELL_STONED                = 33652,
+    GRUUL_SPELL_LOOK_AROUND           = 33965,
+    GRUUL_SPELL_TRACTOR_BEAM_PULL     = 33497,
     
     // High King Maulgar
-    SPELL_ARCING_SMASH          = 39144,
-    SPELL_MIGHTY_BLOW           = 33230,
-    SPELL_WHIRLWIND             = 33238,
-    SPELL_BERSERKER_C           = 26561,
-    SPELL_ROAR                  = 16508,
-    SPELL_FLURRY                = 33232,
+    MAULGAR_SPELL_ARCING_SMASH        = 39144,
+    MAULGAR_SPELL_MIGHTY_BLOW         = 33230,
+    MAULGAR_SPELL_WHIRLWIND           = 33238,
+    MAULGAR_SPELL_BERSERKER_C         = 26561,
+    MAULGAR_SPELL_ROAR                = 16508,
+    MAULGAR_SPELL_FLURRY              = 33232,
     
     // Olm the Summoner
-    SPELL_DARK_DECAY            = 33129,
-    SPELL_DEATH_COIL            = 33130,
-    SPELL_SUMMON_WFH            = 33131,
+    OLM_SPELL_DARK_DECAY              = 33129,
+    OLM_SPELL_DEATH_COIL              = 33130,
+    OLM_SPELL_SUMMON_WFH              = 33131,
     
     // Kiggler the Crazed
-    SPELL_GREATER_POLYMORPH     = 33173,
-    SPELL_LIGHTNING_BOLT        = 36152,
-    SPELL_ARCANE_SHOCK          = 33175,
-    SPELL_ARCANE_EXPLOSION      = 33237,
+    KIGGLER_SPELL_GREATER_POLYMORPH   = 33173,
+    KIGGLER_SPELL_LIGHTNING_BOLT      = 36152,
+    KIGGLER_SPELL_ARCANE_SHOCK        = 33175,
+    KIGGLER_SPELL_ARCANE_EXPLOSION    = 33237,
     
     // Blindeye the Seer
-    SPELL_GREATER_PW_SHIELD     = 33147,
-    SPELL_HEAL                  = 33144,
-    SPELL_PRAYER_OH             = 33152,
+    BLINDEYE_SPELL_GREATER_PW_SHIELD  = 33147,
+    BLINDEYE_SPELL_HEAL               = 33144,
+    BLINDEYE_SPELL_PRAYER_OH          = 33152,
     
     // Krosh Firehand
-    SPELL_GREATER_FIREBALL      = 33051,
-    SPELL_SPELLSHIELD           = 33054,
-    SPELL_BLAST_WAVE            = 33061
+    KROSH_SPELL_GREATER_FIREBALL      = 33051,
+    KROSH_SPELL_SPELLSHIELD           = 33054,
+    KROSH_SPELL_BLAST_WAVE            = 33061
 };
 
 // Gruul the Dragonkiller Actions
@@ -148,10 +148,10 @@ public:
     bool isUseful() override;
 };
 
-class OlmPetAction : public Action
+class OlmWildFelStalkerAction : public AttackAction
 {
 public:
-    OlmPetAction(PlayerbotAI* ai) : Action(ai, "olm pet") {}
+    OlmWildFelStalkerAction(PlayerbotAI* ai) : AttackAction(ai, "olm wild fel stalker") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

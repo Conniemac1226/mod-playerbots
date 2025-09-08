@@ -26,7 +26,7 @@ public:
         // Council actions
         creators["krosh spellsteal"] = &GruulActionContext::krosh_spellsteal;
         creators["kiggler polymorph"] = &GruulActionContext::kiggler_polymorph;
-        creators["olm pet"] = &GruulActionContext::olm_pet;
+        creators["olm wild fel stalker"] = &GruulActionContext::olm_wild_fel_stalker;
         creators["blindeye interrupt"] = &GruulActionContext::blindeye_interrupt;
     }
     
@@ -48,7 +48,7 @@ private:
     // Council actions
     static Action* krosh_spellsteal(PlayerbotAI* ai) { return new KroshSpellstealAction(ai); }
     static Action* kiggler_polymorph(PlayerbotAI* ai) { return new KigglerPolymorphAction(ai); }
-    static Action* olm_pet(PlayerbotAI* ai) { return new OlmPetAction(ai); }
+    static Action* olm_wild_fel_stalker(PlayerbotAI* ai) { return new OlmWildFelStalkerAction(ai); }
     static Action* blindeye_interrupt(PlayerbotAI* ai) { return new BlindeyeInterruptAction(ai); }
 };
 
