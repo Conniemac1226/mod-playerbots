@@ -43,9 +43,9 @@ void GruulStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("kiggler arcane explosion",
         NextAction::array(0, new NextAction("maulgar position", ACTION_MOVE + 4), nullptr)));
     
-    // Olm the Summoner
-    triggers.push_back(new TriggerNode("olm summon",
-        NextAction::array(0, new NextAction("olm pet", ACTION_HIGH + 4), nullptr)));
+    // Olm the Summoner - Wild Fel Stalkers (HIGHEST PRIORITY - spawned adds)
+    triggers.push_back(new TriggerNode("olm wild fel stalker",
+        NextAction::array(0, new NextAction("olm wild fel stalker", ACTION_RAID + 5), nullptr)));
     
     // Blindeye the Seer
     triggers.push_back(new TriggerNode("blindeye heal",

@@ -122,10 +122,10 @@ public:
     bool IsActive() override;
 };
 
-class OlmSummonTrigger : public Trigger
+class OlmWildFelStalkerTrigger : public Trigger
 {
 public:
-    OlmSummonTrigger(PlayerbotAI* ai) : Trigger(ai, "olm summon") {}
+    OlmWildFelStalkerTrigger(PlayerbotAI* ai) : Trigger(ai, "olm wild fel stalker") {}
     bool IsActive() override;
 };
 

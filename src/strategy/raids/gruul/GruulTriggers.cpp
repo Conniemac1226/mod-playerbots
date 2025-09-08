@@ -56,15 +56,15 @@ bool GruulGroundSlamTrigger::IsActive()
         return false;
         
     // PRIORITY 1: Check if Gruul is casting Ground Slam (CRITICAL - earliest detection)
-    if (IsCastingSpell(gruul, SPELL_GROUND_SLAM))
+    if (IsCastingSpell(gruul, GRUUL_SPELL_GROUND_SLAM))
         return true;
         
     // PRIORITY 2: Check if we're being affected by tractor beam (Ground Slam active)
-    if (bot->HasAura(SPELL_TRACTOR_BEAM_PULL))
+    if (bot->HasAura(GRUUL_SPELL_TRACTOR_BEAM_PULL))
         return true;
         
     // PRIORITY 3: Check if we have the Look Around stun (during Ground Slam sequence)
-    if (bot->HasAura(SPELL_LOOK_AROUND))
+    if (bot->HasAura(GRUUL_SPELL_LOOK_AROUND))
         return true;
     
     // PRIORITY 4: WotLK Pattern - Check if disperse distance is active
@@ -94,11 +94,11 @@ bool GruulShatterTrigger::IsActive()
         return false;
         
     // Check if we're petrified (about to be shattered)
-    if (bot->HasAura(SPELL_STONED))
+    if (bot->HasAura(GRUUL_SPELL_STONED))
         return true;
         
     // Check if Gruul is casting Shatter (critical to spread out)
-    if (IsCastingSpell(gruul, SPELL_SHATTER))
+    if (IsCastingSpell(gruul, GRUUL_SPELL_SHATTER))
         return true;
         
     // Check if we recently had Ground Slam (shatter follows 9.7 seconds later)
@@ -118,7 +118,7 @@ bool GruulCaveInTrigger::IsActive()
         return false;
         
     // Check if Gruul is casting Cave In
-    if (IsCastingSpell(gruul, SPELL_CAVE_IN))
+    if (IsCastingSpell(gruul, GRUUL_SPELL_CAVE_IN))
         return true;
     
     // Check if we're in a Cave In area (would need to check for visual/ground effects)
@@ -134,7 +134,7 @@ bool GruulReverberationTrigger::IsActive()
         return false;
 
     // Check if we have Reverberation (silence)
-    if (bot->HasAura(SPELL_REVERBERATION))
+    if (bot->HasAura(GRUUL_SPELL_REVERBERATION))
         return true;
         
     Unit* gruul = bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f);
@@ -142,7 +142,7 @@ bool GruulReverberationTrigger::IsActive()
         return false;
         
     // Check if Gruul is casting Reverberation
-    if (IsCastingSpell(gruul, SPELL_REVERBERATION))
+    if (IsCastingSpell(gruul, GRUUL_SPELL_REVERBERATION))
         return true;
     
     return false;
@@ -198,7 +198,7 @@ bool GruulGrowthTrigger::IsActive()
     // Check if Gruul has Growth stacks (increases size and damage)
     // Growth happens every 30.3 seconds automatically
     uint32 growthStacks = 0;
-    if (Aura* growth = gruul->GetAura(SPELL_GROWTH))
+    if (Aura* growth = gruul->GetAura(GRUUL_SPELL_GROWTH))
     {
         growthStacks = growth->GetStackAmount();
     }
@@ -223,26 +223,16 @@ bool MaulgarCouncilTrigger::IsActive()
     if (!bot)
         return false;
 
-    // WotLK Pattern: Check if Maulgar is in combat first (tank has engaged)
-    Unit* maulgar = bot->FindNearestCreature(NPC_HIGH_KING_MAULGAR, 150.0f, true);
-    if (!maulgar || !maulgar->IsAlive() || !maulgar->IsInCombat())
-        return false;
-    if (!maulgar->GetVictim()) // Ensure tank has aggro
-        return false;
-
-    uint32 councilIds[] = {
-        NPC_KROSH_FIREHAND,
-        NPC_OLM_THE_SUMMONER,
-        NPC_KIGGLER_THE_CRAZED,
-        NPC_BLINDEYE_THE_SEER
-    };
-    
-    for (uint32 npcId : councilIds)
-    {
-        Unit* council = bot->FindNearestCreature(npcId, 150.0f, true);
-        if (council && council->IsAlive() && council->IsInCombat())
-            return true;
-    }
+    // ICC Pattern: Simple boss existence check - no complex combat validation
+    // Check for living council members (excluding Maulgar for add priority)
+    if (AI_VALUE2(Unit*, "find target", "krosh firehand"))
+        return true;
+    if (AI_VALUE2(Unit*, "find target", "olm the summoner"))
+        return true;
+    if (AI_VALUE2(Unit*, "find target", "kiggler the crazed"))
+        return true;
+    if (AI_VALUE2(Unit*, "find target", "blindeye the seer"))
+        return true;
     
     return false;
 }
@@ -258,11 +248,11 @@ bool MaulgarWhirlwindTrigger::IsActive()
         return false;
         
     // Check if Maulgar is casting Whirlwind
-    if (IsCastingSpell(maulgar, SPELL_WHIRLWIND))
+    if (IsCastingSpell(maulgar, MAULGAR_SPELL_WHIRLWIND))
         return true;
         
     // Check if Maulgar has Whirlwind buff active
-    if (maulgar->HasAura(SPELL_WHIRLWIND))
+    if (maulgar->HasAura(MAULGAR_SPELL_WHIRLWIND))
         return true;
     
     return false;
@@ -279,7 +269,7 @@ bool MaulgarArcingSmashTrigger::IsActive()
         return false;
         
     // Check if Maulgar is casting Arcing Smash (frontal cleave)
-    if (IsCastingSpell(maulgar, SPELL_ARCING_SMASH))
+    if (IsCastingSpell(maulgar, MAULGAR_SPELL_ARCING_SMASH))
     {
         // Check if we're in front of Maulgar
         if (!maulgar->HasInArc(M_PI / 2, bot))
@@ -300,7 +290,7 @@ bool MaulgarBerserkerTrigger::IsActive()
         return false;
         
     // Check if Maulgar has Berserker buff (at 50% health)
-    if (maulgar->HasAura(SPELL_BERSERKER_C))
+    if (maulgar->HasAura(MAULGAR_SPELL_BERSERKER_C))
         return true;
         
     // Check if Maulgar is below 50% health (when he gains berserker)
@@ -322,11 +312,11 @@ bool KroshSpellshieldTrigger::IsActive()
         return false;
         
     // Check if Krosh has Spellshield (needs to be stolen)
-    if (krosh->HasAura(SPELL_SPELLSHIELD))
+    if (krosh->HasAura(KROSH_SPELL_SPELLSHIELD))
         return true;
         
     // Check if Krosh is casting Spellshield
-    if (IsCastingSpell(krosh, SPELL_SPELLSHIELD))
+    if (IsCastingSpell(krosh, KROSH_SPELL_SPELLSHIELD))
         return true;
     
     return false;
@@ -346,7 +336,7 @@ bool KroshBlastWaveTrigger::IsActive()
     if (bot->GetDistance(krosh) < 15.0f)
     {
         // Check if Krosh is casting Blast Wave
-        if (IsCastingSpell(krosh, SPELL_BLAST_WAVE))
+        if (IsCastingSpell(krosh, KROSH_SPELL_BLAST_WAVE))
             return true;
     }
     
@@ -360,7 +350,7 @@ bool KigglerPolymorphTrigger::IsActive()
         return false;
 
     // Check if we're polymorphed
-    if (bot->HasAura(SPELL_GREATER_POLYMORPH))
+    if (bot->HasAura(KIGGLER_SPELL_GREATER_POLYMORPH))
         return true;
         
     Unit* kiggler = bot->FindNearestCreature(NPC_KIGGLER_THE_CRAZED, 150.0f);
@@ -368,7 +358,7 @@ bool KigglerPolymorphTrigger::IsActive()
         return false;
         
     // Check if Kiggler is casting Greater Polymorph
-    if (IsCastingSpell(kiggler, SPELL_GREATER_POLYMORPH))
+    if (IsCastingSpell(kiggler, KIGGLER_SPELL_GREATER_POLYMORPH))
         return true;
     
     return false;
@@ -388,30 +378,29 @@ bool KigglerArcaneExplosionTrigger::IsActive()
     if (bot->GetDistance(kiggler) < 10.0f)
     {
         // Check if Kiggler is casting Arcane Explosion
-        if (IsCastingSpell(kiggler, SPELL_ARCANE_EXPLOSION))
+        if (IsCastingSpell(kiggler, KIGGLER_SPELL_ARCANE_EXPLOSION))
             return true;
     }
     
     return false;
 }
 
-bool OlmSummonTrigger::IsActive()
+bool OlmWildFelStalkerTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // Check for Wild Fel Stalker pets
-    if (bot->FindNearestCreature(NPC_WILD_FEL_STALKER, 100.0f, true))
-        return true;
-        
-    Unit* olm = bot->FindNearestCreature(NPC_OLM_THE_SUMMONER, 150.0f);
-    if (!olm)
-        return false;
-        
-    // Check if Olm is summoning
-    if (IsCastingSpell(olm, SPELL_SUMMON_WFH))
-        return true;
+    // ICC Pattern: Simple check for spawned adds - no complex validation
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_WILD_FEL_STALKER)
+        {
+            return true; // Found spawned Wild Fel Stalker
+        }
+    }
     
     return false;
 }
@@ -427,11 +416,11 @@ bool BlindeyeHealTrigger::IsActive()
         return false;
         
     // Check if Blindeye is casting Heal (should be interrupted)
-    if (IsCastingSpell(blindeye, SPELL_HEAL))
+    if (IsCastingSpell(blindeye, BLINDEYE_SPELL_HEAL))
         return true;
         
     // Check if Blindeye is casting Prayer of Healing
-    if (IsCastingSpell(blindeye, SPELL_PRAYER_OH))
+    if (IsCastingSpell(blindeye, BLINDEYE_SPELL_PRAYER_OH))
         return true;
     
     return false;
@@ -460,13 +449,13 @@ bool BlindeyeShieldTrigger::IsActive()
     {
         if (Unit* councilMember = bot->FindNearestCreature(npcId, 150.0f))
         {
-            if (councilMember->HasAura(SPELL_GREATER_PW_SHIELD))
+            if (councilMember->HasAura(BLINDEYE_SPELL_GREATER_PW_SHIELD))
                 return true;
         }
     }
     
     // Check if Blindeye is casting Greater Power Word: Shield
-    if (IsCastingSpell(blindeye, SPELL_GREATER_PW_SHIELD))
+    if (IsCastingSpell(blindeye, BLINDEYE_SPELL_GREATER_PW_SHIELD))
         return true;
     
     return false;
