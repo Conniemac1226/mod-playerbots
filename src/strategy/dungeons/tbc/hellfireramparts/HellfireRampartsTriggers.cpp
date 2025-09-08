@@ -215,31 +215,62 @@ bool NazanBellowingRoarTrigger::IsActive()
     return bot->HasAura(SPELL_BELLOWING_ROAR);
 }
 
-bool OmorProactiveSpreadTrigger::IsActive()
+bool OmorTreacheryCastTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    // ICC Pattern: Simple boss existence check
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss)
         return false;
 
-    // PROACTIVE SPREAD: Always keep bots spread during Omor fight
-    // Check if any ally is too close (maintain 18+ yard safety zone)
+    // CRITICAL: Detect when Omor STARTS casting Treacherous Aura
+    // This is the moment all bots need to drop everything and spread immediately
+    if (boss->HasUnitState(UNIT_STATE_CASTING) && 
+        boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA))
+    {
+        return true;
+    }
+
+    return false;
+}
+
+bool OmorDebuffAvoidanceTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if any group member has Treacherous Aura debuff
+    // Bots need to stay away from debuffed players
     GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
     for (const auto& guid : friendlyUnits)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (unit && bot != unit && unit->IsAlive())
+        if (unit && unit != bot && unit->IsAlive() && unit->HasAura(SPELL_TREACHEROUS_AURA))
         {
-            float distance = bot->GetDistance(unit);
-            if (distance < 18.0f) // Trigger spread when within 18 yards
-            {
-                return true; // Bot needs to maintain distance from allies
-            }
+            // Someone has the debuff - check if we're too close
+            if (bot->GetDistance(unit) < 15.0f)
+                return true;
         }
     }
 
     return false;
+}
+
+bool OmorClearSpreadTrigger::IsActive()
+{
+    // Trigger when we have spread distance set but should clear it
+    if (AI_VALUE(float, "disperse distance") <= 0.0f)
+        return false;
+        
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss)
+        return true; // Clear spread when boss is gone
+    
+    // Clear spread when Omor finishes casting Treacherous Aura
+    return !(boss->HasUnitState(UNIT_STATE_CASTING) && 
+             boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA));
 }

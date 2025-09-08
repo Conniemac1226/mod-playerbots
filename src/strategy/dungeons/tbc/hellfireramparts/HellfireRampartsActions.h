@@ -107,10 +107,26 @@ public:
 };
 
 
-class OmorProactiveSpreadAction : public MovementAction
+class OmorTreacherySpreadAction : public MovementAction
 {
 public:
-    OmorProactiveSpreadAction(PlayerbotAI* ai) : MovementAction(ai, "omor proactive spread") {}
+    OmorTreacherySpreadAction(PlayerbotAI* ai) : MovementAction(ai, "omor treachery spread") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class OmorDebuffAvoidanceAction : public MovementAction
+{
+public:
+    OmorDebuffAvoidanceAction(PlayerbotAI* ai) : MovementAction(ai, "omor debuff avoidance") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class OmorClearSpreadAction : public Action
+{
+public:
+    OmorClearSpreadAction(PlayerbotAI* ai) : Action(ai, "omor clear spread") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

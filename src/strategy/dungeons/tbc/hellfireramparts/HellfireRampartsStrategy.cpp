@@ -31,9 +31,18 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
              NextAction::array(0, new NextAction("interrupt omor shadow bolt", ACTION_INTERRUPT + 2), nullptr)));
     
 
-    // PROACTIVE SPREAD - ESSENTIAL to prevent death from aura spread
-    triggers.push_back(new TriggerNode("omor proactive spread", 
-             NextAction::array(0, new NextAction("omor proactive spread", ACTION_NORMAL - 5), nullptr)));
+    // HEROIC-READY SPREAD MECHANICS - IMMEDIATE RESPONSE TO TREACHERY CAST
+    // CRITICAL: Highest priority when Omor starts casting - drop everything and spread
+    triggers.push_back(new TriggerNode("omor treachery cast",
+             NextAction::array(0, new NextAction("omor treachery spread", ACTION_EMERGENCY + 5), nullptr)));
+    
+    // DEBUFF AVOIDANCE - Stay away from players with Treacherous Aura
+    triggers.push_back(new TriggerNode("omor debuff avoidance",
+             NextAction::array(0, new NextAction("omor debuff avoidance", ACTION_EMERGENCY + 1), nullptr)));
+    
+    // CLEAR SPREAD - Remove spread when cast finishes to prevent permanent spreading
+    triggers.push_back(new TriggerNode("omor clear spread",
+             NextAction::array(0, new NextAction("omor clear spread", ACTION_NORMAL + 5), nullptr)));
     
     // Boss: Vazruden & Nazan
     // Avoid Liquid Fire patches

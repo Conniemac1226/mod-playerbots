@@ -524,68 +524,85 @@ bool NazanBellowingRoarAction::isUseful()
     return bot->HasAura(SPELL_BELLOWING_ROAR);
 }
 
-bool OmorProactiveSpreadAction::isUseful()
+
+// NEW HEROIC-READY SPREAD MECHANICS FOR OMOR
+
+bool OmorTreacherySpreadAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // Only spread if allies are dangerously close (< 18 yards)
-    GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
-    for (const auto& guid : friendlyUnits)
-    {
-        Unit* unit = botAI->GetUnit(guid);
-        if (unit && bot != unit && unit->IsAlive())
-        {
-            float distance = bot->GetDistance(unit);
-            if (distance < 18.0f) // Match trigger threshold
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
+    // Ulduar/ICC Pattern: Use disperse distance AI value for immediate spread
+    // RESEARCHED: Same pattern used in RaidUlduarActions.cpp:2269 (Mimiron) and RaidIccActions.cpp
+    SET_AI_VALUE(float, "disperse distance", 20.0f);
+    
+    return true;
 }
 
-bool OmorProactiveSpreadAction::Execute(Event event)
+bool OmorTreacherySpreadAction::isUseful()
+{
+    // Always useful when trigger activates - this is emergency spread
+    return true;
+}
+
+bool OmorDebuffAvoidanceAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-        
-    // Find closest ally to spread away from
-    Unit* closestAlly = nullptr;
-    float closestDistance = 18.0f; // Check within 18 yards
+    // Find the closest player with Treacherous Aura debuff
+    Unit* debuffedPlayer = nullptr;
+    float closestDistance = 15.0f;
     
     GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
     for (const auto& guid : friendlyUnits)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (unit && bot != unit && unit->IsAlive())
+        if (unit && unit != bot && unit->IsAlive() && unit->HasAura(SPELL_TREACHEROUS_AURA))
         {
             float distance = bot->GetDistance(unit);
             if (distance < closestDistance)
             {
                 closestDistance = distance;
-                closestAlly = unit;
+                debuffedPlayer = unit;
             }
         }
     }
-
-    if (closestAlly)
+    
+    if (debuffedPlayer)
     {
-        // Move away from the closest ally to maintain spread
-        return MoveAway(closestAlly, 20.0f, false);
+        // Move away from debuffed player immediately - use 25.0f for extra safety in heroic
+        return MoveAway(debuffedPlayer, 25.0f - closestDistance, false);
     }
 
     return false;
+}
+
+bool OmorDebuffAvoidanceAction::isUseful()
+{
+    return true; // Always useful when trigger activates
+}
+
+bool OmorClearSpreadAction::Execute(Event event)
+{
+    // Clear the disperse distance when cast finishes or fight ends
+    if (AI_VALUE(float, "disperse distance") > 0.0f)
+    {
+        SET_AI_VALUE(float, "disperse distance", 0.0f);
+        return true;
+    }
+    return false;
+}
+
+bool OmorClearSpreadAction::isUseful()
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss)
+        return true; // Clear spread when boss is gone
+    
+    // Clear spread when Omor is not casting Treacherous Aura
+    return !(boss->HasUnitState(UNIT_STATE_CASTING) && 
+             boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA));
 }

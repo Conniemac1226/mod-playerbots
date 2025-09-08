@@ -17,7 +17,9 @@ public:
         creators["interrupt omor shadow bolt"] = &HellfireRampartsActionContext::interrupt_omor_shadow_bolt;
         creators["omor treacherous aura"] = &HellfireRampartsActionContext::omor_treacherous_aura;
         creators["omor demonic shield"] = &HellfireRampartsActionContext::omor_demonic_shield;
-        creators["omor proactive spread"] = &HellfireRampartsActionContext::omor_proactive_spread;
+        creators["omor treachery spread"] = &HellfireRampartsActionContext::omor_treachery_spread;
+        creators["omor debuff avoidance"] = &HellfireRampartsActionContext::omor_debuff_avoidance;
+        creators["omor clear spread"] = &HellfireRampartsActionContext::omor_clear_spread;
         creators["avoid liquid fire"] = &HellfireRampartsActionContext::avoid_liquid_fire;
         creators["avoid cone of fire"] = &HellfireRampartsActionContext::avoid_cone_of_fire;
         creators["attack nazan first"] = &HellfireRampartsActionContext::attack_nazan_first;
@@ -33,7 +35,9 @@ private:
     static Action* interrupt_omor_shadow_bolt(PlayerbotAI* ai) { return new OmorShadowBoltInterruptAction(ai); }
     static Action* omor_treacherous_aura(PlayerbotAI* ai) { return new OmorTreacherousAuraAction(ai); }
     static Action* omor_demonic_shield(PlayerbotAI* ai) { return new OmorDemonicShieldAction(ai); }
-    static Action* omor_proactive_spread(PlayerbotAI* ai) { return new OmorProactiveSpreadAction(ai); }
+    static Action* omor_treachery_spread(PlayerbotAI* ai) { return new OmorTreacherySpreadAction(ai); }
+    static Action* omor_debuff_avoidance(PlayerbotAI* ai) { return new OmorDebuffAvoidanceAction(ai); }
+    static Action* omor_clear_spread(PlayerbotAI* ai) { return new OmorClearSpreadAction(ai); }
     static Action* avoid_liquid_fire(PlayerbotAI* ai) { return new NazanLiquidFireAction(ai); }
     static Action* avoid_cone_of_fire(PlayerbotAI* ai) { return new NazanConeOfFireAction(ai); }
     static Action* attack_nazan_first(PlayerbotAI* ai) { return new AttackNazanFirstAction(ai); }
