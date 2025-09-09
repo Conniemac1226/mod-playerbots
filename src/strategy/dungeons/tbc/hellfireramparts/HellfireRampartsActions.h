@@ -35,6 +35,8 @@ enum OmorSpells
     SPELL_SHADOW_BOLT           = 30686,
     SPELL_SUMMON_FIENDISH_HOUND = 30707,
     SPELL_TREACHEROUS_AURA      = 30695,
+    // Some cores apply a different debuff aura id on players (heroic variant)
+    SPELL_TREACHEROUS_AURA_H    = 37566,
     SPELL_DEMONIC_SHIELD        = 31901
 };
 

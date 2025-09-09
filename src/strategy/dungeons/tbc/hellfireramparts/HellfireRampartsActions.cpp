@@ -1,6 +1,7 @@
 #include "HellfireRampartsActions.h"
 #include "Playerbots.h"
 #include "Group.h"
+#include <cfloat>
 
 // Watchkeeper Gargolmar - Attack Hellfire Watchers at 50% health
 bool AttackHellfireWatcherAction::Execute(Event event)
@@ -219,8 +220,14 @@ bool OmorTreacherousAuraAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Treacherous Aura from boss_omor_the_unscarred.cpp:36
-    if (bot->HasAura(SPELL_TREACHEROUS_AURA))
+    // Some cores use a different aura id on players (heroic): SPELL_TREACHEROUS_AURA_H
+    if (bot->HasAura(SPELL_TREACHEROUS_AURA) || bot->HasAura(SPELL_TREACHEROUS_AURA_H))
     {
+        // Emergency: ensure immediate group spread even if cast trigger was missed
+        if (AI_VALUE(float, "disperse distance") < 15.0f)
+        {
+            SET_AI_VALUE(float, "disperse distance", 20.0f);
+        }
         // Dispel if possible
         Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
         if (spellIdsValue)
@@ -235,6 +242,8 @@ bool OmorTreacherousAuraAction::Execute(Event event)
                 }
             }
         }
+        // Even if we cannot dispel, consider the spread action handled
+        return true;
     }
 
     return false;
@@ -554,13 +563,13 @@ bool OmorDebuffAvoidanceAction::Execute(Event event)
 
     // Find the closest player with Treacherous Aura debuff
     Unit* debuffedPlayer = nullptr;
-    float closestDistance = 15.0f;
+    float closestDistance = FLT_MAX;
     
     GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
     for (const auto& guid : friendlyUnits)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (unit && unit != bot && unit->IsAlive() && unit->HasAura(SPELL_TREACHEROUS_AURA))
+        if (unit && unit != bot && unit->IsAlive() && (unit->HasAura(SPELL_TREACHEROUS_AURA) || unit->HasAura(SPELL_TREACHEROUS_AURA_H)))
         {
             float distance = bot->GetDistance(unit);
             if (distance < closestDistance)
@@ -573,8 +582,17 @@ bool OmorDebuffAvoidanceAction::Execute(Event event)
     
     if (debuffedPlayer)
     {
-        // Move away from debuffed player immediately - use 25.0f for extra safety in heroic
-        return MoveAway(debuffedPlayer, 25.0f - closestDistance, false);
+        // Ensure group-wide spread is active during this window
+        if (AI_VALUE(float, "disperse distance") < 15.0f)
+        {
+            SET_AI_VALUE(float, "disperse distance", 20.0f);
+        }
+        // Move away only if too close
+        if (closestDistance < 15.0f)
+        {
+            return MoveAway(debuffedPlayer, 25.0f - closestDistance, false);
+        }
+        return true;
     }
 
     return false;
