@@ -493,8 +493,12 @@ bool NetherspiteBeamsTrigger::IsActive()
         return false;
 
     Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
-    // Simplified - would need actual beam detection
-    return netherspite && netherspite->IsInCombat();
+    if (!netherspite || !netherspite->IsInCombat())
+        return false;
+        
+    // Only trigger during portal phase (when NOT banished)
+    // Banish aura ID = 38524, when this is present, no beams are active
+    return !netherspite->HasAura(38524);
 }
 
 bool NetherspiteVoidZoneTrigger::IsActive()
@@ -657,17 +661,24 @@ bool ChessEventActiveTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if Echo of Medivh is present (Chess Event controller)
-    Unit* medivh = bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 100.0f, true);
-    if (!medivh)
-        return false;
-
-    // Check if bot is possessing a chess piece (vehicle system)
+    // First check if bot is already possessing a chess piece (priority check)
     if (bot->GetVehicleBase())
         return true;
 
-    // Check if chess event is in progress (Game in Session aura on Medivh)
+    // Check if Echo of Medivh is present (Chess Event controller)
+    Unit* medivh = bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 100.0f);
+    if (!medivh)
+        return false;
+
+    // Check if chess event is in progress - multiple detection methods
     if (medivh->HasAura(SPELL_GAME_IN_SESSION))
+        return true;
+        
+    // Check if any chess pieces exist nearby (alternative detection)
+    if (bot->FindNearestCreature(NPC_CHESS_KING_LLANE, 50.0f) ||
+        bot->FindNearestCreature(NPC_WARCHIEF_BLACKHAND, 50.0f) ||
+        bot->FindNearestCreature(NPC_HUMAN_FOOTMAN, 50.0f) ||
+        bot->FindNearestCreature(NPC_ORC_GRUNT, 50.0f))
         return true;
 
     return false;

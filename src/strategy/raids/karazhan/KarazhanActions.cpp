@@ -910,15 +910,37 @@ bool AranBlizzardAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Move out of Blizzard
+    Unit* aran = bot->FindNearestCreature(NPC_SHADE_OF_ARAN, 100.0f);
+    if (!aran)
+        return false;
+
+    // Proactive movement when Aran starts casting OR when already affected
+    bool shouldMove = false;
+    
+    // Check if already affected by blizzard
     if (bot->HasAura(SPELL_CIRCULAR_BLIZZARD))
+        shouldMove = true;
+    
+    // Check if Aran is casting blizzard (proactive movement)
+    if (aran->HasUnitState(UNIT_STATE_CASTING))
+    {
+        CurrentSpellTypes spellType = CURRENT_GENERIC_SPELL;
+        if (aran->GetCurrentSpell(spellType))
+        {
+            uint32 spellId = aran->GetCurrentSpell(spellType)->m_spellInfo->Id;
+            if (spellId == SPELL_CIRCULAR_BLIZZARD)
+                shouldMove = true;
+        }
+    }
+
+    if (shouldMove)
     {
         // Move to center of room (safe spot)
         float centerX = -11158.0f;
         float centerY = -1902.0f;
         float centerZ = 232.0f;
         
-        return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
+        return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
     }
     
     return false;
@@ -1108,30 +1130,46 @@ bool NetherspiteBeamAction::Execute(Event event)
     // Red Beam (Perseverance) - Tanks
     if (botAI->IsTank(bot))
     {
-        // Check if we need to rotate (30 second debuff duration)
+        // Check if we need to rotate based on debuff stacks
         if (beamState.redBeamHolder == botGuid)
         {
-            if (bot->HasAura(38280) && bot->GetAura(38280)->GetDuration() < 5000) // About to expire
+            // Stay in beam unless we have high stacks or debuff is expiring
+            if (bot->HasAura(38280)) 
             {
-                // Need to swap out
-                beamState.redBeamHolder = ObjectGuid::Empty;
+                Aura* debuff = bot->GetAura(38280);
+                if (debuff->GetStackAmount() >= 4 || debuff->GetDuration() < 3000)
+                {
+                    // Need to swap out - high stacks or about to expire
+                    beamState.redBeamHolder = ObjectGuid::Empty;
+                    beamState.lastBeamSwitch = currentTime;
+                    return false;
+                }
+                // Continue holding beam
                 return false;
             }
         }
         else if (beamState.redBeamHolder.IsEmpty() || 
-                 (currentTime - beamState.lastBeamSwitch > 30000))
+                 (currentTime - beamState.lastBeamSwitch > 25000)) // Allow rotation after 25s
         {
             shouldTakeRed = true;
         }
     }
     // Blue Beam (Dominance) - Healers
-    else if (PlayerbotAI::IsHeal(bot))
+    else if (botAI->IsHeal(bot))
     {
         if (beamState.blueBeamHolder == botGuid)
         {
-            if (bot->HasAura(38281) && bot->GetAura(38281)->GetDuration() < 5000)
+            // Stay in beam unless debuff is expiring - healers typically don't need to rotate
+            if (bot->HasAura(38281))
             {
-                beamState.blueBeamHolder = ObjectGuid::Empty;
+                Aura* debuff = bot->GetAura(38281);
+                if (debuff->GetDuration() < 3000)
+                {
+                    beamState.blueBeamHolder = ObjectGuid::Empty;
+                    beamState.lastBeamSwitch = currentTime;
+                    return false;
+                }
+                // Continue holding beam
                 return false;
             }
         }
@@ -1140,14 +1178,22 @@ bool NetherspiteBeamAction::Execute(Event event)
             shouldTakeBlue = true;
         }
     }
-    // Green Beam (Serenity) - DPS
-    else if (botAI->IsDps(bot))
+    // Green Beam (Serenity) - DPS  
+    else if (!botAI->IsTank(bot) && !botAI->IsHeal(bot))
     {
         if (beamState.greenBeamHolder == botGuid)
         {
-            if (bot->HasAura(38282) && bot->GetAura(38282)->GetDuration() < 5000)
+            // Stay in beam unless debuff is expiring - DPS typically don't need to rotate often
+            if (bot->HasAura(38282))
             {
-                beamState.greenBeamHolder = ObjectGuid::Empty;
+                Aura* debuff = bot->GetAura(38282);
+                if (debuff->GetDuration() < 3000)
+                {
+                    beamState.greenBeamHolder = ObjectGuid::Empty;
+                    beamState.lastBeamSwitch = currentTime;
+                    return false;
+                }
+                // Continue holding beam
                 return false;
             }
         }
@@ -1165,7 +1211,7 @@ bool NetherspiteBeamAction::Execute(Event event)
         float y = (NETHERSPITE_RED_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
         float z = netherspite->GetPositionZ();
         
-        if (MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL))
+        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
         {
             beamState.redBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1179,7 +1225,7 @@ bool NetherspiteBeamAction::Execute(Event event)
         float y = (NETHERSPITE_BLUE_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
         float z = netherspite->GetPositionZ();
         
-        if (MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL))
+        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
         {
             beamState.blueBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1193,7 +1239,7 @@ bool NetherspiteBeamAction::Execute(Event event)
         float y = (NETHERSPITE_GREEN_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
         float z = netherspite->GetPositionZ();
         
-        if (MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL))
+        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
         {
             beamState.greenBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1504,7 +1550,40 @@ bool ChessEventMoveAction::Execute(Event event)
     // Check if bot is controlling a chess piece (vehicle)
     Unit* vehicle = bot->GetVehicleBase();
     if (!vehicle)
+    {
+        // Try to possess a chess piece if event is active
+        Unit* medivh = bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 100.0f);
+        if (!medivh)
+            return false;
+
+        // Find available chess pieces to possess (Alliance pieces for players)
+        std::vector<uint32> chessPieceIds = {
+            NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC, 
+            NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE
+        };
+
+        for (uint32 pieceId : chessPieceIds)
+        {
+            Unit* piece = bot->FindNearestCreature(pieceId, 50.0f);
+            if (piece && piece->IsAlive() && !piece->GetCharmer())
+            {
+                // Attempt to possess the piece - interact with it
+                if (bot->GetDistance(piece) > 5.0f)
+                {
+                    // Move closer to the piece first
+                    bot->GetMotionMaster()->MovePoint(0, piece->GetPositionX(), piece->GetPositionY(), piece->GetPositionZ());
+                    return true;
+                }
+                else
+                {
+                    // Interact with the chess piece to possess it
+                    bot->SetTarget(piece->GetGUID());
+                    return true;
+                }
+            }
+        }
         return false;
+    }
         
     // Identify controlled piece type
     uint32 pieceEntry = vehicle->GetEntry();
@@ -1512,35 +1591,63 @@ bool ChessEventMoveAction::Execute(Event event)
                      pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_ORC_NECROLYTE);
     bool isKing = (pieceEntry == NPC_CHESS_KING_LLANE || pieceEntry == NPC_WARCHIEF_BLACKHAND);
     
-    // Find enemy king
-    Unit* enemyKing = nullptr;
-    if (pieceEntry <= NPC_HUMAN_CLERIC) // Human side
-        enemyKing = bot->FindNearestCreature(NPC_WARCHIEF_BLACKHAND, 100.0f);
-    else // Orc side
-        enemyKing = bot->FindNearestCreature(NPC_CHESS_KING_LLANE, 100.0f);
-        
-    if (!enemyKing)
-        return false;
-        
-    // Movement strategy based on piece type
-    float desiredDistance = isRanged ? 20.0f : 5.0f;
-    float currentDistance = vehicle->GetDistance(enemyKing);
+    // Find best target based on piece type and strategy
+    Unit* target = nullptr;
+    std::vector<uint32> enemyPieceIds;
     
-    // King pieces should stay back
-    if (isKing)
-        desiredDistance = 30.0f;
-    
-    // Move to optimal range
-    if (fabs(currentDistance - desiredDistance) > 3.0f)
+    // Determine enemy pieces based on our side
+    if (pieceEntry <= NPC_HUMAN_CLERIC) // Human side - target Orc pieces
     {
-        float angle = vehicle->GetAngle(enemyKing);
-        float moveDistance = currentDistance > desiredDistance ? -5.0f : 5.0f;
+        enemyPieceIds = {NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE, 
+                        NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
+    }
+    else // Orc side - target Human pieces
+    {
+        enemyPieceIds = {NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC,
+                        NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
+    }
+    
+    // Find nearest enemy piece as target
+    float closestDistance = 100.0f;
+    for (uint32 enemyId : enemyPieceIds)
+    {
+        Unit* enemy = bot->FindNearestCreature(enemyId, 50.0f);
+        if (enemy && enemy->IsAlive())
+        {
+            float distance = vehicle->GetDistance(enemy);
+            if (distance < closestDistance)
+            {
+                target = enemy;
+                closestDistance = distance;
+            }
+        }
+    }
+    
+    if (!target)
+        return false;
+    
+    // Movement strategy based on piece type
+    float desiredDistance = 5.0f; // Default melee range
+    
+    if (isRanged)
+        desiredDistance = 15.0f; // Ranged pieces stay back
+    else if (isKing)
+        desiredDistance = 25.0f; // Kings stay furthest back
+        
+    float currentDistance = vehicle->GetDistance(target);
+    
+    // Move to optimal range for attack
+    if (fabs(currentDistance - desiredDistance) > 2.0f)
+    {
+        // Calculate movement position
+        float angle = vehicle->GetAngle(target);
+        float moveDistance = currentDistance > desiredDistance ? -3.0f : 3.0f;
         
         float x = vehicle->GetPositionX() + cos(angle) * moveDistance;
         float y = vehicle->GetPositionY() + sin(angle) * moveDistance;
         float z = vehicle->GetPositionZ();
         
-        // Chess pieces move in straight lines
+        // Move towards or away from target
         bot->GetMotionMaster()->MovePoint(0, x, y, z);
         return true;
     }
