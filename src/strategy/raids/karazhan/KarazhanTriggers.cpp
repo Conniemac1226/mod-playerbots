@@ -316,9 +316,17 @@ bool CuratorFlareTrigger::IsActive()
     if (!curator->GetVictim())
         return false;
 
-    // NOW check for flares (only after combat initiated)
-    Unit* flare = bot->FindNearestCreature(NPC_ASTRAL_FLARE, 100.0f, true);
-    return flare && flare->IsAlive() && flare->IsInCombat();
+    // Only check for flares during actual encounter and within reasonable range
+    Unit* flare = bot->FindNearestCreature(NPC_ASTRAL_FLARE, 40.0f, true);
+    if (!flare || !flare->IsAlive() || !flare->IsInCombat())
+        return false;
+    
+    // Additional check: ensure flare is accessible (not through walls)
+    // Simple line-of-sight check
+    if (!bot->IsWithinLOSInMap(flare))
+        return false;
+        
+    return true;
 }
 
 bool CuratorEvocationTrigger::IsActive()
