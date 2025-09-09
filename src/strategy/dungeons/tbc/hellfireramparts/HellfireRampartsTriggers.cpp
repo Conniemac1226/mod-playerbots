@@ -97,8 +97,9 @@ bool OmorTreacherousAuraTrigger::IsActive()
     if (!bot)
         return false;
 
-    // RESEARCHED: Treacherous Aura - boss_omor_the_unscarred.cpp:76
-    return bot->HasAura(SPELL_TREACHEROUS_AURA);
+    // RESEARCHED: Treacherous Aura - boss_omor_the_unscarred.cpp
+    // Some cores apply heroic variant aura id to players
+    return bot->HasAura(SPELL_TREACHEROUS_AURA) || bot->HasAura(SPELL_TREACHEROUS_AURA_H);
 }
 
 // Omor Demonic Shield at 21% health
@@ -221,20 +222,16 @@ bool OmorTreacheryCastTrigger::IsActive()
     if (!bot)
         return false;
 
-    // ICC Pattern: Simple boss existence check
-    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
-    if (!boss)
+    // Reliable boss detection via NPC entry instead of name lookup
+    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 100.0f, true);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // CRITICAL: Detect when Omor STARTS casting Treacherous Aura
-    // This is the moment all bots need to drop everything and spread immediately
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && 
-        boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA))
-    {
-        return true;
-    }
-
-    return false;
+    // Detect when Omor STARTS casting Treacherous Aura
+    // Spell ID verified in server script (30695); include heroic variant (37566) if used as cast on some cores
+    if (!boss->HasUnitState(UNIT_STATE_CASTING))
+        return false;
+    return boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA) || boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA_H);
 }
 
 bool OmorDebuffAvoidanceTrigger::IsActive()
@@ -249,7 +246,7 @@ bool OmorDebuffAvoidanceTrigger::IsActive()
     for (const auto& guid : friendlyUnits)
     {
         Unit* unit = botAI->GetUnit(guid);
-        if (unit && unit != bot && unit->IsAlive() && unit->HasAura(SPELL_TREACHEROUS_AURA))
+        if (unit && unit != bot && unit->IsAlive() && (unit->HasAura(SPELL_TREACHEROUS_AURA) || unit->HasAura(SPELL_TREACHEROUS_AURA_H)))
         {
             // Someone has the debuff - check if we're too close
             if (bot->GetDistance(unit) < 15.0f)
@@ -265,12 +262,17 @@ bool OmorClearSpreadTrigger::IsActive()
     // Trigger when we have spread distance set but should clear it
     if (AI_VALUE(float, "disperse distance") <= 0.0f)
         return false;
-        
-    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+
+    // Use NPC entry for robust boss detection
+    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 100.0f, true);
     if (!boss)
         return true; // Clear spread when boss is gone
-    
-    // Clear spread when Omor finishes casting Treacherous Aura
-    return !(boss->HasUnitState(UNIT_STATE_CASTING) && 
-             boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA));
+
+    // Clear spread when Omor finishes casting Treacherous Aura (either id if used for cast)
+    if (boss->HasUnitState(UNIT_STATE_CASTING))
+    {
+        if (boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA) || boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA_H))
+            return false;
+    }
+    return true;
 }
