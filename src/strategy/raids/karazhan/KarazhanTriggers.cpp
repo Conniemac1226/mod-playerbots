@@ -45,31 +45,6 @@ static bool IsCastingAnySpell(Unit* unit, std::initializer_list<uint32> spellIds
     return false;
 }
 
-bool AttumenEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-
-    // Check if Attumen has spawned (phase 2 started)
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_ATTUMEN_UNMOUNTED)
-            return true;
-    }
-    return false;
-}
-
 bool AttumenMountedTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -157,20 +132,14 @@ bool AttumenShadowcleaveTrigger::IsActive()
 }
 
 // Moroes triggers
-bool MoroesEngagedTrigger::IsActive()
+bool MoroesAddsTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f, true);
-    return (moroes != nullptr);
-}
-
-bool MoroesAddsTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
+    // Exclude healers - WotLK pattern per CLAUDE.md:705
+    if (botAI->IsHeal(bot))
         return false;
 
     // WotLK Pattern: Check if Moroes is in combat first (tank has engaged)
@@ -215,23 +184,6 @@ bool MoroesGarroteTrigger::IsActive()
 }
 
 // Maiden of Virtue triggers
-bool MaidenEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* maiden = bot->FindNearestCreature(NPC_MAIDEN_OF_VIRTUE, 100.0f, true);
-    bool result = (maiden != nullptr);
-    
-    if (maiden)
-    {
-        // Less restrictive - just need the boss to exist and be alive
-        return true;
-    }
-    return false;
-}
-
 bool MaidenRepentanceTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -300,28 +252,6 @@ bool MaidenHolyGroundTrigger::IsActive()
 }
 
 // Opera Event triggers
-bool OperaEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    uint32 operaNpcs[] = {
-        NPC_DOROTHEE, NPC_ROAR, NPC_STRAWMAN, NPC_TINHEAD, NPC_CRONE,
-        NPC_ROMULO, NPC_JULIANNE, NPC_BIG_BAD_WOLF
-    };
-
-    for (uint32 npcId : operaNpcs)
-    {
-        Unit* operaNpc = bot->FindNearestCreature(npcId, 100.0f, true);
-        if (operaNpc && operaNpc->IsInCombat() && operaNpc->GetVictim())
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool OperaOzEngagedTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -367,22 +297,6 @@ bool OperaWolfTrigger::IsActive()
 }
 
 // Curator triggers
-bool CuratorEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* curator = bot->FindNearestCreature(NPC_CURATOR, 100.0f, true);
-    bool result = (curator != nullptr);
-    
-    if (curator)
-    {
-        return true;
-    }
-    return false;
-}
-
 bool CuratorFlareTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -441,22 +355,6 @@ bool CuratorEvocationTrigger::IsActive()
 }
 
 // Shade of Aran triggers
-bool AranEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* aran = bot->FindNearestCreature(NPC_SHADE_OF_ARAN, 100.0f, true);
-    bool result = (aran != nullptr);
-    
-    if (aran)
-    {
-        return true;
-    }
-    return false;
-}
-
 bool AranFlameWreathTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -519,64 +417,7 @@ bool AranDragonsBreathTrigger::IsActive()
     return false;
 }
 
-bool AranArcanExplosionTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* aran = bot->FindNearestCreature(NPC_SHADE_OF_ARAN, 100.0f);
-    if (!aran)
-        return false;
-
-    // Arcane Explosion at low health - check if Aran is casting it
-    if (aran->GetHealthPct() < 40.0f && aran->HasUnitState(UNIT_STATE_CASTING))
-    {
-        CurrentSpellTypes spellType = CURRENT_GENERIC_SPELL;
-        if (aran->GetCurrentSpell(spellType))
-        {
-            uint32 spellId = aran->GetCurrentSpell(spellType)->m_spellInfo->Id;
-            // Arcane Explosion spell ID (29973)
-            if (spellId == 29973 && bot->GetDistance(aran) < 10.0f)
-                return true;
-        }
-    }
-    
-    return false;
-}
-
-bool AranMassPolymorphTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* aran = bot->FindNearestCreature(NPC_SHADE_OF_ARAN, 100.0f);
-    if (!aran)
-        return false;
-
-    // Check if Aran is casting Mass Polymorph
-    // This spell usually has a distinctive cast time
-    if (IsCastingSpell(aran, SPELL_MASS_POLYMORPH))
-        return true;
-    
-    // Also check if we're already polymorphed
-    if (bot->HasAura(SPELL_MASS_POLYMORPH))
-        return true;
-    
-    return false;
-}
-
 // Terestian Illhoof triggers
-bool IllhoofEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    return bot->FindNearestCreature(NPC_TERESTIAN_ILLHOOF, 100.0f, true) != nullptr;
-}
-
 bool IllhoofDemonChainsTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -645,15 +486,6 @@ bool IllhoofImpsTrigger::IsActive()
 }
 
 // Netherspite triggers
-bool NetherspiteEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    return bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f, true) != nullptr;
-}
-
 bool NetherspiteBeamsTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -693,15 +525,6 @@ bool NetherspiteVoidZoneTrigger::IsActive()
 }
 
 // Prince Malchezaar triggers
-bool MalchezaarEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    return bot->FindNearestCreature(NPC_PRINCE_MALCHEZAAR, 100.0f, true) != nullptr;
-}
-
 bool MalchezaarInfernalTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -759,15 +582,6 @@ bool MalchezaarEnfeebleTrigger::IsActive()
 }
 
 // Nightbane triggers
-bool NightbaneEngagedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    return bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f, true) != nullptr;
-}
-
 bool NightbaneAirPhaseTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
