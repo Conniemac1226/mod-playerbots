@@ -790,10 +790,19 @@ bool CuratorFlareAction::Execute(Event event)
     if (currentTarget && currentTarget->GetEntry() == NPC_ASTRAL_FLARE)
         return false;
 
-    // Find nearest Astral Flare
-    Unit* flare = bot->FindNearestCreature(NPC_ASTRAL_FLARE, 100.0f, true);
+    // Find nearest Astral Flare with distance and accessibility checks
+    Unit* flare = bot->FindNearestCreature(NPC_ASTRAL_FLARE, 40.0f, true);
     if (flare && flare->IsAlive() && flare->IsInCombat())
     {
+        // Ensure flare is accessible and not through walls
+        if (!bot->IsWithinLOSInMap(flare))
+            return false;
+            
+        // Validate we can reach the flare (not too far vertically)
+        float heightDiff = fabs(bot->GetPositionZ() - flare->GetPositionZ());
+        if (heightDiff > 15.0f) // Reasonable height difference
+            return false;
+            
         // WotLK pattern: AttackAction inheritance enables actual combat
         return Attack(flare);
     }
@@ -806,7 +815,15 @@ bool CuratorFlareAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->FindNearestCreature(NPC_ASTRAL_FLARE, 100.0f, true) != nullptr;
+        
+    // Only useful if Curator is alive and in combat
+    Unit* curator = bot->FindNearestCreature(NPC_CURATOR, 100.0f, true);
+    if (!curator || !curator->IsAlive() || !curator->IsInCombat())
+        return false;
+        
+    // Check for accessible flares
+    Unit* flare = bot->FindNearestCreature(NPC_ASTRAL_FLARE, 40.0f, true);
+    return flare && flare->IsAlive() && bot->IsWithinLOSInMap(flare);
 }
 
 bool CuratorEvocationAction::Execute(Event event)
