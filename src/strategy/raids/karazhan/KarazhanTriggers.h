@@ -8,13 +8,6 @@
 #include "KarazhanActions.h"
 
 // Attumen the Huntsman triggers
-class AttumenEngagedTrigger : public Trigger
-{
-public:
-    AttumenEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "attumen engaged") {}
-    bool IsActive() override;
-};
-
 class AttumenMountedTrigger : public Trigger
 {
 public:
@@ -37,13 +30,6 @@ public:
 };
 
 // Moroes triggers
-class MoroesEngagedTrigger : public Trigger
-{
-public:
-    MoroesEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "moroes engaged") {}
-    bool IsActive() override;
-};
-
 class MoroesAddsTrigger : public Trigger
 {
 public:
@@ -59,13 +45,6 @@ public:
 };
 
 // Maiden of Virtue triggers
-class MaidenEngagedTrigger : public Trigger
-{
-public:
-    MaidenEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "maiden engaged") {}
-    bool IsActive() override;
-};
-
 class MaidenRepentanceTrigger : public Trigger
 {
 public:
@@ -81,13 +60,6 @@ public:
 };
 
 // Opera Event triggers
-class OperaEngagedTrigger : public Trigger
-{
-public:
-    OperaEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "opera engaged") {}
-    bool IsActive() override;
-};
-
 class OperaOzEngagedTrigger : public Trigger
 {
 public:
@@ -110,13 +82,6 @@ public:
 };
 
 // Curator triggers
-class CuratorEngagedTrigger : public Trigger
-{
-public:
-    CuratorEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "curator engaged") {}
-    bool IsActive() override;
-};
-
 class CuratorFlareTrigger : public Trigger
 {
 public:
@@ -132,13 +97,6 @@ public:
 };
 
 // Shade of Aran triggers
-class AranEngagedTrigger : public Trigger
-{
-public:
-    AranEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "aran engaged") {}
-    bool IsActive() override;
-};
-
 class AranFlameWreathTrigger : public Trigger
 {
 public:
@@ -160,28 +118,6 @@ public:
     bool IsActive() override;
 };
 
-class AranArcanExplosionTrigger : public Trigger
-{
-public:
-    AranArcanExplosionTrigger(PlayerbotAI* ai) : Trigger(ai, "aran arcane explosion") {}
-    bool IsActive() override;
-};
-
-class AranMassPolymorphTrigger : public Trigger
-{
-public:
-    AranMassPolymorphTrigger(PlayerbotAI* ai) : Trigger(ai, "aran mass polymorph") {}
-    bool IsActive() override;
-};
-
-// Terestian Illhoof triggers
-class IllhoofEngagedTrigger : public Trigger
-{
-public:
-    IllhoofEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "illhoof engaged") {}
-    bool IsActive() override;
-};
-
 class IllhoofDemonChainsTrigger : public Trigger
 {
 public:
@@ -197,13 +133,6 @@ public:
 };
 
 // Netherspite triggers
-class NetherspiteEngagedTrigger : public Trigger
-{
-public:
-    NetherspiteEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "netherspite engaged") {}
-    bool IsActive() override;
-};
-
 class NetherspiteBeamsTrigger : public Trigger
 {
 public:
@@ -219,13 +148,6 @@ public:
 };
 
 // Prince Malchezaar triggers
-class MalchezaarEngagedTrigger : public Trigger
-{
-public:
-    MalchezaarEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "malchezaar engaged") {}
-    bool IsActive() override;
-};
-
 class MalchezaarInfernalTrigger : public Trigger
 {
 public:
@@ -241,13 +163,6 @@ public:
 };
 
 // Nightbane triggers
-class NightbaneEngagedTrigger : public Trigger
-{
-public:
-    NightbaneEngagedTrigger(PlayerbotAI* ai) : Trigger(ai, "nightbane engaged") {}
-    bool IsActive() override;
-};
-
 class NightbaneAirPhaseTrigger : public Trigger
 {
 public:
