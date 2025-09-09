@@ -70,7 +70,7 @@ bool AttumenAvoidChargeAction::Execute(Event event)
             float y = boss->GetPositionY() + sin(angle) * 5.0f;
             float z = boss->GetPositionZ();
             
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+            return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
         }
         // Ranged should move further away
         else
@@ -81,7 +81,7 @@ bool AttumenAvoidChargeAction::Execute(Event event)
             float y = bot->GetPositionY() + sin(angle) * 10.0f;
             float z = bot->GetPositionZ();
             
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+            return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
         }
     }
     
@@ -149,7 +149,7 @@ bool AttumenPositionAction::Execute(Event event)
                     float y = attumen->GetPositionY() + sin(angle) * 10.0f;
                     float z = attumen->GetPositionZ();
                     
-                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+                    return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
                 }
             }
         }
@@ -164,7 +164,7 @@ bool AttumenPositionAction::Execute(Event event)
                 float y = attumen->GetPositionY() + sin(angle) * 5.0f;
                 float z = attumen->GetPositionZ();
                 
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+                return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
             }
         }
     }
@@ -226,8 +226,29 @@ bool MoroesFocusAddsAction::Execute(Event event)
         Unit* add = bot->FindNearestCreature(npcId, 100.0f, true);
         if (add && add->IsAlive() && add->IsInCombat())
         {
-            // Use WotLK pattern: AttackAction::Attack()
-            return Attack(add);
+            // Bypass LOS issue: Set target directly and trigger movement for melee
+            Unit* oldTarget = AI_VALUE(Unit*, "current target");
+            
+            // Always set the target (bypasses AttackAction LOS check)
+            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(add);
+            bot->SetSelection(add->GetGUID());
+            
+            // For melee bots: Trigger explicit movement to target if not in LOS
+            if (botAI->IsMelee(bot) && !bot->IsWithinLOSInMap(add))
+            {
+                // Use ReachCombatTo for better path robustness and combat positioning
+                return ReachCombatTo(add);
+            }
+            
+            // Try normal Attack() as fallback (will work if LOS exists)
+            if (Attack(add))
+            {
+                return true;
+            }
+            
+            // If Attack() failed but we set target, still consider this successful
+            // The "reach melee" trigger should now activate with the set target
+            return true;
         }
     }
     
@@ -235,7 +256,25 @@ bool MoroesFocusAddsAction::Execute(Event event)
     Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f, true);
     if (moroes && moroes->IsAlive())
     {
-        return Attack(moroes);
+        // Apply same LOS bypass logic for Moroes
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(moroes);
+        bot->SetSelection(moroes->GetGUID());
+        
+        // For melee bots: Trigger explicit movement if not in LOS
+        if (botAI->IsMelee(bot) && !bot->IsWithinLOSInMap(moroes))
+        {
+            // Use ReachCombatTo for better path robustness and combat positioning  
+            return ReachCombatTo(moroes);
+        }
+        
+        // Try normal Attack() as fallback
+        if (Attack(moroes))
+        {
+            return true;
+        }
+        
+        // Target is set, so this should still activate reach melee triggers
+        return true;
     }
     
     return false;
@@ -266,7 +305,7 @@ bool MoroesPositionAction::Execute(Event event)
             float y = moroes->GetPositionY() + sin(angle) * 3.0f;
             float z = moroes->GetPositionZ();
             
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+            return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
         }
     }
     // Ranged and healers just need to be in reasonable range to participate
@@ -274,7 +313,7 @@ bool MoroesPositionAction::Execute(Event event)
     {
         if (distanceToMoroes > 25.0f)
         {
-            return MoveTo(moroes->GetMapId(), moroes->GetPositionX(), moroes->GetPositionY(), moroes->GetPositionZ(), false, false, false, false);
+            return MoveTo(moroes->GetMapId(), moroes->GetPositionX(), moroes->GetPositionY(), moroes->GetPositionZ(), false, true, false, false);
         }
     }
     
@@ -505,7 +544,7 @@ bool MaidenRepentanceAction::Execute(Event event)
                 float y = bot->GetPositionY() + sin(angle) * 10.0f;
                 float z = bot->GetPositionZ();
                 
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+                return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
             }
         }
     }
@@ -536,7 +575,7 @@ bool MaidenHolyGroundAction::Execute(Event event)
         float y = bot->GetPositionY() + sin(angle) * 10.0f;
         float z = bot->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -580,7 +619,7 @@ bool OperaPositionAction::Execute(Event event)
         float y = centerY + sin(newAngle) * 20.0f;
         float z = bot->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     // Wizard of Oz - Spread for Dorothee's fear
@@ -601,7 +640,7 @@ bool OperaPositionAction::Execute(Event event)
                     float y = bot->GetPositionY() + sin(angle) * 5.0f;
                     float z = bot->GetPositionZ();
                     
-                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+                    return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
                 }
             }
         }
@@ -625,7 +664,7 @@ bool OperaPositionAction::Execute(Event event)
                 float y = myTarget->GetPositionY() + sin(angle) * 10.0f;
                 float z = myTarget->GetPositionZ();
                 
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+                return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
             }
         }
     }
@@ -879,7 +918,7 @@ bool AranBlizzardAction::Execute(Event event)
         float centerY = -1902.0f;
         float centerZ = 232.0f;
         
-        return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -918,7 +957,7 @@ bool AranDragonsBreathAction::Execute(Event event)
         float y = aran->GetPositionY() + sin(angle) * 10.0f;
         float z = aran->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1126,7 +1165,7 @@ bool NetherspiteBeamAction::Execute(Event event)
         float y = (NETHERSPITE_RED_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
         float z = netherspite->GetPositionZ();
         
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL))
+        if (MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL))
         {
             beamState.redBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1140,7 +1179,7 @@ bool NetherspiteBeamAction::Execute(Event event)
         float y = (NETHERSPITE_BLUE_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
         float z = netherspite->GetPositionZ();
         
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL))
+        if (MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL))
         {
             beamState.blueBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1154,7 +1193,7 @@ bool NetherspiteBeamAction::Execute(Event event)
         float y = (NETHERSPITE_GREEN_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
         float z = netherspite->GetPositionZ();
         
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL))
+        if (MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL))
         {
             beamState.greenBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1187,7 +1226,7 @@ bool NetherspiteVoidZoneAction::Execute(Event event)
         float y = bot->GetPositionY() + sin(angle) * 10.0f;
         float z = bot->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1273,7 +1312,7 @@ bool MalchezaarEnfeebleAction::Execute(Event event)
             float y = bot->GetPositionY() + sin(angle) * 30.0f;
             float z = bot->GetPositionZ();
             
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+            return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
         }
     }
     
@@ -1313,7 +1352,7 @@ bool NightbanePositionAction::Execute(Event event)
         float y = nightbane->GetPositionY() + sin(angle) * 10.0f;
         float z = nightbane->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1341,7 +1380,7 @@ bool NightbaneCharredEarthAction::Execute(Event event)
         float y = bot->GetPositionY() + sin(angle) * 15.0f;
         float z = bot->GetPositionZ();
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1390,7 +1429,7 @@ bool NightbaneAirPhaseAction::Execute(Event event)
                     float y = bot->GetPositionY() + sin(angle) * 15.0f;
                     float z = bot->GetPositionZ();
                     
-                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+                    return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
                 }
             }
         }

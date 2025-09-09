@@ -151,7 +151,7 @@ void PlayerbotHolder::AddPlayerBot(ObjectGuid playerGuid, uint32 masterAccountId
     botLoading.insert(playerGuid);
 
     // Always login in with world session to avoid race condition
-    sWorld->AddQueryHolderCallback(CharacterDatabase.DelayQueryHolder(holder))
+    static_cast<World*>(sWorld.get())->AddQueryHolderCallback(CharacterDatabase.DelayQueryHolder(holder))
         .AfterComplete([this](SQLQueryHolderBase const& holder)
                         { HandlePlayerBotLoginCallback(static_cast<PlayerbotLoginQueryHolder const&>(holder)); });
 }

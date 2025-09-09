@@ -243,10 +243,10 @@ public:
     bool isUseful() override;
 };
 
-class CuratorEvocationAction : public MovementAction
+class CuratorEvocationAction : public Action
 {
 public:
-    CuratorEvocationAction(PlayerbotAI* ai) : MovementAction(ai, "curator evocation") {}
+    CuratorEvocationAction(PlayerbotAI* ai) : Action(ai, "curator evocation") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
