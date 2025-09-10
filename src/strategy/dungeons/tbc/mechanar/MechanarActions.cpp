@@ -516,7 +516,7 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     {
         lastMove = now;
         return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY, bestPos.m_positionZ,
-                      false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                      false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
     }
 
     // Fallback: flee directly if no good tangent found
