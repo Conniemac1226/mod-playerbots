@@ -17,8 +17,8 @@ float MechanarMultiplier::GetValue(Action* action)
     if (!spellAction)
         return 1.0f;
 
-    // Block all spells if standing in fire trail
-    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA))
+    // Block all spells if standing in fire trail / inferno damage
+    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA) || bot->HasAura(SPELL_INFERNO_DAMAGE))
         return 0.0f;
         
     // Check if bot is being targeted by Raging Flames for cast time restriction
