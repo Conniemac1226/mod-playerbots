@@ -84,6 +84,41 @@ bool IsPathClear(const Position& from, const Position& to, PlayerbotAI* botAI = 
     return true;
 }
 
+// Path hazard sampler: ensure path samples are not too close to any Raging Flames (avoids "trails")
+bool IsPathSafeFromFlames(const Position& from, const Position& to, PlayerbotAI* botAI, float minDistance)
+{
+    if (!botAI)
+        return true;
+
+    const GuidVector npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs")->Get();
+    std::vector<Unit*> flames;
+    flames.reserve(8);
+    for (auto const& guid : npcs)
+    {
+        Unit* u = botAI->GetUnit(guid);
+        if (u && u->IsAlive() && u->GetEntry() == NPC_RAGING_FLAMES)
+            flames.push_back(u);
+    }
+    if (flames.empty())
+        return true;
+
+    const int steps = 12;
+    for (int i = 1; i <= steps; ++i)
+    {
+        float t = float(i) / float(steps);
+        Position p;
+        p.m_positionX = from.m_positionX + t * (to.m_positionX - from.m_positionX);
+        p.m_positionY = from.m_positionY + t * (to.m_positionY - from.m_positionY);
+        p.m_positionZ = from.m_positionZ + t * (to.m_positionZ - from.m_positionZ);
+        for (Unit* f : flames)
+        {
+            if (p.GetExactDist2d(f) < minDistance)
+                return false;
+        }
+    }
+    return true;
+}
+
 // Force position to stay within safe room bounds
 Position ConstrainToRoom(const Position& pos, PlayerbotAI* botAI = nullptr)
 {
@@ -476,7 +511,8 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     // Evaluate candidate waypoints (tangential arc)
     float bestScore = -1.0f;
     Position bestPos;
-    const float radius = 20.0f;
+    const bool isHealer = botAI->IsHeal(bot);
+    const float radius = isHealer ? 24.0f : 20.0f;
     for (int i = -2; i <= 2; ++i)
     {
         float ang = baseAngle + phase + i * 0.35f; // spread candidates along arc
@@ -486,7 +522,8 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
         p.m_positionZ = bot->GetPositionZ();
         p = ConstrainToRoom(p, botAI);
 
-        if (!IsPositionSafe(p, botAI) || !IsPathClear(bot->GetPosition(), p, botAI))
+        if (!IsPositionSafe(p, botAI) || !IsPathClear(bot->GetPosition(), p, botAI) ||
+            !IsPathSafeFromFlames(bot->GetPosition(), p, botAI, 10.0f))
             continue;
 
         // Score by distance from all flames and away from boss frontal (for breath)
@@ -501,10 +538,31 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
                 if (d < minFlameDist) minFlameDist = d;
             }
         }
-        if (minFlameDist < 10.0f) // too close to any flame
+        if (minFlameDist < (isHealer ? 14.0f : 10.0f)) // too close to any flame
             continue;
 
-        float score = minFlameDist - fabsf(i) * 1.5f; // prefer further from flames, slight center preference
+        // Healers prefer staying within 35y of the nearest tank to keep healing range
+        float rangePenalty = 0.0f;
+        if (isHealer)
+        {
+            Unit* bestTank = nullptr; float bestTankD = 1e9f;
+            const GuidVector members = AI_VALUE(GuidVector, "group members");
+            for (auto& m : members)
+            {
+                Player* pl = botAI->GetPlayer(m);
+                if (pl && pl->IsAlive() && botAI->IsTank(pl))
+                {
+                    float d = p.GetExactDist2d(pl);
+                    if (d < bestTankD) { bestTankD = d; bestTank = pl; }
+                }
+            }
+            if (bestTank)
+            {
+                if (bestTankD > 35.0f) rangePenalty = (bestTankD - 35.0f) * 0.5f; // penalize being too far to heal
+            }
+        }
+
+        float score = minFlameDist - fabsf(i) * 1.5f - rangePenalty; // prefer further from flames, keep healer in range
         if (score > bestScore)
         {
             bestScore = score;
@@ -828,7 +886,7 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
 
     Position safePos = ConstrainToRoom(targetPos, botAI);
 
-    if (IsPathClear(botPos, safePos, botAI))
+    if (IsPathClear(botPos, safePos, botAI) && IsPathSafeFromFlames(botPos, safePos, botAI, 10.0f))
     {
         return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY, 
                      safePos.m_positionZ, false, false, false, true, 
@@ -845,7 +903,7 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
             checkPos.m_positionY = botPos.m_positionY + sin(current_angle) * 15.0f;
             checkPos.m_positionZ = botPos.m_positionZ;
 
-            if (IsPathClear(botPos, checkPos, botAI))
+            if (IsPathClear(botPos, checkPos, botAI) && IsPathSafeFromFlames(botPos, checkPos, botAI, 10.0f))
             {
                 Position newPos = ConstrainToRoom(checkPos);
                 return MoveTo(bot->GetMapId(), newPos.m_positionX, newPos.m_positionY,
@@ -947,6 +1005,23 @@ bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
         float escapeDistance = 18.0f; // Increased from area aura range
         uint32 minTime = 1000; // Quick escape time
         
+        // Try a few angular offsets to avoid fleeing through a flame path
+        Position from = bot->GetPosition();
+        for (int i = 0; i < 8; ++i)
+        {
+            float ang = bot->GetAngle(nearestFlame) + M_PI + (i % 2 == 0 ? 1 : -1) * (i * 0.2f);
+            Position candidate;
+            candidate.m_positionX = from.m_positionX + cosf(ang) * escapeDistance;
+            candidate.m_positionY = from.m_positionY + sinf(ang) * escapeDistance;
+            candidate.m_positionZ = from.m_positionZ;
+            candidate = ConstrainToRoom(candidate, botAI);
+            if (IsPathClear(from, candidate, botAI) && IsPathSafeFromFlames(from, candidate, botAI, 10.0f))
+            {
+                return MoveTo(bot->GetMapId(), candidate.m_positionX, candidate.m_positionY,
+                              candidate.m_positionZ, false, false, false, true,
+                              MovementPriority::MOVEMENT_COMBAT);
+            }
+        }
         return FleePosition(nearestFlame->GetPosition(), escapeDistance, minTime);
     }
     
