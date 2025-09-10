@@ -10,6 +10,9 @@ using namespace VMAP;
 std::map<ObjectGuid, uint32> g_capacitus_lastPolarityTime;
 std::map<ObjectGuid, bool> g_capacitus_hasPositive;
 std::map<ObjectGuid, bool> g_capacitus_hasNegative;
+// Sepethrea kiting state
+static std::map<ObjectGuid, uint32> g_sepethrea_lastKiteMove;
+static std::map<ObjectGuid, float> g_sepethrea_kitePhase;
 
 // Room boundaries for safe movement - Sepethrea room
 const Position MECHANAR_SEPETHREA_CENTER = {290.52f, 11.492f, 25.39f, 0.0f};
@@ -434,42 +437,91 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
         return false;
 
     // MOVED: Spell interruption logic moved below for smarter handling
-    
-    // ENHANCED KITING: Check for fire hazards before using FleePosition
-    float fleeDistance = 20.0f; // Safe distance from area aura + inferno blast
-    uint32 minTime = 1500; // Reduced to 1.5s for better responsiveness
-    
-    // SAFETY CHECK: If bot is standing in fire, prioritize getting out immediately
-    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA))
+
+    // Emergency: immediate escape if standing in damaging aura
+    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA) || bot->HasAura(SPELL_INFERNO) || bot->HasAura(SPELL_INFERNO_DAMAGE))
     {
-        // Emergency fire escape - use simple FleePosition for immediate movement
-        return FleePosition(targetingFlame->GetPosition(), fleeDistance, minTime);
+        return FleePosition(targetingFlame->GetPosition(), 22.0f, 900U);
     }
-    
-    // SMART KITING: Only interrupt spells for instant casts or when in immediate danger
+
+    // SMART KITING: Only interrupt long/unsafe casts
     if (bot->IsNonMeleeSpellCast(false))
     {
-        Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        if (currentSpell)
+        if (Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
         {
             uint32 castTime = currentSpell->GetCastTime();
             float distanceToFlame = bot->GetDistance(targetingFlame);
-            
-            // Only interrupt if: instant cast, or flame very close, or long cast time
-            if (castTime == 0 || distanceToFlame < 10.0f || castTime > 3000)
-            {
+            if (castTime > 1500 || distanceToFlame < 12.0f)
                 botAI->InterruptSpell();
-            }
         }
         else
         {
-            // Fallback - interrupt if no current spell info available
             botAI->InterruptSpell();
         }
     }
-    
-    // PRIMARY KITING METHOD: FleePosition with smart distance management
-    return FleePosition(targetingFlame->GetPosition(), fleeDistance, minTime);
+
+    // CIRCULAR KITING: pick a tangential waypoint around room center to avoid backtracking through fire
+    const Position& center = MECHANAR_SEPETHREA_CENTER;
+    ObjectGuid guid = bot->GetGUID();
+    uint32 now = getMSTime();
+    uint32& lastMove = g_sepethrea_lastKiteMove[guid];
+    if (lastMove && now - lastMove < 400) // throttle pathing
+        return false;
+
+    // Base angle from flame -> bot, then rotate +/- 60 degrees with per-bot phase
+    float baseAngle = atan2f(bot->GetPositionY() - center.GetPositionY(), bot->GetPositionX() - center.GetPositionX());
+    float phase = g_sepethrea_kitePhase.count(guid) ? g_sepethrea_kitePhase[guid] : float((guid.GetCounter() % 6) - 3) * 0.12f;
+    g_sepethrea_kitePhase[guid] = phase;
+
+    // Evaluate candidate waypoints (tangential arc)
+    float bestScore = -1.0f;
+    Position bestPos;
+    const float radius = 20.0f;
+    for (int i = -2; i <= 2; ++i)
+    {
+        float ang = baseAngle + phase + i * 0.35f; // spread candidates along arc
+        Position p;
+        p.m_positionX = center.GetPositionX() + cosf(ang) * radius;
+        p.m_positionY = center.GetPositionY() + sinf(ang) * radius;
+        p.m_positionZ = bot->GetPositionZ();
+        p = ConstrainToRoom(p, botAI);
+
+        if (!IsPositionSafe(p, botAI) || !IsPathClear(bot->GetPosition(), p, botAI))
+            continue;
+
+        // Score by distance from all flames and away from boss frontal (for breath)
+        float minFlameDist = 9999.0f;
+        const GuidVector npcs2 = AI_VALUE(GuidVector, "nearest hostile npcs");
+        for (auto& npc2 : npcs2)
+        {
+            Unit* u = botAI->GetUnit(npc2);
+            if (u && u->IsAlive() && u->GetEntry() == NPC_RAGING_FLAMES)
+            {
+                float d = p.GetExactDist2d(u);
+                if (d < minFlameDist) minFlameDist = d;
+            }
+        }
+        if (minFlameDist < 10.0f) // too close to any flame
+            continue;
+
+        float score = minFlameDist - fabsf(i) * 1.5f; // prefer further from flames, slight center preference
+        if (score > bestScore)
+        {
+            bestScore = score;
+            bestPos = p;
+        }
+    }
+
+    if (bestScore > 0.0f)
+    {
+        lastMove = now;
+        return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY, bestPos.m_positionZ,
+                      false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+    }
+
+    // Fallback: flee directly if no good tangent found
+    lastMove = now;
+    return FleePosition(targetingFlame->GetPosition(), 20.0f, 1000U);
 }
 
 bool SepethreaRagingFlamesAction::isUseful()
@@ -920,8 +972,20 @@ bool SepethreaFireTrailAvoidanceAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check if standing in fire trail aura
-    return bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA);
+    // Check if standing in fire trail aura or near any flame within 8 yards
+    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA) || bot->HasAura(SPELL_INFERNO_DAMAGE))
+        return true;
+
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (auto& npc : npcs)
+    {
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
+            continue;
+        if (bot->GetDistance(flame) < 8.0f)
+            return true;
+    }
+    return false;
 }
 
 // ========== PATHALEON THE CALCULATOR ACTIONS ==========
