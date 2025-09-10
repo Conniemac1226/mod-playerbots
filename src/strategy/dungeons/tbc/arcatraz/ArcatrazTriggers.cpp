@@ -256,14 +256,7 @@ bool MellicharAddsActiveTrigger::IsActive()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-        
-    // Check if we're fighting Warden Mellichar OR Harbinger Skyriss (final encounter)
-    Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
-    Unit* skyriss = AI_VALUE2(Unit*, "find target", "harbinger skyriss");
     
-    if ((!warden || !warden->IsInCombat()) && (!skyriss || !skyriss->IsInCombat()))
-        return false;
-        
     // WOTLK PATTERN: Use "possible targets" for better add detection
     const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
     const uint32 mellicharAdds[] = {

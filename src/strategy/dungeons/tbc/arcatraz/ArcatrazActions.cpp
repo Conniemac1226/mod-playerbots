@@ -54,14 +54,7 @@ bool AttackMellicharAddsAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-        
-    // Check if we're fighting Warden Mellichar (who is immune) OR Harbinger Skyriss
-    Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
-    Unit* skyriss = AI_VALUE2(Unit*, "find target", "harbinger skyriss");
     
-    if ((!warden || !warden->IsInCombat()) && (!skyriss || !skyriss->IsInCombat()))
-        return false;
-        
     // RESEARCHED: arcatraz.cpp - Warden releases hostile adds in sequence
     // NOTE: Millhouse (NPC_MILLHOUSE) is NOT included - he becomes friendly ally!
     const GuidVector npcs = AI_VALUE(GuidVector, "possible targets");

@@ -144,6 +144,11 @@ enum KarazhanSpells
     SPELL_GAME_IN_SESSION      = 39331
 };
 
+// Chess helper IDs (from core script boss_chess_event.cpp / karazhan.h)
+const uint32 KZ_NPC_CHESS_MOVE_TRIGGER = 22519;
+const uint32 KZ_SPELL_MOVE_GENERIC = 30012;
+const uint32 KZ_SPELL_MOVE_COOLDOWN = 30543;
+
 // Attumen the Huntsman
 class AttumenAvoidChargeAction : public MovementAction
 {
