@@ -40,6 +40,9 @@ static bool IsCastingSpell(Unit* unit, uint32 spellId)
 std::map<ObjectGuid, uint32> g_karazhan_lastMoveTime;
 std::map<ObjectGuid, bool> g_karazhan_inSafePosition;
 std::map<ObjectGuid, uint32> g_karazhan_lastPhaseTime;
+// Chess throttles to protect server integrity
+static std::map<ObjectGuid, uint32> g_chess_lastMoveTime;
+static std::map<ObjectGuid, uint32> g_chess_lastAbilityTime;
 
 bool AttumenAvoidChargeAction::Execute(Event event)
 {
@@ -1564,46 +1567,99 @@ bool ChessEventMoveAction::Execute(Event event)
     if (!bot)
         return false;
         
-    // Check if bot is controlling a chess piece (vehicle)
+    // Check if bot is controlling a chess piece (vehicle) or charmed piece
     Unit* vehicle = bot->GetVehicleBase();
+    Creature* controlledPiece = nullptr;
     if (!vehicle)
     {
         // Try to possess a chess piece if event is active
-        Unit* medivh = bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 100.0f);
+        Unit* medivh = bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 120.0f);
         if (!medivh)
             return false;
 
-        // Find available chess pieces to possess (Alliance pieces for players)
-        std::vector<uint32> chessPieceIds = {
-            NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC, 
+        // Skip if bot recently left a piece (server aura blocks immediate re-entry)
+        if (bot->HasAura(30529)) // SPELL_RECENTLY_INGAME
+            return false;
+
+        // Prefer Alliance pieces (players' side)
+        const uint32 pieceIds[] = {
+            NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC,
             NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE
         };
 
-        for (uint32 pieceId : chessPieceIds)
+        for (uint32 pid : pieceIds)
         {
-            Unit* piece = bot->FindNearestCreature(pieceId, 50.0f);
-            if (piece && piece->IsAlive() && !piece->GetCharmer())
+            Creature* piece = bot->FindNearestCreature(pid, 60.0f, true);
+            if (!piece || !piece->IsAlive() || piece->GetCharmer())
+                continue;
+
+            // Move into gossip range
+            if (bot->GetDistance(piece) > 4.5f)
             {
-                // Attempt to possess the piece - interact with it
-                if (bot->GetDistance(piece) > 5.0f)
+                bot->GetMotionMaster()->MovePoint(0, piece->GetPositionX(), piece->GetPositionY(), piece->GetPositionZ());
+                return true;
+            }
+
+            // Open gossip and select "Control <piece>"
+            {
+                WorldPacket hello;
+                hello << piece->GetGUID();
+                bot->GetSession()->HandleGossipHelloOpcode(hello);
+
+                if (!bot->PlayerTalkClass)
+                    return false;
+
+                GossipMenu& menu = bot->PlayerTalkClass->GetGossipMenu();
+                uint32 menuId = menu.GetMenuId();
+
+                // Default to first option; prefer one with text starting with "Control"
+                int32 selectIndex = -1;
+                GossipMenuItemContainer const& items = menu.GetMenuItems();
+                for (auto it = items.begin(); it != items.end(); ++it)
                 {
-                    // Move closer to the piece first
-                    bot->GetMotionMaster()->MovePoint(0, piece->GetPositionX(), piece->GetPositionY(), piece->GetPositionZ());
-                    return true;
+                    uint32 idx = it->first;
+                    GossipMenuItem const* gi = menu.GetItem(idx);
+                    if (!gi)
+                        continue;
+                    // Heuristic: Chess script sets message to "Control <name>"
+                    if (gi->Message.find("Control ") == 0)
+                    {
+                        selectIndex = static_cast<int32>(idx);
+                        break;
+                    }
+                    if (selectIndex == -1)
+                        selectIndex = static_cast<int32>(idx);
                 }
-                else
+
+                if (selectIndex != -1)
                 {
-                    // Interact with the chess piece to possess it
-                    bot->SetTarget(piece->GetGUID());
+                    std::string code;
+                    WorldPacket sel;
+                    sel << piece->GetGUID();
+                    sel << menuId << static_cast<uint32>(selectIndex);
+                    sel << code;
+                    bot->GetSession()->HandleGossipSelectOptionOpcode(sel);
                     return true;
                 }
             }
         }
-        return false;
+        // If we already charmed a piece, pick it up here
+        for (Unit::ControlSet::const_iterator itr = bot->m_Controlled.begin(); itr != bot->m_Controlled.end(); ++itr)
+        {
+            Creature* c = dynamic_cast<Creature*>(*itr);
+            if (c && c->IsAlive() && c->GetCharmerGUID() == bot->GetGUID())
+            {
+                controlledPiece = c;
+                break;
+            }
+        }
+        if (!controlledPiece)
+            return false;
     }
         
     // Identify controlled piece type
-    uint32 pieceEntry = vehicle->GetEntry();
+    Unit* controller = vehicle ? vehicle : static_cast<Unit*>(controlledPiece);
+    uint32 pieceEntry = controller->GetEntry();
     bool isRanged = (pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_ORC_WARLOCK ||
                      pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_ORC_NECROLYTE);
     bool isKing = (pieceEntry == NPC_CHESS_KING_LLANE || pieceEntry == NPC_WARCHIEF_BLACKHAND);
@@ -1628,10 +1684,10 @@ bool ChessEventMoveAction::Execute(Event event)
     float closestDistance = 100.0f;
     for (uint32 enemyId : enemyPieceIds)
     {
-        Unit* enemy = bot->FindNearestCreature(enemyId, 50.0f);
+        Unit* enemy = bot->FindNearestCreature(enemyId, 60.0f);
         if (enemy && enemy->IsAlive())
         {
-            float distance = vehicle->GetDistance(enemy);
+            float distance = controller->GetDistance(enemy);
             if (distance < closestDistance)
             {
                 target = enemy;
@@ -1643,32 +1699,49 @@ bool ChessEventMoveAction::Execute(Event event)
     if (!target)
         return false;
     
-    // Movement strategy based on piece type
-    float desiredDistance = 5.0f; // Default melee range
-    
-    if (isRanged)
-        desiredDistance = 15.0f; // Ranged pieces stay back
-    else if (isKing)
-        desiredDistance = 25.0f; // Kings stay furthest back
-        
-    float currentDistance = vehicle->GetDistance(target);
-    
-    // Move to optimal range for attack
-    if (fabs(currentDistance - desiredDistance) > 2.0f)
+    // Movement strategy using chess triggers (cast SPELL_MOVE_GENERIC on best trigger)
+    float desiredDistance = isRanged ? 18.0f : (isKing ? 25.0f : 6.0f);
+    float currentDistance = controller->GetDistance(target);
+    if (fabs(currentDistance - desiredDistance) > 4.0f && controlledPiece)
     {
-        // Calculate movement position
-        float angle = vehicle->GetAngle(target);
-        float moveDistance = currentDistance > desiredDistance ? -3.0f : 3.0f;
-        
-        float x = vehicle->GetPositionX() + cos(angle) * moveDistance;
-        float y = vehicle->GetPositionY() + sin(angle) * moveDistance;
-        float z = vehicle->GetPositionZ();
-        
-        // Move towards or away from target
-        bot->GetMotionMaster()->MovePoint(0, x, y, z);
-        return true;
+        // Safety: respect movement cooldown and throttle
+        if (controlledPiece->HasAura(KZ_SPELL_MOVE_COOLDOWN) ||
+            controlledPiece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
+            return false;
+        uint32 now = getMSTime();
+        uint32& last = g_chess_lastMoveTime[controlledPiece->GetGUID()];
+        if (last && now - last < 1500) // 1.5s throttle
+            return false;
+        std::list<Unit*> nearby;
+        Acore::AnyUnitInObjectRangeCheck u_check(controlledPiece, 45.0f);
+        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(controlledPiece, nearby, u_check);
+        Cell::VisitObjects(controlledPiece, searcher, 45.0f);
+
+        Creature* bestTrigger = nullptr;
+        float bestScore = 1e9f;
+        for (Unit* u : nearby)
+        {
+            Creature* trig = u ? u->ToCreature() : nullptr;
+            if (!trig || trig->GetEntry() != KZ_NPC_CHESS_MOVE_TRIGGER)
+                continue; // NPC_CHESS_MOVE_TRIGGER
+            float dPiece = controlledPiece->GetDistance(trig);
+            if (dPiece < 4.0f || dPiece > 22.0f)
+                continue;
+            float dEnemy = trig->GetDistance(target);
+            float score = dEnemy + dPiece * 0.25f;
+            if (score < bestScore)
+            {
+                bestScore = score;
+                bestTrigger = trig;
+            }
+        }
+        if (bestTrigger)
+        {
+            controlledPiece->CastSpell(bestTrigger, KZ_SPELL_MOVE_GENERIC, false);
+            g_chess_lastMoveTime[controlledPiece->GetGUID()] = now;
+            return true;
+        }
     }
-    
     return false;
 }
 
@@ -1677,7 +1750,10 @@ bool ChessEventMoveAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->GetVehicleBase() != nullptr;
+    // Useful if already controlling a piece or the event is around us
+    if (bot->GetVehicleBase())
+        return true;
+    return bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 120.0f) != nullptr;
 }
 
 bool ChessEventAbilityAction::Execute(Event event)
@@ -1685,75 +1761,204 @@ bool ChessEventAbilityAction::Execute(Event event)
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-        
-    Unit* vehicle = bot->GetVehicleBase();
-    if (!vehicle)
+
+    // Resolve controlled chess piece (vehicle or charmed creature)
+    Creature* piece = nullptr;
+    if (Unit* v = bot->GetVehicleBase())
+        piece = v->ToCreature();
+    if (!piece)
+    {
+        for (Unit::ControlSet::const_iterator itr = bot->m_Controlled.begin(); itr != bot->m_Controlled.end(); ++itr)
+        {
+            Creature* c = dynamic_cast<Creature*>(*itr);
+            if (c && c->IsAlive() && c->GetCharmerGUID() == bot->GetGUID())
+            {
+                piece = c;
+                break;
+            }
+        }
+    }
+    if (!piece)
         return false;
-        
-    uint32 pieceEntry = vehicle->GetEntry();
-    
-    // Use piece abilities based on type
+
+    // Safety throttles to avoid spam and respect casting state
+    if (piece->HasUnitState(UNIT_STATE_CASTING) || piece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
+        return false;
+    uint32 now = getMSTime();
+    uint32& last = g_chess_lastAbilityTime[piece->GetGUID()];
+    if (last && now - last < 1200) // ~GCD throttle
+        return false;
+
+    uint32 pieceEntry = piece->GetEntry();
+
+    auto findEnemy = [&](float range) -> Creature*
+    {
+        std::vector<uint32> enemyIds;
+        if (pieceEntry == NPC_HUMAN_FOOTMAN || pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_HUMAN_CHARGER || pieceEntry == NPC_CHESS_KING_LLANE)
+            enemyIds = {NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE, NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
+        else
+            enemyIds = {NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC, NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
+
+        Creature* best = nullptr; float bestD = 1e9f;
+        for (uint32 id : enemyIds)
+        {
+            Creature* c = piece->FindNearestCreature(id, range, true);
+            if (c && c->IsAlive())
+            {
+                float d = piece->GetDistance(c);
+                if (d < bestD) { bestD = d; best = c; }
+            }
+        }
+        return best;
+    };
+
+    auto findAllyLow = [&](float range, uint32 hpDiff) -> Creature*
+    {
+        std::vector<uint32> allyIds;
+        if (pieceEntry == NPC_HUMAN_FOOTMAN || pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_HUMAN_CHARGER || pieceEntry == NPC_CHESS_KING_LLANE)
+            allyIds = {NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC, NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
+        else
+            allyIds = {NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE, NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
+
+        Creature* best = nullptr; uint32 bestDelta = 0;
+        for (uint32 id : allyIds)
+        {
+            Creature* c = piece->FindNearestCreature(id, range, true);
+            if (c && c->IsAlive())
+            {
+                uint32 delta = c->GetMaxHealth() - c->GetHealth();
+                if (delta > hpDiff && delta > bestDelta) { bestDelta = delta; best = c; }
+            }
+        }
+        return best;
+    };
+
     switch (pieceEntry)
     {
-        case NPC_HUMAN_FOOTMAN:
-        case NPC_ORC_GRUNT:
-            // Heroic Blow / Vicious Strike
-            if (Unit* target = vehicle->GetVictim())
+        case NPC_HUMAN_FOOTMAN: // Pawn A
+        {
+            if (Creature* e = findEnemy(12.0f))
             {
-                if (vehicle->IsWithinMeleeRange(target))
-                    return botAI->CastSpell(32227, target); // Heroic Blow
+                piece->CastSpell(e, 37406, false); // Heroic Blow
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
             }
-            break;
-            
-        case NPC_HUMAN_CHARGER:
-        case NPC_ORC_WOLF:
-            // Smash / Bite
-            if (Unit* target = vehicle->GetVictim())
+            piece->CastSpell(piece, 37414, true); // Shield Block
+            g_chess_lastAbilityTime[piece->GetGUID()] = now;
+            return true;
+        }
+        case NPC_HUMAN_CHARGER: // Knight A
+        {
+            if (Creature* e = findEnemy(10.0f))
             {
-                if (vehicle->GetDistance(target) < 8.0f)
-                    return botAI->CastSpell(32228, target); // Smash
+                piece->CastSpell(piece, 37498, true); // Stomp
+                piece->CastSpell(e, 37453, false);    // Smash
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
             }
-            break;
-            
-        case NPC_HUMAN_CONJURER:
-        case NPC_ORC_WARLOCK:
-            // Elemental Blast / Fireball
-            if (Unit* target = vehicle->GetVictim())
+            return false;
+        }
+        case NPC_HUMAN_CONJURER: // Queen A
+        {
+            if (Creature* e = findEnemy(25.0f))
             {
-                if (vehicle->GetDistance(target) < 30.0f)
-                    return botAI->CastSpell(32236, target); // Elemental Blast
+                piece->CastSpell(e, 37462, false); // Elemental Blast
+                piece->CastSpell(e, 37465, false); // Rain of Fire
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
             }
-            break;
-            
-        case NPC_HUMAN_CLERIC:
-        case NPC_ORC_NECROLYTE:
-            // Heal / Shadow Mend
+            return false;
+        }
+        case NPC_HUMAN_CLERIC: // Bishop A
+        {
+            if (Creature* ally = findAllyLow(25.0f, 5000))
             {
-                // Find injured ally piece
-                std::list<Unit*> allies;
-                Acore::AnyFriendlyUnitInObjectRangeCheck u_check(vehicle, vehicle, 30.0f);
-                Acore::UnitListSearcher<Acore::AnyFriendlyUnitInObjectRangeCheck> searcher(vehicle, allies, u_check);
-                Cell::VisitObjects(vehicle, searcher, 30.0f);
-                
-                for (Unit* ally : allies)
-                {
-                    if (ally->GetHealthPct() < 50.0f)
-                        return botAI->CastSpell(32238, ally); // Heal
-                }
+                piece->CastSpell(ally, 37455, false); // Healing
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
             }
-            break;
-            
-        case NPC_CHESS_KING_LLANE:
-        case NPC_WARCHIEF_BLACKHAND:
-            // Sweep / Cleave
-            if (Unit* target = vehicle->GetVictim())
+            if (Creature* e = findEnemy(20.0f))
             {
-                if (vehicle->IsWithinMeleeRange(target))
-                    return botAI->CastSpell(32226, target); // Sweep
+                piece->CastSpell(e, 37459, false); // Holy Lance
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
             }
+            return false;
+        }
+        case NPC_CHESS_KING_LLANE: // King A
+        {
+            piece->CastSpell(piece, 37471, true); // Heroism
+            if (Creature* e = findEnemy(10.0f))
+            {
+                piece->CastSpell(piece, 37474, true); // Sweep
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
+            }
+            return false;
+        }
+        case NPC_ORC_GRUNT: // Pawn H
+        {
+            if (Creature* e = findEnemy(12.0f))
+            {
+                piece->CastSpell(e, 37413, false); // Vicious Strike
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
+            }
+            piece->CastSpell(piece, 37416, true); // Weapon Deflection
+            g_chess_lastAbilityTime[piece->GetGUID()] = now;
+            return true;
+        }
+        case NPC_ORC_WOLF: // Knight H
+        {
+            if (Creature* e = findEnemy(10.0f))
+            {
+                piece->CastSpell(piece, 37454, true); // Bite
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
+            }
+            return false;
+        }
+        case NPC_ORC_WARLOCK: // Queen H
+        {
+            if (Creature* e = findEnemy(25.0f))
+            {
+                piece->CastSpell(e, 37463, false); // Fireball
+                piece->CastSpell(e, 37469, false); // Poison Cloud
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
+            }
+            return false;
+        }
+        case NPC_ORC_NECROLYTE: // Bishop H
+        {
+            if (Creature* ally = findAllyLow(25.0f, 5000))
+            {
+                piece->CastSpell(ally, 37456, false); // Shadow Mend
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
+            }
+            if (Creature* e = findEnemy(20.0f))
+            {
+                piece->CastSpell(e, 37461, false); // Shadow Spear
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
+            }
+            return false;
+        }
+        case NPC_WARCHIEF_BLACKHAND: // King H
+        {
+            piece->CastSpell(piece, 37472, true); // Bloodlust
+            if (Creature* e = findEnemy(10.0f))
+            {
+                piece->CastSpell(piece, 37476, true); // Cleave
+                g_chess_lastAbilityTime[piece->GetGUID()] = now;
+                return true;
+            }
+            return false;
+        }
+        default:
             break;
     }
-    
     return false;
 }
 
@@ -1762,7 +1967,15 @@ bool ChessEventAbilityAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->GetVehicleBase() != nullptr;
+    if (bot->GetVehicleBase())
+        return true;
+    for (Unit::ControlSet::const_iterator itr = bot->m_Controlled.begin(); itr != bot->m_Controlled.end(); ++itr)
+    {
+        Creature* c = dynamic_cast<Creature*>(*itr);
+        if (c && c->IsAlive() && c->GetCharmerGUID() == bot->GetGUID())
+            return true;
+    }
+    return false;
 }
 
 // Moroes Tank Swap
