@@ -175,17 +175,28 @@ bool GruulHurtfulStrikeAction::isUseful()
 // High King Maulgar Actions
 bool MaulgarFocusTargetAction::Execute(Event event)
 {
-    // Follow kill order with priority targeting
+    // Stick to current council target if valid to prevent ping-pong
+    if (Unit* current = AI_VALUE(Unit*, "current target"))
+    {
+        uint32 entry = current->GetEntry();
+        if (current->IsAlive() && current->IsInCombat() &&
+            (entry == NPC_HIGH_KING_MAULGAR || entry == NPC_KROSH_FIREHAND || entry == NPC_OLM_THE_SUMMONER ||
+             entry == NPC_KIGGLER_THE_CRAZED || entry == NPC_BLINDEYE_THE_SEER))
+        {
+            return Attack(current);
+        }
+    }
+
+    // Follow kill order with priority targeting (only in combat)
     for (uint32 npcId : councilKillOrder)
     {
         Unit* target = bot->FindNearestCreature(npcId, 150.0f, true);
         if (target && target->IsAlive() && target->IsInCombat())
         {
-            // Use WotLK pattern: AttackAction::Attack()
             return Attack(target);
         }
     }
-    
+
     return false;
 }
 
@@ -193,6 +204,10 @@ bool MaulgarPositionAction::Execute(Event event)
 {
     Unit* maulgar = bot->FindNearestCreature(NPC_HIGH_KING_MAULGAR, 150.0f);
     if (!maulgar)
+        return false;
+
+    // Do not reposition pre-pull
+    if (!maulgar->IsInCombat() || !bot->IsInCombat())
         return false;
         
     // Position behind Maulgar to avoid Arcing Smash
@@ -224,6 +239,9 @@ bool MaulgarWhirlwindAction::Execute(Event event)
     Unit* maulgar = bot->FindNearestCreature(NPC_HIGH_KING_MAULGAR, 150.0f);
     if (!maulgar)
         return false;
+
+    if (!maulgar->IsInCombat())
+        return false;
         
     // Run away from Whirlwind
     if (bot->GetDistance(maulgar) < 10.0f)
@@ -249,6 +267,9 @@ bool MaulgarArcingSmashAction::Execute(Event event)
 {
     Unit* maulgar = bot->FindNearestCreature(NPC_HIGH_KING_MAULGAR, 150.0f);
     if (!maulgar)
+        return false;
+
+    if (!maulgar->IsInCombat() || !bot->IsInCombat())
         return false;
         
     // Move behind Maulgar to avoid frontal cleave

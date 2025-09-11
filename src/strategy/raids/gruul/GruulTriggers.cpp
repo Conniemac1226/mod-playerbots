@@ -221,7 +221,11 @@ bool MaulgarEngagedTrigger::IsActive()
     if (!bot)
         return false;
 
-    return bot->FindNearestCreature(NPC_HIGH_KING_MAULGAR, 150.0f, true) != nullptr;
+    // Only active when Maulgar is actually in combat
+    if (Unit* maulgar = bot->FindNearestCreature(NPC_HIGH_KING_MAULGAR, 150.0f, true))
+        return maulgar->IsInCombat();
+
+    return false;
 }
 
 bool MaulgarCouncilTrigger::IsActive()
@@ -230,16 +234,15 @@ bool MaulgarCouncilTrigger::IsActive()
     if (!bot)
         return false;
 
-    // ICC Pattern: Simple boss existence check - no complex combat validation
-    // Check for living council members (excluding Maulgar for add priority)
-    if (AI_VALUE2(Unit*, "find target", "krosh firehand"))
-        return true;
-    if (AI_VALUE2(Unit*, "find target", "olm the summoner"))
-        return true;
-    if (AI_VALUE2(Unit*, "find target", "kiggler the crazed"))
-        return true;
-    if (AI_VALUE2(Unit*, "find target", "blindeye the seer"))
-        return true;
+    // Consider council "active" only if any member is in combat
+    if (Unit* u = AI_VALUE2(Unit*, "find target", "krosh firehand"))
+        if (u->IsInCombat()) return true;
+    if (Unit* u = AI_VALUE2(Unit*, "find target", "olm the summoner"))
+        if (u->IsInCombat()) return true;
+    if (Unit* u = AI_VALUE2(Unit*, "find target", "kiggler the crazed"))
+        if (u->IsInCombat()) return true;
+    if (Unit* u = AI_VALUE2(Unit*, "find target", "blindeye the seer"))
+        if (u->IsInCombat()) return true;
     
     return false;
 }
