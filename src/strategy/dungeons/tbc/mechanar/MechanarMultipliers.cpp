@@ -64,9 +64,25 @@ float MechanarMultiplier::GetValue(Action* action)
                 // Heuristic: block ground-target and wide AoE when kiting
                 if (spellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
                     return 0.0f;
-                // Also block long casts while flames are near (DPS safety)
-                if (spellInfo->CalcCastTime() > 1500 && !botAI->IsHeal(bot))
+                // Block long casts for all roles when flames are near
+                if (spellInfo->CalcCastTime() > 1200)
+                {
+                    // Allow healers to push long heals only if relatively safe
+                    if (botAI->IsHeal(bot))
+                    {
+                        // If any flame within 14y, block
+                        const GuidVector npcs2 = AI_VALUE(GuidVector, "nearest hostile npcs");
+                        for (auto& g : npcs2)
+                        {
+                            Unit* f = botAI->GetUnit(g);
+                            if (f && f->IsAlive() && f->GetEntry() == NPC_RAGING_FLAMES && bot->GetExactDist2d(f) < 14.0f)
+                                return 0.0f;
+                        }
+                        // Otherwise allow the heal
+                        return 1.0f;
+                    }
                     return 0.0f;
+                }
             }
         }
     }
