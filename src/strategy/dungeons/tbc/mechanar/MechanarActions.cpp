@@ -13,6 +13,8 @@ std::map<ObjectGuid, bool> g_capacitus_hasNegative;
 // Sepethrea kiting state
 static std::map<ObjectGuid, uint32> g_sepethrea_lastKiteMove;
 static std::map<ObjectGuid, float> g_sepethrea_kitePhase;
+static std::map<ObjectGuid, int> g_sepethrea_kiteDir;          // +1 clockwise, -1 counter-clockwise
+static std::map<ObjectGuid, uint32> g_sepethrea_blockedTries;  // consecutive failures
 
 // Room boundaries for safe movement - Sepethrea room
 const Position MECHANAR_SEPETHREA_CENTER = {290.52f, 11.492f, 25.39f, 0.0f};
@@ -507,14 +509,18 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     float baseAngle = atan2f(bot->GetPositionY() - center.GetPositionY(), bot->GetPositionX() - center.GetPositionX());
     float phase = g_sepethrea_kitePhase.count(guid) ? g_sepethrea_kitePhase[guid] : float((guid.GetCounter() % 6) - 3) * 0.12f;
     g_sepethrea_kitePhase[guid] = phase;
+    int& dir = g_sepethrea_kiteDir[guid];
+    if (dir == 0) dir = (guid.GetCounter() % 2 == 0) ? 1 : -1;
 
     // Evaluate candidate waypoints (tangential arc)
     float bestScore = -1.0f;
     Position bestPos;
     const bool isHealer = botAI->IsHeal(bot);
     const float radius = isHealer ? 24.0f : 20.0f;
-    for (int i = -2; i <= 2; ++i)
+    // Try biased to current direction first to prevent zig-zag at walls
+    for (int step = 0; step <= 4; ++step)
     {
+        int i = dir * (step == 0 ? 1 : step); // 1,2,3,4 in current dir
         float ang = baseAngle + phase + i * 0.35f; // spread candidates along arc
         Position p;
         p.m_positionX = center.GetPositionX() + cosf(ang) * radius;
@@ -576,6 +582,11 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
         return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY, bestPos.m_positionZ,
                       false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
     }
+
+    // Fallback: if blocked repeatedly, flip direction
+    uint32& blocked = g_sepethrea_blockedTries[guid];
+    blocked++;
+    if (blocked > 3) { dir = -dir; blocked = 0; }
 
     // Fallback: flee directly if no good tangent found
     lastMove = now;
