@@ -801,7 +801,8 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
     if (!nearestFlame)
         return false;
 
-    const float MIN_SAFE_DISTANCE = 16.0f; // Area aura + Inferno range + buffer
+    const bool heroic = bot->GetMap()->IsHeroic();
+    const float MIN_SAFE_DISTANCE = heroic ? 22.0f : 20.0f; // Larger bubble on heroic (3 flames)
     
     // If too close to ANY Raging Flames, move away (like ICC gas cloud)
     if (closestDistance < MIN_SAFE_DISTANCE)
@@ -822,7 +823,7 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
         }
         
         // Fallback: simple flee with proper priority
-        return FleePosition(nearestFlame->GetPosition(), 18.0f, 1500U);
+        return FleePosition(nearestFlame->GetPosition(), heroic ? 22.0f : 18.0f, 1500U);
     }
     
     return false;
@@ -951,7 +952,7 @@ bool SepethreaInfernoAvoidanceAction::isUseful()
 
         // Check for Inferno casting OR active Inferno aura (persistent damage)
         if ((unit->FindCurrentSpellBySpellId(SPELL_INFERNO) || unit->HasAura(SPELL_INFERNO)) 
-            && bot->GetDistance(unit) < 20.0f)
+            && bot->GetDistance(unit) < 25.0f)
             return true;
     }
     
@@ -1068,7 +1069,7 @@ bool SepethreaFireTrailAvoidanceAction::isUseful()
         Unit* flame = botAI->GetUnit(npc);
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
-        if (bot->GetDistance(flame) < 8.0f)
+        if (bot->GetDistance(flame) < 12.0f)
             return true;
     }
     return false;
