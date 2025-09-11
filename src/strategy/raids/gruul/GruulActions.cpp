@@ -89,33 +89,29 @@ bool GruulShatterPositionAction::Execute(Event event)
 
 bool GruulShatterPositionAction::isUseful()
 {
-    // DEPRECATED: Shatter positioning now handled by Ground Slam action
-    // By the time Shatter happens, players are petrified and cannot move
-    // This action kept for compatibility but should rarely trigger
-    return bot && bot->IsAlive() && !bot->HasAura(GRUUL_SPELL_STONED) && 
-           bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f, true) != nullptr;
+    // Useful when spread is active and Gruul is present; allow during petrify to clear state
+    return bot && bot->IsAlive() &&
+           bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f, true) != nullptr &&
+           AI_VALUE(float, "disperse distance") > 0.0f;
 }
 
 bool GruulCaveInAction::Execute(Event event)
 {
-    // Cave In targets random locations
-    // Move away from any cave in visual effects
-    // This would require detecting ground effects
-    
     Unit* gruul = bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f);
     if (!gruul)
         return false;
-        
-    // Move to a safer position near the wall
-    float angle = gruul->GetAngle(bot);
-    float distance = 25.0f;
-    
-    Position pos = gruul->GetPosition();
-    pos.m_positionX += cos(angle) * distance;
-    pos.m_positionY += sin(angle) * distance;
-    
+
+    // Prefer a quick sidestep out of the ground effect: move perpendicular
+    // to the vector from Gruul to the bot by ~10 yards.
+    float angleToGruul = gruul->GetAngle(bot);
+    float sidestep = angleToGruul + M_PI_2; // 90 degrees
+
+    Position pos = bot->GetPosition();
+    pos.m_positionX += cos(sidestep) * 10.0f;
+    pos.m_positionY += sin(sidestep) * 10.0f;
+
     return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
-                 false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+                  false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool GruulCaveInAction::isUseful()
@@ -128,7 +124,11 @@ bool GruulHurtfulStrikeAction::Execute(Event event)
     Unit* gruul = bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f);
     if (!gruul)
         return false;
-        
+
+    // Off-tanks should remain in melee to soak Hurtful Strike
+    if (botAI->IsTank(bot))
+        return false;
+
     // If we're not the main tank and in melee range, move out
     if (gruul->GetVictim() != bot && bot->GetDistance(gruul) <= 5.0f)
     {
@@ -198,7 +198,8 @@ bool MaulgarPositionAction::Execute(Event event)
     // Position behind Maulgar to avoid Arcing Smash
     if (botAI->IsMelee(bot))
     {
-        if (!maulgar->HasInArc(M_PI / 2, bot))
+        // Move if we are in his frontal arc (danger)
+        if (maulgar->HasInArc(M_PI / 2, bot))
         {
             float angle = maulgar->GetOrientation() + M_PI;
             Position pos = maulgar->GetPosition();
@@ -251,7 +252,7 @@ bool MaulgarArcingSmashAction::Execute(Event event)
         return false;
         
     // Move behind Maulgar to avoid frontal cleave
-    if (!maulgar->HasInArc(M_PI / 2, bot))
+    if (maulgar->HasInArc(M_PI / 2, bot))
     {
         float angle = maulgar->GetOrientation() + M_PI;
         Position pos = maulgar->GetPosition();
@@ -259,7 +260,7 @@ bool MaulgarArcingSmashAction::Execute(Event event)
         pos.m_positionY += sin(angle) * 3.0f;
         
         return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
-                     false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                     false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -386,6 +387,59 @@ bool BlindeyeInterruptAction::isUseful()
     return bot && bot->IsAlive();
 }
 
+// AoE Avoidance Actions
+bool KroshBlastWaveAvoidAction::Execute(Event event)
+{
+    Unit* krosh = bot->FindNearestCreature(NPC_KROSH_FIREHAND, 150.0f);
+    if (!krosh)
+        return false;
+
+    // If within Blast Wave range and casting, step out directly away from Krosh
+    if (bot->GetDistance(krosh) < 15.0f && IsCastingSpell(krosh, KROSH_SPELL_BLAST_WAVE))
+    {
+        float angle = krosh->GetAngle(bot) + M_PI;
+        Position pos = bot->GetPosition();
+        pos.m_positionX += cos(angle) * 15.0f;
+        pos.m_positionY += sin(angle) * 15.0f;
+
+        return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                      false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    return false;
+}
+
+bool KroshBlastWaveAvoidAction::isUseful()
+{
+    return bot && bot->IsAlive();
+}
+
+bool KigglerArcaneExplosionAvoidAction::Execute(Event event)
+{
+    Unit* kiggler = bot->FindNearestCreature(NPC_KIGGLER_THE_CRAZED, 150.0f);
+    if (!kiggler)
+        return false;
+
+    // If within Arcane Explosion range and casting, step out
+    if (bot->GetDistance(kiggler) < 10.0f && IsCastingSpell(kiggler, KIGGLER_SPELL_ARCANE_EXPLOSION))
+    {
+        float angle = kiggler->GetAngle(bot) + M_PI;
+        Position pos = bot->GetPosition();
+        pos.m_positionX += cos(angle) * 12.0f;
+        pos.m_positionY += sin(angle) * 12.0f;
+
+        return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                      false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    return false;
+}
+
+bool KigglerArcaneExplosionAvoidAction::isUseful()
+{
+    return bot && bot->IsAlive();
+}
+
 // Utility Actions
 bool GruulTankSwapAction::Execute(Event event)
 {
@@ -434,31 +488,63 @@ bool GruulTankSwapAction::isUseful()
 
 bool GruulDispelAction::Execute(Event event)
 {
-    if (!PlayerbotAI::IsHeal(bot))
-        return false;
-        
-    // Dispel priority debuffs
-    Group* group = bot->GetGroup();
-    if (!group)
-        return false;
-        
-    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    // First: offensive dispel on Blindeye shields if possible (Priest/Shaman)
     {
-        Player* member = ref->GetSource();
-        if (!member || !member->IsAlive())
-            continue;
-            
-        // Dispel Greater Polymorph
-        if (member->HasAura(KIGGLER_SPELL_GREATER_POLYMORPH))
+        uint32 councilIds[] = {
+            NPC_HIGH_KING_MAULGAR,
+            NPC_KROSH_FIREHAND,
+            NPC_OLM_THE_SUMMONER,
+            NPC_KIGGLER_THE_CRAZED,
+            NPC_BLINDEYE_THE_SEER
+        };
+
+        for (uint32 npcId : councilIds)
         {
-            if (botAI->CanCastSpell(988, member)) // Dispel Magic
+            if (Unit* council = bot->FindNearestCreature(npcId, 150.0f))
             {
-                botAI->CastSpell(988, member);
-                return true;
+                if (council->HasAura(BLINDEYE_SPELL_GREATER_PW_SHIELD))
+                {
+                    // Priest Dispel Magic (offensive)
+                    if (bot->getClass() == CLASS_PRIEST && botAI->CanCastSpell(988, council))
+                    {
+                        botAI->CastSpell(988, council);
+                        return true;
+                    }
+                    // Shaman Purge
+                    if (bot->getClass() == CLASS_SHAMAN && botAI->CanCastSpell(370, council))
+                    {
+                        botAI->CastSpell(370, council);
+                        return true;
+                    }
+                }
             }
         }
     }
-    
+
+    // Then: friendly dispel for Greater Polymorph
+    if (PlayerbotAI::IsHeal(bot))
+    {
+        Group* group = bot->GetGroup();
+        if (!group)
+            return false;
+
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || !member->IsAlive())
+                continue;
+
+            if (member->HasAura(KIGGLER_SPELL_GREATER_POLYMORPH))
+            {
+                if (botAI->CanCastSpell(988, member)) // Dispel Magic
+                {
+                    botAI->CastSpell(988, member);
+                    return true;
+                }
+            }
+        }
+    }
+
     return false;
 }
 

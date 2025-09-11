@@ -164,6 +164,23 @@ public:
     bool isUseful() override;
 };
 
+// AoE Avoidance Actions
+class KroshBlastWaveAvoidAction : public MovementAction
+{
+public:
+    KroshBlastWaveAvoidAction(PlayerbotAI* ai) : MovementAction(ai, "krosh blast wave avoid") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class KigglerArcaneExplosionAvoidAction : public MovementAction
+{
+public:
+    KigglerArcaneExplosionAvoidAction(PlayerbotAI* ai) : MovementAction(ai, "kiggler arcane explosion avoid") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 // Utility Actions
 class GruulTankSwapAction : public Action
 {

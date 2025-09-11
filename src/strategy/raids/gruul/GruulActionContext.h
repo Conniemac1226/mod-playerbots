@@ -28,6 +28,8 @@ public:
         creators["kiggler polymorph"] = &GruulActionContext::kiggler_polymorph;
         creators["olm wild fel stalker"] = &GruulActionContext::olm_wild_fel_stalker;
         creators["blindeye interrupt"] = &GruulActionContext::blindeye_interrupt;
+        creators["krosh blast wave avoid"] = &GruulActionContext::krosh_blast_wave_avoid;
+        creators["kiggler arcane explosion avoid"] = &GruulActionContext::kiggler_arcane_explosion_avoid;
     }
     
 private:
@@ -50,6 +52,8 @@ private:
     static Action* kiggler_polymorph(PlayerbotAI* ai) { return new KigglerPolymorphAction(ai); }
     static Action* olm_wild_fel_stalker(PlayerbotAI* ai) { return new OlmWildFelStalkerAction(ai); }
     static Action* blindeye_interrupt(PlayerbotAI* ai) { return new BlindeyeInterruptAction(ai); }
+    static Action* krosh_blast_wave_avoid(PlayerbotAI* ai) { return new KroshBlastWaveAvoidAction(ai); }
+    static Action* kiggler_arcane_explosion_avoid(PlayerbotAI* ai) { return new KigglerArcaneExplosionAvoidAction(ai); }
 };
 
 #endif
