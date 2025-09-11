@@ -35,13 +35,13 @@ void GruulStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("krosh spellshield",
         NextAction::array(0, new NextAction("krosh spellsteal", ACTION_HIGH + 5), nullptr)));
     triggers.push_back(new TriggerNode("krosh blast wave",
-        NextAction::array(0, new NextAction("maulgar position", ACTION_MOVE + 5), nullptr)));
+        NextAction::array(0, new NextAction("krosh blast wave avoid", ACTION_MOVE + 5), nullptr)));
     
     // Kiggler the Crazed
     triggers.push_back(new TriggerNode("kiggler polymorph",
-        NextAction::array(0, new NextAction("kiggler polymorph", ACTION_DISPEL + 2), nullptr)));
+        NextAction::array(0, new NextAction("gruul dispel", ACTION_DISPEL + 2), nullptr)));
     triggers.push_back(new TriggerNode("kiggler arcane explosion",
-        NextAction::array(0, new NextAction("maulgar position", ACTION_MOVE + 4), nullptr)));
+        NextAction::array(0, new NextAction("kiggler arcane explosion avoid", ACTION_MOVE + 4), nullptr)));
     
     // Olm the Summoner - Wild Fel Stalkers (HIGHEST PRIORITY - spawned adds)
     triggers.push_back(new TriggerNode("olm wild fel stalker",

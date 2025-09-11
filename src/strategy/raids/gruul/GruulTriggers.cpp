@@ -101,8 +101,14 @@ bool GruulShatterTrigger::IsActive()
     if (IsCastingSpell(gruul, GRUUL_SPELL_SHATTER))
         return true;
         
-    // Check if we recently had Ground Slam (shatter follows 9.7 seconds later)
-    // This would require tracking Ground Slam timing
+    // Time-based fallback: Shatter ~9.7s after Ground Slam
+    auto it = groundSlamTimes.find(bot->GetGUID());
+    if (it != groundSlamTimes.end())
+    {
+        time_t timeSinceSlam = time(nullptr) - it->second;
+        if (timeSinceSlam >= 9 && timeSinceSlam <= 14)
+            return true;
+    }
     
     return false;
 }
@@ -120,10 +126,11 @@ bool GruulCaveInTrigger::IsActive()
     // Check if Gruul is casting Cave In
     if (IsCastingSpell(gruul, GRUUL_SPELL_CAVE_IN))
         return true;
-    
-    // Check if we're in a Cave In area (would need to check for visual/ground effects)
-    // Cave In targets random players and creates danger zones
-    
+
+    // Also react if we have the Cave In aura (standing in it)
+    if (bot->HasAura(GRUUL_SPELL_CAVE_IN))
+        return true;
+
     return false;
 }
 
@@ -271,8 +278,8 @@ bool MaulgarArcingSmashTrigger::IsActive()
     // Check if Maulgar is casting Arcing Smash (frontal cleave)
     if (IsCastingSpell(maulgar, MAULGAR_SPELL_ARCING_SMASH))
     {
-        // Check if we're in front of Maulgar
-        if (!maulgar->HasInArc(M_PI / 2, bot))
+        // Check if we're in front of Maulgar (danger zone)
+        if (maulgar->HasInArc(M_PI / 2, bot))
             return true;
     }
     
