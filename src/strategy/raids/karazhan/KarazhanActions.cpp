@@ -1116,6 +1116,14 @@ bool NetherspiteBeamAction::Execute(Event event)
     if (!bot)
         return false;
 
+    // Throttle beam handling per-bot to avoid movement spam
+    static std::map<ObjectGuid, uint32> s_lastBeamTick;
+    uint32 nowTick = getMSTime();
+    uint32& lastTick = s_lastBeamTick[bot->GetGUID()];
+    if (lastTick && nowTick - lastTick < 800) // ~0.8s cadence
+        return false;
+    lastTick = nowTick;
+
     Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
     if (!netherspite)
         return false;
@@ -1223,15 +1231,34 @@ bool NetherspiteBeamAction::Execute(Event event)
         }
     }
     
+    // Helper lambda to move toward midpoint of a portal->boss line
+    auto moveTowardBeam = [&](const Position& portal) -> bool
+    {
+        float bx = netherspite->GetPositionX();
+        float by = netherspite->GetPositionY();
+        float bz = netherspite->GetPositionZ();
+
+        // Try two points along the beam line: mid and slightly closer to portal
+        const float tCandidates[2] = {0.5f, 0.65f};
+        for (float t : tCandidates)
+        {
+            float x = portal.GetPositionX() * t + bx * (1.0f - t);
+            float y = portal.GetPositionY() * t + by * (1.0f - t);
+            float z = bz;
+
+            // Prefer exact waypoint first, then relaxed
+            if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
+                return true;
+            if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_COMBAT))
+                return true;
+        }
+        return false;
+    };
+
     // Position to intercept appropriate beam
     if (shouldTakeRed)
     {
-        // Position between red portal and Netherspite
-        float x = (NETHERSPITE_RED_PORTAL.GetPositionX() + netherspite->GetPositionX()) / 2.0f;
-        float y = (NETHERSPITE_RED_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
-        float z = netherspite->GetPositionZ();
-        
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
+        if (moveTowardBeam(NETHERSPITE_RED_PORTAL))
         {
             beamState.redBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1240,12 +1267,7 @@ bool NetherspiteBeamAction::Execute(Event event)
     }
     else if (shouldTakeBlue)
     {
-        // Position between blue portal and Netherspite
-        float x = (NETHERSPITE_BLUE_PORTAL.GetPositionX() + netherspite->GetPositionX()) / 2.0f;
-        float y = (NETHERSPITE_BLUE_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
-        float z = netherspite->GetPositionZ();
-        
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
+        if (moveTowardBeam(NETHERSPITE_BLUE_PORTAL))
         {
             beamState.blueBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1254,12 +1276,7 @@ bool NetherspiteBeamAction::Execute(Event event)
     }
     else if (shouldTakeGreen)
     {
-        // Position between green portal and Netherspite
-        float x = (NETHERSPITE_GREEN_PORTAL.GetPositionX() + netherspite->GetPositionX()) / 2.0f;
-        float y = (NETHERSPITE_GREEN_PORTAL.GetPositionY() + netherspite->GetPositionY()) / 2.0f;
-        float z = netherspite->GetPositionZ();
-        
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
+        if (moveTowardBeam(NETHERSPITE_GREEN_PORTAL))
         {
             beamState.greenBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
