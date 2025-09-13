@@ -6,8 +6,8 @@
 
 float MaulgarAddMultiplier::GetValue(Action* action)
 {
-    // Block DpsAssist when council members OR spawned adds are present
-    // Following proven pattern from CLAUDE.md:753-778
+    // Block Assist-style retargeting when council members OR spawned adds are present
+    // Following proven raid pattern: stick to scripted kill order, do not override with assists
     if (botAI->IsHeal(bot) || botAI->IsTank(bot)) { return 1.0f; }
     
     // Check for council members using same pattern as trigger
@@ -44,9 +44,13 @@ float MaulgarAddMultiplier::GetValue(Action* action)
         }
     }
     
-    if (addPresent && dynamic_cast<DpsAssistAction*>(action))
+    if (addPresent)
     {
-        return 0.0f; // Block DpsAssist when any adds present
+        if (dynamic_cast<DpsAssistAction*>(action))
+            return 0.0f; // Block DpsAssist when any adds present
+
+        if (dynamic_cast<TankAssistAction*>(action))
+            return 0.0f; // Also block TankAssist for DPS to prevent ping-pong vs kill order
     }
     
     return 1.0f;
