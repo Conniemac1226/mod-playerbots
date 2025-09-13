@@ -1127,6 +1127,9 @@ bool NetherspiteBeamAction::Execute(Event event)
     Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
     if (!netherspite)
         return false;
+    // Only operate beam logic during the actual encounter
+    if (!netherspite->IsInCombat())
+        return false;
         
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
@@ -1247,9 +1250,9 @@ bool NetherspiteBeamAction::Execute(Event event)
             float z = bz;
 
             // Prefer exact waypoint first, then relaxed
-            if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
+            if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL))
                 return true;
-            if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_COMBAT))
+            if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL))
                 return true;
         }
         return false;
@@ -1292,7 +1295,8 @@ bool NetherspiteBeamAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f) != nullptr;
+    Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
+    return netherspite && netherspite->IsInCombat();
 }
 
 bool NetherspiteVoidZoneAction::Execute(Event event)
@@ -1323,7 +1327,7 @@ bool NetherspiteVoidZoneAction::isUseful()
     
     // Active when Netherspite is present and void zones exist
     Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
-    if (!netherspite)
+    if (!netherspite || !netherspite->IsInCombat())
         return false;
         
     // Check if bot is in void zone or void zones are nearby
@@ -1527,7 +1531,8 @@ bool NightbaneAirPhaseAction::isUseful()
     if (!bot)
         return false;
     Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f);
-    return nightbane && !nightbane->IsWithinMeleeRange(bot);
+    // Only useful when Nightbane is engaged; prevents false positives elsewhere in Karazhan
+    return nightbane && nightbane->IsInCombat() && !nightbane->IsWithinMeleeRange(bot);
 }
 
 bool NightbaneSkeletonAction::Execute(Event event)

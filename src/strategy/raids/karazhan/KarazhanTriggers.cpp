@@ -603,6 +603,10 @@ bool NightbaneAirPhaseTrigger::IsActive()
     Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f);
     if (!nightbane)
         return false;
+    
+    // Only react to Nightbane mechanics during the actual encounter
+    if (!nightbane->IsInCombat())
+        return false;
         
     // Air phase is when Nightbane is out of melee range
     if (!nightbane->IsWithinMeleeRange(bot))
