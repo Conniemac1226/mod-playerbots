@@ -121,11 +121,6 @@ bool MoveToTravelTargetAction::isUseful()
     if (!botAI->AllowActivity(TRAVEL_ACTIVITY))
         return false;
 
-    // Prevent pre-combat boss travel inside Karazhan when a real player is leading.
-    // This avoids pathfinding churn near Opera platform and Curator entrance.
-    if (botAI->HasRealPlayerMaster() && bot->GetMapId() == 532)
-        return false;
-
     if (!context->GetValue<TravelTarget*>("travel target")->Get()->isTraveling())
         return false;
 
