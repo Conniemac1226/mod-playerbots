@@ -86,6 +86,7 @@ void KarazhanStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
 {
     // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation  
     // Following HallsOfLightningStrategy.cpp:37-40 pattern per CLAUDE.md:782-786
+    multipliers.push_back(new MoroesAddMultiplier(botAI));
     multipliers.push_back(new CuratorAddMultiplier(botAI));
     multipliers.push_back(new IllhoofAddMultiplier(botAI));
     multipliers.push_back(new MalchezaarAddMultiplier(botAI));

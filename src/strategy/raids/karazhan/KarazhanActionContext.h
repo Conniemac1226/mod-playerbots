@@ -16,7 +16,6 @@ public:
         // Moroes
         creators["moroes focus adds"] = &KarazhanActionContext::moroes_focus_adds;
         creators["moroes position"] = &KarazhanActionContext::moroes_position;
-        creators["moroes crowd control"] = &KarazhanActionContext::moroes_crowd_control;
         creators["moroes tank swap"] = &KarazhanActionContext::moroes_tank_swap;
         creators["moroes attack"] = &KarazhanActionContext::moroes_attack;
         

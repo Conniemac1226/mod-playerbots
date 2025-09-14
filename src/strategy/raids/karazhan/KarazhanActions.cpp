@@ -213,71 +213,60 @@ bool MoroesFocusAddsAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Priority kill order: Healers -> Mana Burners -> Stunners -> DPS warriors
+    // Priority kill order (reliable Moroes strat):
+    // 1) Shadow Priest (Dorothea)
+    // 2) Holy Priest (Catriona)
+    // 3) Holy Paladin (Keira)
+    // 4) Arms Warrior (Robin)
+    // 5) Retribution Paladin (Rafe)
+    // 6) Protection Warrior (Crispin)
     uint32 addPriority[] = {
-        NPC_BARONESS_DOROTHEA,  // Priest (healer)
-        NPC_LORD_ROBIN,         // Paladin (healer)
-        NPC_LADY_KEIRA,         // Priest (mana burn)
-        NPC_LORD_CRISPIN,       // Paladin (stun)
-        NPC_LADY_CATRIONA,      // Warrior
-        NPC_BARON_RAFE          // Warrior
+        NPC_BARONESS_DOROTHEA,
+        NPC_LADY_CATRIONA,
+        NPC_LADY_KEIRA,
+        NPC_LORD_ROBIN,
+        NPC_BARON_RAFE,
+        NPC_LORD_CRISPIN
     };
 
     // Find highest priority add that's alive
     for (uint32 npcId : addPriority)
     {
         Unit* add = bot->FindNearestCreature(npcId, 100.0f, true);
-        if (add && add->IsAlive() && add->IsInCombat())
+        if (!add || !add->IsAlive() || !add->IsInCombat())
+            continue;
+
+        // Set target for downstream actions and UI selection
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(add);
+        bot->SetSelection(add->GetGUID());
+
+        // Melee: if not in melee range, path to target; otherwise attack now
+        if (botAI->IsMelee(bot))
         {
-            // Bypass LOS issue: Set target directly and trigger movement for melee
-            Unit* oldTarget = AI_VALUE(Unit*, "current target");
-            
-            // Always set the target (bypasses AttackAction LOS check)
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(add);
-            bot->SetSelection(add->GetGUID());
-            
-            // For melee bots: Trigger explicit movement to target if not in LOS
-            if (botAI->IsMelee(bot) && !bot->IsWithinLOSInMap(add))
-            {
-                // Use ReachCombatTo for better path robustness and combat positioning
+            if (!bot->IsWithinMeleeRange(add))
                 return ReachCombatTo(add);
-            }
-            
-            // Try normal Attack() as fallback (will work if LOS exists)
-            if (Attack(add))
-            {
-                return true;
-            }
-            
-            // If Attack() failed but we set target, still consider this successful
-            // The "reach melee" trigger should now activate with the set target
-            return true;
+            return Attack(add);
         }
+
+        // Ranged/casters
+        return Attack(add);
     }
     
     // Fall back to Moroes if no adds
     Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f, true);
     if (moroes && moroes->IsAlive())
     {
-        // Apply same LOS bypass logic for Moroes
         botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(moroes);
         bot->SetSelection(moroes->GetGUID());
-        
-        // For melee bots: Trigger explicit movement if not in LOS
-        if (botAI->IsMelee(bot) && !bot->IsWithinLOSInMap(moroes))
+
+        if (botAI->IsMelee(bot))
         {
-            // Use ReachCombatTo for better path robustness and combat positioning  
-            return ReachCombatTo(moroes);
+            if (!bot->IsWithinMeleeRange(moroes))
+                return ReachCombatTo(moroes);
+            return Attack(moroes);
         }
-        
-        // Try normal Attack() as fallback
-        if (Attack(moroes))
-        {
-            return true;
-        }
-        
-        // Target is set, so this should still activate reach melee triggers
-        return true;
+
+        return Attack(moroes);
     }
     
     return false;
