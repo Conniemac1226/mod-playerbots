@@ -41,6 +41,37 @@ float CuratorAddMultiplier::GetValue(Action* action)
     return 1.0f;
 }
 
+float MoroesAddMultiplier::GetValue(Action* action)
+{
+    // Block DpsAssist when Moroes dinner guests are present - prevents boss/add oscillation
+    if (botAI->IsHeal(bot)) { return 1.0f; }
+
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    bool addPresent = false;
+
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (!unit || !unit->IsInCombat())
+            continue;
+
+        uint32 entry = unit->GetEntry();
+        if (entry == NPC_BARONESS_DOROTHEA || entry == NPC_LADY_CATRIONA || entry == NPC_LADY_KEIRA ||
+            entry == NPC_LORD_ROBIN || entry == NPC_LORD_CRISPIN || entry == NPC_BARON_RAFE)
+        {
+            addPresent = true;
+            break;
+        }
+    }
+
+    if (addPresent && dynamic_cast<DpsAssistAction*>(action))
+    {
+        return 0.0f; // Block DpsAssist when dinner guests are alive
+    }
+
+    return 1.0f;
+}
+
 float IllhoofAddMultiplier::GetValue(Action* action)
 {
     // Block DpsAssist when Illhoof adds are present - prevents boss/add oscillation
