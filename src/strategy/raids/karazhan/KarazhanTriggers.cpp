@@ -519,17 +519,27 @@ bool NetherspiteVoidZoneTrigger::IsActive()
     if (bot->HasAura(SPELL_VOID_ZONE))
         return true;
         
-    // Check if Netherspite is casting Void Zone
+    // Check if Netherspite is casting Void Zone and bot is the target
     Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
-    if (netherspite && netherspite->HasUnitState(UNIT_STATE_CASTING))
+    if (netherspite)
     {
-        CurrentSpellTypes spellType = CURRENT_GENERIC_SPELL;
-        if (netherspite->GetCurrentSpell(spellType))
+        // Prefer exact spell match via Unit::FindCurrentSpellBySpellId
+        if (Spell* sp = netherspite->FindCurrentSpellBySpellId(SPELL_VOID_ZONE))
         {
-            uint32 spellId = netherspite->GetCurrentSpell(spellType)->m_spellInfo->Id;
-            // Void Zone is typically placed at target location
-            if (spellId == SPELL_VOID_ZONE && netherspite->GetVictim() == bot)
-                return true; // Move preemptively if targeted
+            // If the unit target is us, preemptively react
+            if (Unit* castTarget = sp->m_targets.GetUnitTarget())
+            {
+                if (castTarget == bot)
+                    return true;
+            }
+            // If there is a destination position targeted and we are close to it, react as well
+            if (SpellDestination const* dst = sp->m_targets.GetDst())
+            {
+                float dx = bot->GetPositionX() - dst->_position.GetPositionX();
+                float dy = bot->GetPositionY() - dst->_position.GetPositionY();
+                if ((dx * dx + dy * dy) < (10.0f * 10.0f))
+                    return true;
+            }
         }
     }
     
