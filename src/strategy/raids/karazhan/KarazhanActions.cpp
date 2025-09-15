@@ -17,6 +17,7 @@
 #include "ObjectGuid.h"
 #include "Position.h"
 #include <cmath>
+ 
 
 // Helper function to check if a unit is casting a specific spell
 static bool IsCastingSpell(Unit* unit, uint32 spellId)
@@ -1085,17 +1086,35 @@ bool IllhoofImpsAction::isUseful()
 }
 
 // Netherspite Actions
-// Beam management state for Netherspite
-struct NetherspiteBeamState {
-    ObjectGuid redBeamHolder;
-    ObjectGuid blueBeamHolder;
-    ObjectGuid greenBeamHolder;
-    uint32 lastBeamSwitch;
-    uint32 beamPhase; // 0 = portal phase, 1 = banish phase
-};
-static std::map<uint32, NetherspiteBeamState> g_netherspiteBeamState; // Per instance ID
-
 // Dynamic portal positions (queried in Execute)
+
+// Utility: check if unit has banish auras used by core boss script
+static inline bool IsNetherspiteBanish(Unit* u)
+{
+    // boss_netherspite.cpp uses SPELL_BANISH_VISUAL (39833) and SPELL_BANISH_ROOT (42716)
+    return u && (u->HasAura(39833) || u->HasAura(42716));
+}
+
+// Utility: distance from point P to infinite line AB, and check if P is between A and B in projection
+static inline bool IsNearBeamLine(const Position& a, const Position& b, const Position& p, float maxDist)
+{
+    const float ax = a.GetPositionX(), ay = a.GetPositionY();
+    const float bx = b.GetPositionX(), by = b.GetPositionY();
+    const float px = p.GetPositionX(), py = p.GetPositionY();
+    const float abx = bx - ax, aby = by - ay;
+    const float apx = px - ax, apy = py - ay;
+    const float abLen2 = abx * abx + aby * aby;
+    if (abLen2 < 0.01f)
+        return false;
+    const float t = (apx * abx + apy * aby) / abLen2;
+    if (t <= 0.0f || t >= 1.0f)
+        return false; // must be between portal and boss
+    const float cx = ax + t * abx;
+    const float cy = ay + t * aby;
+    const float dx = px - cx, dy = py - cy;
+    const float d2 = dx * dx + dy * dy;
+    return d2 <= (maxDist * maxDist);
+}
 
 bool NetherspiteBeamAction::Execute(Event event)
 {
@@ -1117,86 +1136,17 @@ bool NetherspiteBeamAction::Execute(Event event)
     // Only operate beam logic during the actual encounter
     if (!netherspite->IsInCombat())
         return false;
-        
-    ObjectGuid botGuid = bot->GetGUID();
-    uint32 currentTime = getMSTime();
-    uint32 instanceId = bot->GetInstanceId();
-    NetherspiteBeamState& beamState = g_netherspiteBeamState[instanceId];
     
-    // Check if we're in banish phase (no beams)
-    if (netherspite->HasAura(38524)) // Banish aura
-    {
-        beamState.beamPhase = 1;
-        beamState.redBeamHolder = ObjectGuid::Empty;
-        beamState.blueBeamHolder = ObjectGuid::Empty;
-        beamState.greenBeamHolder = ObjectGuid::Empty;
+    // Skip during banish (no beams)
+    if (IsNetherspiteBanish(netherspite))
         return false;
-    }
     
-    // Portal phase - manage beams
-    if (beamState.beamPhase == 1)
-    {
-        beamState.beamPhase = 0;
-        beamState.lastBeamSwitch = currentTime;
-    }
-    
-    // Determine which beam this bot should take
-    bool shouldTakeRed = false;
-    bool shouldTakeBlue = false;
-    bool shouldTakeGreen = false;
-    
-    // Red Beam (Perseverance) - Tanks
-    if (botAI->IsTank(bot))
-    {
-        // Check if we need to rotate based on buff stacks while in beam
-        if (beamState.redBeamHolder == botGuid)
-        {
-            if (Aura* buff = bot->GetAura(SPELL_PORTAL_PERSEVERANCE))
-            {
-                if (buff->GetStackAmount() >= 4)
-                {
-                    // Need to swap out - high stacks
-                    beamState.redBeamHolder = ObjectGuid::Empty;
-                    beamState.lastBeamSwitch = currentTime;
-                    return false;
-                }
-                // Continue holding beam
-                return false;
-            }
-        }
-        else if ((beamState.redBeamHolder.IsEmpty() || (currentTime - beamState.lastBeamSwitch > 25000))
-                  && !bot->HasAura(SPELL_EXHAUSTION_PERSEVERANCE)) // don't take if recently exhausted
-        {
-            shouldTakeRed = true;
-        }
-    }
-    // Blue Beam (Dominance) - Healers
-    else if (botAI->IsHeal(bot))
-    {
-        if (beamState.blueBeamHolder == botGuid)
-        {
-            // Healers can hold blue; no stack rotation required here
-            if (bot->HasAura(SPELL_PORTAL_DOMINANCE))
-                return false;
-        }
-        else if (beamState.blueBeamHolder.IsEmpty() && !bot->HasAura(SPELL_EXHAUSTION_DOMINANCE))
-        {
-            shouldTakeBlue = true;
-        }
-    }
-    // Green Beam (Serenity) - DPS  
-    else if (!botAI->IsTank(bot) && !botAI->IsHeal(bot))
-    {
-        if (beamState.greenBeamHolder == botGuid)
-        {
-            if (bot->HasAura(SPELL_PORTAL_SERENITY))
-                return false;
-        }
-        else if (beamState.greenBeamHolder.IsEmpty() && !bot->HasAura(SPELL_EXHAUSTION_SERENITY))
-        {
-            shouldTakeGreen = true;
-        }
-    }
+    // Determine desired beam by role
+    enum DesiredBeam { RED, BLUE, GREEN, NONE };
+    DesiredBeam desired = NONE;
+    if (botAI->IsTank(bot))           desired = RED;
+    else if (botAI->IsHeal(bot))      desired = BLUE;
+    else                              desired = GREEN;
     
     // Resolve portal positions at runtime; the color-to-position is randomized each portal phase
     Position redPos, bluePos, greenPos;
@@ -1231,15 +1181,15 @@ bool NetherspiteBeamAction::Execute(Event event)
         return false;
     }
 
-    // Helper lambda to move toward midpoint of a portal->boss line
+    // Helper: move toward a stable point on the beam line
     auto moveTowardBeam = [&](const Position& portal) -> bool
     {
         float bx = netherspite->GetPositionX();
         float by = netherspite->GetPositionY();
         float bz = netherspite->GetPositionZ();
 
-        // Try two points along the beam line: mid and slightly closer to portal
-        const float tCandidates[2] = {0.5f, 0.65f};
+        // Try two points along the beam line: mid and slightly portal-sided
+        const float tCandidates[2] = {0.55f, 0.65f};
         for (float t : tCandidates)
         {
             float x = portal.GetPositionX() * t + bx * (1.0f - t);
@@ -1255,33 +1205,63 @@ bool NetherspiteBeamAction::Execute(Event event)
         return false;
     };
 
-    // Position to intercept appropriate beam
-    if (shouldTakeRed)
-    {
-        if (moveTowardBeam(redPos))
-        {
-            beamState.redBeamHolder = botGuid;
-            beamState.lastBeamSwitch = currentTime;
-            return true;
+    // If we already hold the correct buff, decide whether to stay or step out (red only stacks)
+    auto hasExhaustion = [&](DesiredBeam b) -> bool {
+        switch (b) {
+            case RED:   return bot->HasAura(SPELL_EXHAUSTION_PERSEVERANCE);
+            case BLUE:  return bot->HasAura(SPELL_EXHAUSTION_DOMINANCE);
+            case GREEN: return bot->HasAura(SPELL_EXHAUSTION_SERENITY);
+            default:    return false;
         }
+    };
+    auto hasBuff = [&](DesiredBeam b) -> Aura* {
+        switch (b) {
+            case RED:   return bot->GetAura(SPELL_PORTAL_PERSEVERANCE);
+            case BLUE:  return bot->GetAura(SPELL_PORTAL_DOMINANCE);
+            case GREEN: return bot->GetAura(SPELL_PORTAL_SERENITY);
+            default:    return nullptr;
+        }
+    };
+
+    Aura* myBuff = hasBuff(desired);
+    if (myBuff)
+    {
+        if (desired == RED && myBuff->GetStackAmount() >= 4)
+        {
+            // Step out sideways from beam line to drop stacks
+            Position portal = redPos;
+            Position mePos = bot->GetPosition();
+            // Compute a perpendicular move of ~8y
+            float ax = portal.GetPositionX(), ay = portal.GetPositionY();
+            float bx = netherspite->GetPositionX(), by = netherspite->GetPositionY();
+            float vx = bx - ax, vy = by - ay;
+            float len = std::sqrt(vx * vx + vy * vy);
+            if (len > 0.1f)
+            {
+                vx /= len; vy /= len; // direction along beam
+                // perpendicular
+                float px = -vy, py = vx;
+                float tx = mePos.GetPositionX() + px * 8.0f;
+                float ty = mePos.GetPositionY() + py * 8.0f;
+                float tz = mePos.GetPositionZ();
+                return MoveTo(bot->GetMapId(), tx, ty, tz, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
+            }
+        }
+        // Holding correct beam with acceptable stacks; no move
+        return false;
     }
-    else if (shouldTakeBlue)
+
+    // Do not attempt to take a beam while exhausted for that color
+    if (hasExhaustion(desired))
+        return false;
+
+    // If not on beam line for our desired color, move toward it
+    const Position& pPos = (desired == RED ? redPos : desired == BLUE ? bluePos : greenPos);
+    // If already near beam line, no need to move; boss will assign buff tick
+    if (!IsNearBeamLine(pPos, netherspite->GetPosition(), bot->GetPosition(), 1.5f))
     {
-        if (moveTowardBeam(bluePos))
-        {
-            beamState.blueBeamHolder = botGuid;
-            beamState.lastBeamSwitch = currentTime;
+        if (moveTowardBeam(pPos))
             return true;
-        }
-    }
-    else if (shouldTakeGreen)
-    {
-        if (moveTowardBeam(greenPos))
-        {
-            beamState.greenBeamHolder = botGuid;
-            beamState.lastBeamSwitch = currentTime;
-            return true;
-        }
     }
     
     return false;
@@ -1330,33 +1310,38 @@ bool NetherspiteVoidZoneAction::Execute(Event event)
         }
     }
 
-    // If we are near a Minor Void Zone trigger (DB entry 17470), step away from it safely
-    if (Unit* hz = bot->FindNearestCreature(17470, 10.0f, true))
+    // Prefer robust dynamic-aoe avoidance using area debuff (shared pattern with AvoidAoeAction)
+    if (Aura* aura = AI_VALUE(Aura*, "area debuff"))
     {
-        float angle = bot->GetAngle(hz) + M_PI;
-        float x = bot->GetPositionX() + cos(angle) * 12.0f;
-        float y = bot->GetPositionY() + sin(angle) * 12.0f;
-        float z = bot->GetPositionZ();
-        return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
+        if (!aura->IsRemoved() && !aura->IsExpired() && aura->GetType() == DYNOBJ_AURA_TYPE)
+        {
+            if (DynamicObject* dyn = aura->GetDynobjOwner())
+            {
+                const SpellInfo* info = aura->GetSpellInfo();
+                if (dyn->IsInWorld() && info && sPlayerbotAIConfig->aoeAvoidSpellWhitelist.find(info->Id) == sPlayerbotAIConfig->aoeAvoidSpellWhitelist.end())
+                {
+                    float r = dyn->GetRadius();
+                    if (r > 0.0f && r <= sPlayerbotAIConfig->maxAoeAvoidRadius && bot->GetDistance(dyn) <= r)
+                    {
+                        if (FleePosition(dyn->GetPosition(), r))
+                            return true;
+                    }
+                }
+            }
+        }
     }
 
-    // Fallback: if we are ticking with a zone aura (some DBs), move opposite from boss
+    // Fallback: move away from boss direction if we are flagged by any residual void zone auras
     if (bot->HasAura(SPELL_VOID_ZONE))
     {
-        if (Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f))
+        if (Unit* ns = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f))
         {
-            float angle = bot->GetAngle(netherspite) + M_PI; // away from boss
+            float angle = bot->GetAngle(ns) + M_PI;
             float x = bot->GetPositionX() + cos(angle) * 12.0f;
             float y = bot->GetPositionY() + sin(angle) * 12.0f;
             float z = bot->GetPositionZ();
             return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
         }
-        // If boss not found, just move forward 12y to evacuate
-        float angle = bot->GetOrientation();
-        float x = bot->GetPositionX() + cos(angle) * 12.0f;
-        float y = bot->GetPositionY() + sin(angle) * 12.0f;
-        float z = bot->GetPositionZ();
-        return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -1491,13 +1476,26 @@ bool NightbanePositionAction::Execute(Event event)
     float distanceToBack = bot->GetDistance2d(nightbane->GetPositionX() - cos(nightbane->GetOrientation()) * 5.0f,
                                               nightbane->GetPositionY() - sin(nightbane->GetOrientation()) * 5.0f);
 
-    // Position at the side
+    // Position at the side and keep within terrace bounds to avoid falls
     if (distanceToFront < 10.0f || distanceToBack < 10.0f)
     {
         float angle = nightbane->GetOrientation() + (M_PI / 2);
         float x = nightbane->GetPositionX() + cos(angle) * 10.0f;
         float y = nightbane->GetPositionY() + sin(angle) * 10.0f;
         float z = nightbane->GetPositionZ();
+
+        // Clamp within terrace safe circle
+        const Position TERRACE_CENTER = { -11162.231f, -1900.329f, 91.476f };
+        const float TERRACE_RADIUS = 33.0f;
+        float dx = x - TERRACE_CENTER.GetPositionX();
+        float dy = y - TERRACE_CENTER.GetPositionY();
+        float d = std::sqrt(dx*dx + dy*dy);
+        if (d > TERRACE_RADIUS - 1.5f)
+        {
+            float scale = (TERRACE_RADIUS - 1.5f) / d;
+            x = TERRACE_CENTER.GetPositionX() + dx * scale;
+            y = TERRACE_CENTER.GetPositionY() + dy * scale;
+        }
         
         return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
@@ -1510,7 +1508,8 @@ bool NightbanePositionAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    return bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f) != nullptr;
+    Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f);
+    return nightbane && nightbane->IsInCombat();
 }
 
 bool NightbaneCharredEarthAction::Execute(Event event)
@@ -1519,14 +1518,50 @@ bool NightbaneCharredEarthAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Move out of Charred Earth zones
+    // Prefer dynamic-aoe avoidance using area debuff when present (covers ground patch)
+    if (Aura* aura = AI_VALUE(Aura*, "area debuff"))
+    {
+        if (!aura->IsRemoved() && !aura->IsExpired() && aura->GetType() == DYNOBJ_AURA_TYPE)
+        {
+            if (DynamicObject* dyn = aura->GetDynobjOwner())
+            {
+                const SpellInfo* info = aura->GetSpellInfo();
+                if (dyn->IsInWorld() && info && info->Id == SPELL_CHARRED_EARTH)
+                {
+                    float r = dyn->GetRadius();
+                    if (r > 0.0f && r <= sPlayerbotAIConfig->maxAoeAvoidRadius && bot->GetDistance(dyn) <= r)
+                    {
+                        // Flee away from center and clamp within terrace
+                        Position fleeFrom = dyn->GetPosition();
+                        if (FleePosition(fleeFrom, r))
+                        {
+                            // After move request, ensure next target stays inside terrace in subsequent ticks
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: if affected by Charred Earth aura on the bot, step away and clamp within terrace
     if (bot->HasAura(SPELL_CHARRED_EARTH))
     {
         float angle = bot->GetOrientation();
-        float x = bot->GetPositionX() + cos(angle) * 15.0f;
-        float y = bot->GetPositionY() + sin(angle) * 15.0f;
+        float x = bot->GetPositionX() + cos(angle) * 12.0f;
+        float y = bot->GetPositionY() + sin(angle) * 12.0f;
         float z = bot->GetPositionZ();
-        
+        const Position TERRACE_CENTER = { -11162.231f, -1900.329f, 91.476f };
+        const float TERRACE_RADIUS = 33.0f;
+        float dx = x - TERRACE_CENTER.GetPositionX();
+        float dy = y - TERRACE_CENTER.GetPositionY();
+        float d = std::sqrt(dx*dx + dy*dy);
+        if (d > TERRACE_RADIUS - 1.5f)
+        {
+            float scale = (TERRACE_RADIUS - 1.5f) / d;
+            x = TERRACE_CENTER.GetPositionX() + dx * scale;
+            y = TERRACE_CENTER.GetPositionY() + dy * scale;
+        }
         return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
@@ -1544,9 +1579,16 @@ bool NightbaneCharredEarthAction::isUseful()
     if (!nightbane)
         return false;
         
-    // Check if nightbane is casting charred earth or if bot is affected
-    return nightbane->FindCurrentSpellBySpellId(SPELL_CHARRED_EARTH) || 
-           bot->HasAura(SPELL_CHARRED_EARTH);
+    // Useful if Nightbane is casting, or if bot has aura, or if a matching dynamic area is near us
+    if (nightbane->FindCurrentSpellBySpellId(SPELL_CHARRED_EARTH) || bot->HasAura(SPELL_CHARRED_EARTH))
+        return true;
+    if (Aura* aura = AI_VALUE(Aura*, "area debuff"))
+    {
+        const SpellInfo* info = aura->GetSpellInfo();
+        if (info && info->Id == SPELL_CHARRED_EARTH)
+            return true;
+    }
+    return false;
 }
 
 bool NightbaneAirPhaseAction::Execute(Event event)
@@ -1582,7 +1624,7 @@ bool NightbaneAirPhaseAction::Execute(Event event)
 
         float targetX = TERRACE_CENTER.GetPositionX() + std::cos(baseAngle) * SLOT_RING;
         float targetY = TERRACE_CENTER.GetPositionY() + std::sin(baseAngle) * SLOT_RING;
-        float targetZ = bot->GetPositionZ(); // keep current Z to avoid unintended falls
+        float targetZ = TERRACE_CENTER.GetPositionZ(); // anchor to terrace Z to avoid falls/teleporting
 
         // Clamp to terrace circle if somehow outside
         float dx = targetX - TERRACE_CENTER.GetPositionX();
@@ -1652,6 +1694,11 @@ bool NightbaneSkeletonAction::Execute(Event event)
     for (const auto& guid : targets) {
         Unit* unit = botAI->GetUnit(guid);
         if (unit && unit->IsAlive() && unit->GetEntry() == NPC_RESTLESS_SKELETON && unit->IsInCombat()) {
+            // Ignore skeletons that are off the terrace to prevent trash pulls
+            const Position TERRACE_CENTER = { -11162.231f, -1900.329f, 91.476f };
+            const float TERRACE_RADIUS = 36.0f;
+            if (unit->GetExactDist2d(TERRACE_CENTER) > TERRACE_RADIUS)
+                continue;
             // WotLK pattern: AttackAction inheritance enables actual combat per CLAUDE.md:607
             return Attack(unit);
         }
@@ -1675,6 +1722,44 @@ bool NightbaneSkeletonAction::isUseful()
 }
 
 // Chess Event Actions
+// Helper to detect active chess environment even if GAME_IN_SESSION aura is not present on the bot
+static bool IsChessEnvironmentActive(Player* bot)
+{
+    if (!bot)
+        return false;
+    // Aura present on player or any nearby group member
+    if (bot->HasAura(SPELL_GAME_IN_SESSION))
+        return true;
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member->GetMapId() != bot->GetMapId())
+                continue;
+            if (member->IsAlive() && member->GetDistance(bot) < 120.0f && member->HasAura(SPELL_GAME_IN_SESSION))
+                return true;
+        }
+    }
+
+    // Scan nearby: treat event as active only if any piece is currently controlled
+    std::list<Unit*> units;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 120.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, units, u_check);
+    Cell::VisitObjects(bot, searcher, 120.0f);
+    for (Unit* u : units)
+    {
+        Creature* c = u ? u->ToCreature() : nullptr;
+        if (!c)
+            continue;
+        uint32 e = c->GetEntry();
+        bool isHumanPiece = (e == NPC_HUMAN_FOOTMAN || e == NPC_HUMAN_CONJURER || e == NPC_HUMAN_CLERIC || e == NPC_HUMAN_CHARGER || e == NPC_CHESS_KING_LLANE);
+        bool isOrcPiece   = (e == NPC_ORC_GRUNT || e == NPC_ORC_WARLOCK || e == NPC_ORC_NECROLYTE || e == NPC_ORC_WOLF || e == NPC_WARCHIEF_BLACKHAND);
+        if ((isHumanPiece || isOrcPiece) && c->GetCharmerGUID())
+            return true;
+    }
+    return false;
+}
 bool ChessEventMoveAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
@@ -1684,78 +1769,166 @@ bool ChessEventMoveAction::Execute(Event event)
     // Check if bot is controlling a chess piece (vehicle) or charmed piece
     Unit* vehicle = bot->GetVehicleBase();
     Creature* controlledPiece = nullptr;
+    // Shared reservation map for piece selection
+    struct Reservation { ObjectGuid bot; uint32 ts; };
+    static std::map<ObjectGuid, Reservation> s_pieceReservations; // piece -> (bot, time)
     if (!vehicle)
     {
-        // Try to possess a chess piece if event is active
-        Unit* medivh = bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 120.0f);
-        if (!medivh)
+        // Try to possess a chess piece only if event is active around us
+        if (!IsChessEnvironmentActive(bot))
             return false;
 
         // Skip if bot recently left a piece (server aura blocks immediate re-entry)
         if (bot->HasAura(30529)) // SPELL_RECENTLY_INGAME
             return false;
 
-        // Prefer Alliance pieces (players' side)
-        const uint32 pieceIds[] = {
-            NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC,
-            NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE
+        // Choose a side based on bot team and build role-prioritized piece order
+        bool isHorde = (bot->GetTeamId() == TEAM_HORDE);
+        auto preferList = [&]() -> std::vector<uint32>
+        {
+            bool isTank = botAI->IsTank(bot);
+            bool isHeal = botAI->IsHeal(bot);
+            bool isMelee = botAI->IsMelee(bot) && !isTank;
+            // Treat ranged as default when not tank/heal/melee
+            if (isHorde)
+            {
+                // Reserve the King (Warchief Blackhand) for humans: do not include it in bot preferences
+                if (isTank)  return {NPC_ORC_WOLF, NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE};
+                if (isHeal)  return {NPC_ORC_NECROLYTE, NPC_ORC_WARLOCK, NPC_ORC_WOLF, NPC_ORC_GRUNT};
+                if (isMelee) return {NPC_ORC_WOLF, NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE};
+                return {NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE, NPC_ORC_WOLF, NPC_ORC_GRUNT};
+            }
+            else
+            {
+                // Reserve the King (King Llane) for humans: do not include it in bot preferences
+                if (isTank)  return {NPC_HUMAN_CHARGER, NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC};
+                if (isHeal)  return {NPC_HUMAN_CLERIC, NPC_HUMAN_CONJURER, NPC_HUMAN_CHARGER, NPC_HUMAN_FOOTMAN};
+                if (isMelee) return {NPC_HUMAN_CHARGER, NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC};
+                return {NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC, NPC_HUMAN_CHARGER, NPC_HUMAN_FOOTMAN};
+            }
+        }();
+
+        // Build list of free pieces on our side, grouped by entry
+        std::map<uint32, std::vector<Creature*>> freeByEntry;
+        {
+            std::list<Unit*> units;
+            Acore::AnyUnitInObjectRangeCheck u_check(bot, 90.0f);
+            Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, units, u_check);
+            Cell::VisitObjects(bot, searcher, 90.0f);
+            for (Unit* u : units)
+            {
+                Creature* c = u ? u->ToCreature() : nullptr;
+                if (!c)
+                    continue;
+                uint32 e = c->GetEntry();
+                // Filter to our side
+                bool ours = isHorde ? (e == NPC_ORC_GRUNT || e == NPC_ORC_WARLOCK || e == NPC_ORC_NECROLYTE || e == NPC_ORC_WOLF || e == NPC_WARCHIEF_BLACKHAND)
+                                    : (e == NPC_HUMAN_FOOTMAN || e == NPC_HUMAN_CONJURER || e == NPC_HUMAN_CLERIC || e == NPC_HUMAN_CHARGER || e == NPC_CHESS_KING_LLANE);
+                if (!ours)
+                    continue;
+                if (!c->IsAlive() || c->GetCharmer() || c->GetVehicle())
+                    continue;
+                freeByEntry[e].push_back(c);
+            }
+        }
+
+        // Filter duplicates and reserve logic
+        const uint32 now = getMSTime();
+        const uint32 RESERVE_TIMEOUT = 5000; // 5s
+
+        auto reservedByOther = [&](Creature* c) -> bool {
+            auto it = s_pieceReservations.find(c->GetGUID());
+            if (it == s_pieceReservations.end()) return false;
+            const Reservation& r = it->second;
+            if (now - r.ts > RESERVE_TIMEOUT) return false; // stale
+            return r.bot != bot->GetGUID();
         };
 
-        for (uint32 pid : pieceIds)
+        // From the preferred order, find a free, non-reserved piece
+        Creature* piece = nullptr;
+        for (uint32 entry : preferList)
         {
-            Creature* piece = bot->FindNearestCreature(pid, 60.0f, true);
-            if (!piece || !piece->IsAlive() || piece->GetCharmer())
+            auto it = freeByEntry.find(entry);
+            if (it == freeByEntry.end() || it->second.empty())
                 continue;
-
-            // Move into gossip range
-            if (bot->GetDistance(piece) > 4.5f)
+            // Stable distribution among same entry
+            auto& vec = it->second;
+            size_t idx = bot->GetGUID().GetCounter() % vec.size();
+            // Scan up to N candidates to avoid a reserved one
+            for (size_t k = 0; k < vec.size(); ++k)
             {
-                bot->GetMotionMaster()->MovePoint(0, piece->GetPositionX(), piece->GetPositionY(), piece->GetPositionZ());
+                Creature* candidate = vec[(idx + k) % vec.size()];
+                // Explicitly skip kings as an extra safety, even if they slip into lists
+                if (candidate->GetEntry() == NPC_CHESS_KING_LLANE || candidate->GetEntry() == NPC_WARCHIEF_BLACKHAND)
+                    continue;
+                if (!reservedByOther(candidate))
+                {
+                    piece = candidate;
+                    break;
+                }
+            }
+            if (piece)
+                break;
+        }
+        if (!piece)
+            return false;
+
+        // Reserve the chosen piece
+        s_pieceReservations[piece->GetGUID()] = { bot->GetGUID(), now };
+        
+
+        // Move into gossip range
+        if (bot->GetDistance(piece) > 4.5f)
+        {
+            bot->GetMotionMaster()->MovePoint(0, piece->GetPositionX(), piece->GetPositionY(), piece->GetPositionZ());
+            
+            return true;
+        }
+
+        // Open gossip and select "Control <piece>"
+        {
+            // Ensure the piece currently allows gossip (not in warmup/moving)
+            if (!piece->HasNpcFlag(UNIT_NPC_FLAG_GOSSIP))
+                return false;
+            WorldPacket hello;
+            hello << piece->GetGUID();
+            bot->GetSession()->HandleGossipHelloOpcode(hello);
+
+            if (!bot->PlayerTalkClass)
+                return false;
+
+            GossipMenu& menu = bot->PlayerTalkClass->GetGossipMenu();
+            uint32 menuId = menu.GetMenuId();
+
+            // Default to first option; prefer one with text starting with "Control"
+            int32 selectIndex = -1;
+            GossipMenuItemContainer const& items = menu.GetMenuItems();
+            for (auto it = items.begin(); it != items.end(); ++it)
+            {
+                uint32 giIndex = it->first;
+                GossipMenuItem const* gi = menu.GetItem(giIndex);
+                if (!gi)
+                    continue;
+                if (gi->Message.find("Control ") == 0)
+                {
+                    selectIndex = static_cast<int32>(giIndex);
+                    break;
+                }
+                if (selectIndex == -1)
+                    selectIndex = static_cast<int32>(giIndex);
+            }
+
+            if (selectIndex != -1)
+            {
+                std::string code;
+                WorldPacket sel;
+                sel << piece->GetGUID();
+                sel << menuId << static_cast<uint32>(selectIndex);
+                sel << code;
+                bot->GetSession()->HandleGossipSelectOptionOpcode(sel);
                 return true;
             }
-
-            // Open gossip and select "Control <piece>"
-            {
-                WorldPacket hello;
-                hello << piece->GetGUID();
-                bot->GetSession()->HandleGossipHelloOpcode(hello);
-
-                if (!bot->PlayerTalkClass)
-                    return false;
-
-                GossipMenu& menu = bot->PlayerTalkClass->GetGossipMenu();
-                uint32 menuId = menu.GetMenuId();
-
-                // Default to first option; prefer one with text starting with "Control"
-                int32 selectIndex = -1;
-                GossipMenuItemContainer const& items = menu.GetMenuItems();
-                for (auto it = items.begin(); it != items.end(); ++it)
-                {
-                    uint32 idx = it->first;
-                    GossipMenuItem const* gi = menu.GetItem(idx);
-                    if (!gi)
-                        continue;
-                    // Heuristic: Chess script sets message to "Control <name>"
-                    if (gi->Message.find("Control ") == 0)
-                    {
-                        selectIndex = static_cast<int32>(idx);
-                        break;
-                    }
-                    if (selectIndex == -1)
-                        selectIndex = static_cast<int32>(idx);
-                }
-
-                if (selectIndex != -1)
-                {
-                    std::string code;
-                    WorldPacket sel;
-                    sel << piece->GetGUID();
-                    sel << menuId << static_cast<uint32>(selectIndex);
-                    sel << code;
-                    bot->GetSession()->HandleGossipSelectOptionOpcode(sel);
-                    return true;
-                }
-            }
+            
         }
         // If we already charmed a piece, pick it up here
         for (Unit::ControlSet::const_iterator itr = bot->m_Controlled.begin(); itr != bot->m_Controlled.end(); ++itr)
@@ -1769,6 +1942,20 @@ bool ChessEventMoveAction::Execute(Event event)
         }
         if (!controlledPiece)
             return false;
+
+        // We own a piece now; clear any stale reservations made by this bot
+        for (auto it = s_pieceReservations.begin(); it != s_pieceReservations.end(); )
+        {
+            if (it->second.bot == bot->GetGUID()) it = s_pieceReservations.erase(it); else ++it;
+        }
+    }
+    else
+    {
+        // Already in a vehicle: clear any reservations for this bot
+        for (auto it = s_pieceReservations.begin(); it != s_pieceReservations.end(); )
+        {
+            if (it->second.bot == bot->GetGUID()) it = s_pieceReservations.erase(it); else ++it;
+        }
     }
         
     // Identify controlled piece type
@@ -1782,17 +1969,14 @@ bool ChessEventMoveAction::Execute(Event event)
     Unit* target = nullptr;
     std::vector<uint32> enemyPieceIds;
     
-    // Determine enemy pieces based on our side
-    if (pieceEntry <= NPC_HUMAN_CLERIC) // Human side - target Orc pieces
-    {
-        enemyPieceIds = {NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE, 
-                        NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
-    }
-    else // Orc side - target Human pieces
-    {
-        enemyPieceIds = {NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC,
-                        NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
-    }
+    // Determine enemy pieces based on our actual side (by entry membership)
+    auto isHumanPiece = [&](uint32 e) {
+        return e == NPC_HUMAN_FOOTMAN || e == NPC_HUMAN_CONJURER || e == NPC_HUMAN_CLERIC || e == NPC_HUMAN_CHARGER || e == NPC_CHESS_KING_LLANE;
+    };
+    if (isHumanPiece(pieceEntry))
+        enemyPieceIds = {NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE, NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
+    else
+        enemyPieceIds = {NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC, NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
     
     // Find nearest enemy piece as target
     float closestDistance = 100.0f;
@@ -1811,20 +1995,24 @@ bool ChessEventMoveAction::Execute(Event event)
     }
     
     if (!target)
+    {
         return false;
+    }
     
     // Movement strategy using chess triggers (cast SPELL_MOVE_GENERIC on best trigger)
-    float desiredDistance = isRanged ? 18.0f : (isKing ? 25.0f : 6.0f);
+    float desiredDistance = isRanged ? 18.0f : (isKing ? 10.0f : 6.0f);
     float currentDistance = controller->GetDistance(target);
-    if (fabs(currentDistance - desiredDistance) > 4.0f && controlledPiece)
+    // If abilities have not fired for a while, allow repositioning even if nominal distance is okay
+    uint32 now = getMSTime();
+    uint32 lastAbility = g_chess_lastAbilityTime[controller->GetGUID()];
+    bool stale = (lastAbility && now - lastAbility > 3500);
+    if ((fabs(currentDistance - desiredDistance) > 4.0f || stale) && controlledPiece)
     {
-        // Safety: respect movement cooldown and throttle
-        if (controlledPiece->HasAura(KZ_SPELL_MOVE_COOLDOWN) ||
-            controlledPiece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
+        // Safety: respect movement cooldown and throttle (do not block on generic flags)
+        if (controlledPiece->HasAura(KZ_SPELL_MOVE_COOLDOWN))
             return false;
-        uint32 now = getMSTime();
         uint32& last = g_chess_lastMoveTime[controlledPiece->GetGUID()];
-        if (last && now - last < 1500) // 1.5s throttle
+        if (last && now - last < 1200) // modest throttle
             return false;
         std::list<Unit*> nearby;
         Acore::AnyUnitInObjectRangeCheck u_check(controlledPiece, 45.0f);
@@ -1839,7 +2027,7 @@ bool ChessEventMoveAction::Execute(Event event)
             if (!trig || trig->GetEntry() != KZ_NPC_CHESS_MOVE_TRIGGER)
                 continue; // NPC_CHESS_MOVE_TRIGGER
             float dPiece = controlledPiece->GetDistance(trig);
-            if (dPiece < 4.0f || dPiece > 22.0f)
+            if (dPiece > 25.0f)
                 continue;
             float dEnemy = trig->GetDistance(target);
             float score = dEnemy + dPiece * 0.25f;
@@ -1864,10 +2052,12 @@ bool ChessEventMoveAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    // Useful if already controlling a piece or the event is around us
+    // Useful if already controlling a piece or the chess environment is active around us
     if (bot->GetVehicleBase())
         return true;
-    return bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 120.0f) != nullptr;
+    if (IsChessEnvironmentActive(bot))
+        return true;
+    return false;
 }
 
 bool ChessEventAbilityAction::Execute(Event event)
@@ -1895,12 +2085,12 @@ bool ChessEventAbilityAction::Execute(Event event)
     if (!piece)
         return false;
 
-    // Safety throttles to avoid spam and respect casting state
-    if (piece->HasUnitState(UNIT_STATE_CASTING) || piece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
+    // Safety throttles to avoid spam; allow casts even if generic casting flags flicker
+    if (piece->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
         return false;
     uint32 now = getMSTime();
     uint32& last = g_chess_lastAbilityTime[piece->GetGUID()];
-    if (last && now - last < 1200) // ~GCD throttle
+    if (last && now - last < 900) // keep cadence snappy
         return false;
 
     uint32 pieceEntry = piece->GetEntry();
@@ -1953,6 +2143,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         {
             if (Creature* e = findEnemy(12.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37406, false); // Heroic Blow
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
                 return true;
@@ -1965,6 +2156,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         {
             if (Creature* e = findEnemy(10.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(piece, 37498, true); // Stomp
                 piece->CastSpell(e, 37453, false);    // Smash
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
@@ -1976,6 +2168,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         {
             if (Creature* e = findEnemy(25.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37462, false); // Elemental Blast
                 piece->CastSpell(e, 37465, false); // Rain of Fire
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
@@ -1993,6 +2186,7 @@ bool ChessEventAbilityAction::Execute(Event event)
             }
             if (Creature* e = findEnemy(20.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37459, false); // Holy Lance
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
                 return true;
@@ -2004,6 +2198,7 @@ bool ChessEventAbilityAction::Execute(Event event)
             piece->CastSpell(piece, 37471, true); // Heroism
             if (Creature* e = findEnemy(10.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(piece, 37474, true); // Sweep
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
                 return true;
@@ -2014,6 +2209,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         {
             if (Creature* e = findEnemy(12.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37413, false); // Vicious Strike
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
                 return true;
@@ -2026,6 +2222,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         {
             if (Creature* e = findEnemy(10.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(piece, 37454, true); // Bite
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
                 return true;
@@ -2036,6 +2233,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         {
             if (Creature* e = findEnemy(25.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37463, false); // Fireball
                 piece->CastSpell(e, 37469, false); // Poison Cloud
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
@@ -2053,6 +2251,7 @@ bool ChessEventAbilityAction::Execute(Event event)
             }
             if (Creature* e = findEnemy(20.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37461, false); // Shadow Spear
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
                 return true;
@@ -2064,6 +2263,7 @@ bool ChessEventAbilityAction::Execute(Event event)
             piece->CastSpell(piece, 37472, true); // Bloodlust
             if (Creature* e = findEnemy(10.0f))
             {
+                piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(piece, 37476, true); // Cleave
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
                 return true;
