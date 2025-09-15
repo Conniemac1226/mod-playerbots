@@ -1546,29 +1546,61 @@ bool NightbaneAirPhaseAction::Execute(Event event)
     if (!nightbane)
         return false;
 
-    // During air phase, spread out and avoid Rain of Bones
+    // Throttle movement to avoid spam
+    static std::map<ObjectGuid, uint32> s_lastAirMove;
+    uint32 now = getMSTime();
+    uint32& last = s_lastAirMove[bot->GetGUID()];
+    if (last && now - last < 800)
+        return false;
+
+    // Nightbane air phase: boss is not in melee range
     if (!nightbane->IsWithinMeleeRange(bot))
     {
-        // Spread from other players
-        Group* group = bot->GetGroup();
-        if (group)
+        // Define the Master's Terrace safe center and a conservative radius to stay on the platform
+        static const Position TERRACE_CENTER = { -11162.231f, -1900.329f, 91.476f };
+        static constexpr float TERRACE_RADIUS = 33.0f; // keep well within terrace edges
+        static constexpr float SLOT_RING = 14.0f;      // spread ring for players during air phase
+
+        // Pick a stable slot around center based on GUID to avoid stacking
+        float baseAngle = float((bot->GetGUID().GetCounter() % 360)) * float(M_PI) / 180.0f;
+        // Slightly vary for roles
+        if (botAI->IsHeal(bot))
+            baseAngle += 0.35f;
+
+        float targetX = TERRACE_CENTER.GetPositionX() + std::cos(baseAngle) * SLOT_RING;
+        float targetY = TERRACE_CENTER.GetPositionY() + std::sin(baseAngle) * SLOT_RING;
+        float targetZ = bot->GetPositionZ(); // keep current Z to avoid unintended falls
+
+        // Clamp to terrace circle if somehow outside
+        float dx = targetX - TERRACE_CENTER.GetPositionX();
+        float dy = targetY - TERRACE_CENTER.GetPositionY();
+        float d  = std::sqrt(dx*dx + dy*dy);
+        if (d > TERRACE_RADIUS - 2.0f)
         {
-            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
-            {
-                Player* member = ref->GetSource();
-                if (member && member != bot && member->GetDistance(bot) < 10.0f)
-                {
-                    float angle = bot->GetAngle(member) + M_PI;
-                    float x = bot->GetPositionX() + cos(angle) * 15.0f;
-                    float y = bot->GetPositionY() + sin(angle) * 15.0f;
-                    float z = bot->GetPositionZ();
-                    
-                    return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
-                }
-            }
+            float scale = (TERRACE_RADIUS - 2.0f) / d;
+            targetX = TERRACE_CENTER.GetPositionX() + dx * scale;
+            targetY = TERRACE_CENTER.GetPositionY() + dy * scale;
         }
+
+        // Keep within 35y of Nightbane to avoid Fireball Barrage targeting
+        float nbDist = bot->GetExactDist2d(nightbane);
+        if (nbDist > 35.0f)
+        {
+            // Move a bit toward boss, but stay clamped to terrace ring
+            float toBoss = std::atan2(nightbane->GetPositionY() - TERRACE_CENTER.GetPositionY(),
+                                      nightbane->GetPositionX() - TERRACE_CENTER.GetPositionX());
+            targetX = TERRACE_CENTER.GetPositionX() + std::cos(toBoss) * std::min(SLOT_RING + 2.0f, TERRACE_RADIUS - 3.0f);
+            targetY = TERRACE_CENTER.GetPositionY() + std::sin(toBoss) * std::min(SLOT_RING + 2.0f, TERRACE_RADIUS - 3.0f);
+        }
+
+        // If we are already close enough to our slot, do nothing
+        if (bot->GetExactDist2d(targetX, targetY) < 3.0f)
+            return false;
+
+        last = now;
+        return MoveTo(bot->GetMapId(), targetX, targetY, targetZ, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
-    
+
     return false;
 }
 
