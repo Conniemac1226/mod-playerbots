@@ -13,6 +13,7 @@
 #include "Group.h"
 #include "GroupReference.h"
 #include <set>
+#include "Log.h"
 
 
 // Helper function to check if a unit is casting a specific spell
@@ -504,9 +505,11 @@ bool NetherspiteBeamsTrigger::IsActive()
     if (!netherspite || !netherspite->IsInCombat())
         return false;
         
-    // Only trigger during portal phase (when NOT banished)
-    // Banish aura ID = 38524, when this is present, no beams are active
-    return !netherspite->HasAura(38524);
+    // Only trigger during portal phase (when NOT banished per boss script)
+    // SPELL_BANISH_VISUAL (39833) and SPELL_BANISH_ROOT (42716)
+    if (netherspite->HasAura(39833) || netherspite->HasAura(42716))
+        return false;
+    return true;
 }
 
 bool NetherspiteVoidZoneTrigger::IsActive()
@@ -519,6 +522,10 @@ bool NetherspiteVoidZoneTrigger::IsActive()
     if (bot->HasAura(SPELL_VOID_ZONE))
         return true;
 
+    // Generic dynamic-aoe detection (shared with AvoidAoeAction)
+    if (AI_VALUE2(bool, "has area debuff", "self target"))
+        return true;
+        
     // Generic hazard proximity: Minor Void Zone trigger creature (DB entry 17470)
     if (Unit* hz = bot->FindNearestCreature(17470, 12.0f, true))
         return true;
@@ -646,8 +653,24 @@ bool NightbaneCharredEarthTrigger::IsActive()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-
-    return bot->HasAura(SPELL_CHARRED_EARTH);
+    // Trigger if bot is affected
+    if (bot->HasAura(SPELL_CHARRED_EARTH))
+        return true;
+    // Or if Nightbane is casting Charred Earth
+    if (Unit* nightbane = bot->FindNearestCreature(NPC_NIGHTBANE, 100.0f))
+        if (nightbane->FindCurrentSpellBySpellId(SPELL_CHARRED_EARTH))
+            return true;
+    // Or if area debuff matches Charred Earth
+    if (AI_VALUE2(bool, "has area debuff", "self target"))
+    {
+        if (Aura* aura = AI_VALUE(Aura*, "area debuff"))
+        {
+            const SpellInfo* info = aura->GetSpellInfo();
+            if (info && info->Id == SPELL_CHARRED_EARTH)
+                return true;
+        }
+    }
+    return false;
 }
 
 bool NightbaneSkeletonTrigger::IsActive()
@@ -681,6 +704,8 @@ bool NightbaneSkeletonTrigger::IsActive()
 }
 
 // Chess Event triggers
+// Forward declaration used by trigger function
+static bool IsChessEnvironmentActive(Player* bot);
 bool ChessEventActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -691,21 +716,47 @@ bool ChessEventActiveTrigger::IsActive()
     if (bot->GetVehicleBase())
         return true;
 
-    // Check if Echo of Medivh is present (Chess Event controller)
-    Unit* medivh = bot->FindNearestCreature(NPC_ECHO_OF_MEDIVH, 100.0f);
-    if (!medivh)
+    // Event detection via aura or environment
+    if (IsChessEnvironmentActive(bot))
+        return true;
+
+    return false;
+}
+// Chess environment probe (mirror of logic used in actions)
+static bool IsChessEnvironmentActive(Player* bot)
+{
+    if (!bot)
         return false;
-
-    // Check if chess event is in progress - multiple detection methods
-    if (medivh->HasAura(SPELL_GAME_IN_SESSION))
+    // Aura on bot or any nearby group member
+    if (bot->HasAura(SPELL_GAME_IN_SESSION))
         return true;
-        
-    // Check if any chess pieces exist nearby (alternative detection)
-    if (bot->FindNearestCreature(NPC_CHESS_KING_LLANE, 50.0f) ||
-        bot->FindNearestCreature(NPC_WARCHIEF_BLACKHAND, 50.0f) ||
-        bot->FindNearestCreature(NPC_HUMAN_FOOTMAN, 50.0f) ||
-        bot->FindNearestCreature(NPC_ORC_GRUNT, 50.0f))
-        return true;
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member->GetMapId() != bot->GetMapId())
+                continue;
+            if (member->IsAlive() && member->GetDistance(bot) < 120.0f && member->HasAura(SPELL_GAME_IN_SESSION))
+                return true;
+        }
+    }
 
+    // Any piece currently controlled nearby
+    std::list<Unit*> units;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 120.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, units, u_check);
+    Cell::VisitObjects(bot, searcher, 120.0f);
+    for (Unit* u : units)
+    {
+        Creature* c = u ? u->ToCreature() : nullptr;
+        if (!c)
+            continue;
+        uint32 e = c->GetEntry();
+        bool isHumanPiece = (e == NPC_HUMAN_FOOTMAN || e == NPC_HUMAN_CONJURER || e == NPC_HUMAN_CLERIC || e == NPC_HUMAN_CHARGER || e == NPC_CHESS_KING_LLANE);
+        bool isOrcPiece   = (e == NPC_ORC_GRUNT || e == NPC_ORC_WARLOCK || e == NPC_ORC_NECROLYTE || e == NPC_ORC_WOLF || e == NPC_WARCHIEF_BLACKHAND);
+        if ((isHumanPiece || isOrcPiece) && c->GetCharmerGUID())
+            return true;
+    }
     return false;
 }
