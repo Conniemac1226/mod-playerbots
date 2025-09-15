@@ -53,6 +53,10 @@ enum KarazhanNPCs
     
     // Netherspite
     NPC_NETHERSPITE            = 15689,
+    // Netherspite portals (from boss_netherspite.cpp PortalID)
+    NPC_NETHER_PORTAL_PERSEVERANCE = 17369, // Red
+    NPC_NETHER_PORTAL_SERENITY     = 17367, // Green
+    NPC_NETHER_PORTAL_DOMINANCE    = 17368, // Blue
     
     // Chess Event
     NPC_ECHO_OF_MEDIVH         = 16816,
@@ -120,6 +124,13 @@ enum KarazhanSpells
     SPELL_NETHERBURN           = 30522,
     SPELL_VOID_ZONE            = 37063,
     SPELL_NETHERBREATH         = 38523,
+    // Netherspite beam auras (from boss_netherspite.cpp PlayerBuff/PlayerDebuff)
+    SPELL_PORTAL_PERSEVERANCE  = 30421, // PlayerBuff[RED]
+    SPELL_PORTAL_SERENITY      = 30422, // PlayerBuff[GREEN]
+    SPELL_PORTAL_DOMINANCE     = 30423, // PlayerBuff[BLUE]
+    SPELL_EXHAUSTION_PERSEVERANCE = 38637, // PlayerDebuff[RED]
+    SPELL_EXHAUSTION_SERENITY     = 38638, // PlayerDebuff[GREEN]
+    SPELL_EXHAUSTION_DOMINANCE    = 38639, // PlayerDebuff[BLUE]
     
     // Prince Malchezaar
     SPELL_SHADOW_WORD_PAIN     = 30854,

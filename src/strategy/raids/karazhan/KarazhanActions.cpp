@@ -16,6 +16,7 @@
 #include "GroupReference.h"
 #include "ObjectGuid.h"
 #include "Position.h"
+#include <cmath>
 
 // Helper function to check if a unit is casting a specific spell
 static bool IsCastingSpell(Unit* unit, uint32 spellId)
@@ -1094,10 +1095,7 @@ struct NetherspiteBeamState {
 };
 static std::map<uint32, NetherspiteBeamState> g_netherspiteBeamState; // Per instance ID
 
-// Beam portal positions (approximate)
-static const Position NETHERSPITE_RED_PORTAL = {-11187.0f, -1638.0f, 278.0f};
-static const Position NETHERSPITE_BLUE_PORTAL = {-11111.0f, -1638.0f, 278.0f};
-static const Position NETHERSPITE_GREEN_PORTAL = {-11149.0f, -1691.0f, 278.0f};
+// Dynamic portal positions (queried in Execute)
 
 bool NetherspiteBeamAction::Execute(Event event)
 {
@@ -1150,16 +1148,14 @@ bool NetherspiteBeamAction::Execute(Event event)
     // Red Beam (Perseverance) - Tanks
     if (botAI->IsTank(bot))
     {
-        // Check if we need to rotate based on debuff stacks
+        // Check if we need to rotate based on buff stacks while in beam
         if (beamState.redBeamHolder == botGuid)
         {
-            // Stay in beam unless we have high stacks or debuff is expiring
-            if (bot->HasAura(38280)) 
+            if (Aura* buff = bot->GetAura(SPELL_PORTAL_PERSEVERANCE))
             {
-                Aura* debuff = bot->GetAura(38280);
-                if (debuff->GetStackAmount() >= 4 || debuff->GetDuration() < 3000)
+                if (buff->GetStackAmount() >= 4)
                 {
-                    // Need to swap out - high stacks or about to expire
+                    // Need to swap out - high stacks
                     beamState.redBeamHolder = ObjectGuid::Empty;
                     beamState.lastBeamSwitch = currentTime;
                     return false;
@@ -1168,8 +1164,8 @@ bool NetherspiteBeamAction::Execute(Event event)
                 return false;
             }
         }
-        else if (beamState.redBeamHolder.IsEmpty() || 
-                 (currentTime - beamState.lastBeamSwitch > 25000)) // Allow rotation after 25s
+        else if ((beamState.redBeamHolder.IsEmpty() || (currentTime - beamState.lastBeamSwitch > 25000))
+                  && !bot->HasAura(SPELL_EXHAUSTION_PERSEVERANCE)) // don't take if recently exhausted
         {
             shouldTakeRed = true;
         }
@@ -1179,21 +1175,11 @@ bool NetherspiteBeamAction::Execute(Event event)
     {
         if (beamState.blueBeamHolder == botGuid)
         {
-            // Stay in beam unless debuff is expiring - healers typically don't need to rotate
-            if (bot->HasAura(38281))
-            {
-                Aura* debuff = bot->GetAura(38281);
-                if (debuff->GetDuration() < 3000)
-                {
-                    beamState.blueBeamHolder = ObjectGuid::Empty;
-                    beamState.lastBeamSwitch = currentTime;
-                    return false;
-                }
-                // Continue holding beam
+            // Healers can hold blue; no stack rotation required here
+            if (bot->HasAura(SPELL_PORTAL_DOMINANCE))
                 return false;
-            }
         }
-        else if (beamState.blueBeamHolder.IsEmpty())
+        else if (beamState.blueBeamHolder.IsEmpty() && !bot->HasAura(SPELL_EXHAUSTION_DOMINANCE))
         {
             shouldTakeBlue = true;
         }
@@ -1203,26 +1189,48 @@ bool NetherspiteBeamAction::Execute(Event event)
     {
         if (beamState.greenBeamHolder == botGuid)
         {
-            // Stay in beam unless debuff is expiring - DPS typically don't need to rotate often
-            if (bot->HasAura(38282))
-            {
-                Aura* debuff = bot->GetAura(38282);
-                if (debuff->GetDuration() < 3000)
-                {
-                    beamState.greenBeamHolder = ObjectGuid::Empty;
-                    beamState.lastBeamSwitch = currentTime;
-                    return false;
-                }
-                // Continue holding beam
+            if (bot->HasAura(SPELL_PORTAL_SERENITY))
                 return false;
-            }
         }
-        else if (beamState.greenBeamHolder.IsEmpty())
+        else if (beamState.greenBeamHolder.IsEmpty() && !bot->HasAura(SPELL_EXHAUSTION_SERENITY))
         {
             shouldTakeGreen = true;
         }
     }
     
+    // Resolve portal positions at runtime; the color-to-position is randomized each portal phase
+    Position redPos, bluePos, greenPos;
+    auto findPortalPos = [&](uint32 entry, Position& out) -> bool
+    {
+        if (Creature* c = bot->FindNearestCreature(entry, 120.0f, true))
+        {
+            out.Relocate(c->GetPosition());
+            return true;
+        }
+        // Beamer uses the same entry; scan hostile list if nearest misses
+        const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+        for (const auto& g : npcs)
+        {
+            if (Unit* u = botAI->GetUnit(g))
+            {
+                if (u->GetEntry() == entry)
+                {
+                    out.Relocate(u->GetPosition());
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    // Abort if we cannot find the portals yet
+    if (!findPortalPos(NPC_NETHER_PORTAL_PERSEVERANCE, redPos) |
+        !findPortalPos(NPC_NETHER_PORTAL_DOMINANCE, bluePos) |
+        !findPortalPos(NPC_NETHER_PORTAL_SERENITY, greenPos))
+    {
+        return false;
+    }
+
     // Helper lambda to move toward midpoint of a portal->boss line
     auto moveTowardBeam = [&](const Position& portal) -> bool
     {
@@ -1250,7 +1258,7 @@ bool NetherspiteBeamAction::Execute(Event event)
     // Position to intercept appropriate beam
     if (shouldTakeRed)
     {
-        if (moveTowardBeam(NETHERSPITE_RED_PORTAL))
+        if (moveTowardBeam(redPos))
         {
             beamState.redBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1259,7 +1267,7 @@ bool NetherspiteBeamAction::Execute(Event event)
     }
     else if (shouldTakeBlue)
     {
-        if (moveTowardBeam(NETHERSPITE_BLUE_PORTAL))
+        if (moveTowardBeam(bluePos))
         {
             beamState.blueBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1268,7 +1276,7 @@ bool NetherspiteBeamAction::Execute(Event event)
     }
     else if (shouldTakeGreen)
     {
-        if (moveTowardBeam(NETHERSPITE_GREEN_PORTAL))
+        if (moveTowardBeam(greenPos))
         {
             beamState.greenBeamHolder = botGuid;
             beamState.lastBeamSwitch = currentTime;
@@ -1294,14 +1302,50 @@ bool NetherspiteVoidZoneAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Move out of Void Zone
+    // Prefer moving away from the actual cast destination (when available)
+    if (Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f))
+    {
+        if (Spell* sp = netherspite->FindCurrentSpellBySpellId(SPELL_VOID_ZONE))
+        {
+            // If a destination (ground) was targeted, step away from that point
+            if (SpellDestination const* dst = sp->m_targets.GetDst())
+            {
+                float hx = dst->_position.GetPositionX();
+                float hy = dst->_position.GetPositionY();
+                float dx = bot->GetPositionX() - hx;
+                float dy = bot->GetPositionY() - hy;
+                float dist2d = std::sqrt(dx * dx + dy * dy);
+                // If we are standing on/near the hazard or selected as target, move 15y away from it
+                if (dist2d < 12.0f || (sp->m_targets.GetUnitTarget() == bot))
+                {
+                    float nx = bot->GetPositionX();
+                    float ny = bot->GetPositionY();
+                    float nz = bot->GetPositionZ();
+                    float scale = (dist2d > 0.1f ? (15.0f / dist2d) : 1.0f);
+                    nx += dx * scale;
+                    ny += dy * scale;
+                    return MoveTo(bot->GetMapId(), nx, ny, nz, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
+                }
+            }
+        }
+    }
+
+    // Fallback: if we are ticking with the Void Zone aura, move opposite from boss
     if (bot->HasAura(SPELL_VOID_ZONE))
     {
+        if (Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f))
+        {
+            float angle = bot->GetAngle(netherspite) + M_PI; // away from boss
+            float x = bot->GetPositionX() + cos(angle) * 12.0f;
+            float y = bot->GetPositionY() + sin(angle) * 12.0f;
+            float z = bot->GetPositionZ();
+            return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
+        }
+        // If boss not found, just move forward 12y to evacuate
         float angle = bot->GetOrientation();
-        float x = bot->GetPositionX() + cos(angle) * 10.0f;
-        float y = bot->GetPositionY() + sin(angle) * 10.0f;
+        float x = bot->GetPositionX() + cos(angle) * 12.0f;
+        float y = bot->GetPositionY() + sin(angle) * 12.0f;
         float z = bot->GetPositionZ();
-        
         return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
     }
     
@@ -1314,14 +1358,28 @@ bool NetherspiteVoidZoneAction::isUseful()
     if (!bot)
         return false;
     
-    // Active when Netherspite is present and void zones exist
+    // Active when Netherspite is present and void zones may affect us
     Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
     if (!netherspite || !netherspite->IsInCombat())
         return false;
-        
-    // Check if bot is in void zone or void zones are nearby
-    return bot->HasAura(SPELL_VOID_ZONE) || 
-           bot->FindNearestCreature(17470, 30.0f); // Void Zone creature ID
+
+    // Useful if: (a) we are taking zone aura ticks, or (b) boss is casting Void Zone and we are target/near destination
+    if (bot->HasAura(SPELL_VOID_ZONE))
+        return true;
+
+    if (Spell* sp = netherspite->FindCurrentSpellBySpellId(SPELL_VOID_ZONE))
+    {
+        if (sp->m_targets.GetUnitTarget() == bot)
+            return true;
+        if (SpellDestination const* dst = sp->m_targets.GetDst())
+        {
+            float dx = bot->GetPositionX() - dst->_position.GetPositionX();
+            float dy = bot->GetPositionY() - dst->_position.GetPositionY();
+            if ((dx * dx + dy * dy) < (10.0f * 10.0f))
+                return true;
+        }
+    }
+    return false;
 }
 
 // Prince Malchezaar Actions
