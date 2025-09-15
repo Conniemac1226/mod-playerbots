@@ -518,6 +518,10 @@ bool NetherspiteVoidZoneTrigger::IsActive()
     // Check if in Void Zone
     if (bot->HasAura(SPELL_VOID_ZONE))
         return true;
+
+    // Generic hazard proximity: Minor Void Zone trigger creature (DB entry 17470)
+    if (Unit* hz = bot->FindNearestCreature(17470, 12.0f, true))
+        return true;
         
     // Check if Netherspite is casting Void Zone and bot is the target
     Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
