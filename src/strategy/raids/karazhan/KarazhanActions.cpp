@@ -1207,17 +1207,17 @@ bool NetherspiteBeamAction::Execute(Event event)
             out.Relocate(c->GetPosition());
             return true;
         }
-        // Beamer uses the same entry; scan hostile list if nearest misses
-        const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-        for (const auto& g : npcs)
+        // Scan all units in range (neutral/friendly portals included)
+        std::list<Unit*> units;
+        Acore::AnyUnitInObjectRangeCheck check(bot, 120.0f);
+        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, units, check);
+        Cell::VisitObjects(bot, searcher, 120.0f);
+        for (Unit* u : units)
         {
-            if (Unit* u = botAI->GetUnit(g))
+            if (u && u->GetEntry() == entry)
             {
-                if (u->GetEntry() == entry)
-                {
-                    out.Relocate(u->GetPosition());
-                    return true;
-                }
+                out.Relocate(u->GetPosition());
+                return true;
             }
         }
         return false;
@@ -1330,7 +1330,17 @@ bool NetherspiteVoidZoneAction::Execute(Event event)
         }
     }
 
-    // Fallback: if we are ticking with the Void Zone aura, move opposite from boss
+    // If we are near a Minor Void Zone trigger (DB entry 17470), step away from it safely
+    if (Unit* hz = bot->FindNearestCreature(17470, 10.0f, true))
+    {
+        float angle = bot->GetAngle(hz) + M_PI;
+        float x = bot->GetPositionX() + cos(angle) * 12.0f;
+        float y = bot->GetPositionY() + sin(angle) * 12.0f;
+        float z = bot->GetPositionZ();
+        return MoveTo(bot->GetMapId(), x, y, z, false, true, false, true, MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    // Fallback: if we are ticking with a zone aura (some DBs), move opposite from boss
     if (bot->HasAura(SPELL_VOID_ZONE))
     {
         if (Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f))
@@ -1379,6 +1389,9 @@ bool NetherspiteVoidZoneAction::isUseful()
                 return true;
         }
     }
+    // Also useful if an active Minor Void Zone trigger exists close to the bot
+    if (bot->FindNearestCreature(17470, 12.0f, true))
+        return true;
     return false;
 }
 
