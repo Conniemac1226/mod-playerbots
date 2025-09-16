@@ -27,16 +27,20 @@ bool SarannisReinforcementsAction::Execute(Event event)
         return false;
     }
     
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    float distance = bot->GetExactDist2d(boss);
+    if (distance > 40.0f)
+    {
+        // Pull adds back toward the boss if we are too far out
+        return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), boss->GetPositionZ(),
+                      false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+    }
     
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit)
-        {
             continue;
-        }
         
         if (unit->GetEntry() == NPC_BLOODWARDER_MENDER)
         {
@@ -48,9 +52,7 @@ bool SarannisReinforcementsAction::Execute(Event event)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit)
-        {
             continue;
-        }
         
         if (unit->GetEntry() == NPC_BLOODWARDER_RESERVIST)
         {
@@ -60,6 +62,7 @@ bool SarannisReinforcementsAction::Execute(Event event)
     
     return false;
 }
+
 
 bool FreywinnFrayerPriorityAction::isUseful()
 {
@@ -276,26 +279,50 @@ bool ThorngrinHellfireAction::Execute(Event event)
         return false;
     }
 
-    float safeDistance = 15.0f; // Hellfire has 15 yard radius per spell data
+    float safeDistance = 15.0f; // Hellfire radius per spell data
     float currentDist = bot->GetExactDist2d(boss);
 
     if (currentDist < safeDistance)
     {
-        // EMERGENCY: Move out of hellfire range
-        float angle = bot->GetAngle(boss) + M_PI;
-        float moveDistance = safeDistance - currentDist + 3.0f;
-        float x = bot->GetPositionX() + cos(angle) * moveDistance;
-        float y = bot->GetPositionY() + sin(angle) * moveDistance;
-        float z = bot->GetPositionZ();
+        float moveDistance = safeDistance - currentDist + 4.0f;
 
-        // Stop casting and move immediately
         bot->InterruptNonMeleeSpells(true);
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                    MovementPriority::MOVEMENT_NORMAL);
+        if (MoveAway(boss, moveDistance))
+            return true;
+
+        float baseAngle = boss->GetAngle(bot);
+        for (float delta = 0.0f; delta <= M_PI / 2; delta += M_PI / 8)
+        {
+            for (int sign = -1; sign <= 1; sign += 2)
+            {
+                float angle = baseAngle + delta * sign;
+                if (delta == 0.0f && sign == -1)
+                    sign = 1; // ensure base angle only processed once
+
+                float dx = bot->GetPositionX() + cos(angle) * moveDistance;
+                float dy = bot->GetPositionY() + sin(angle) * moveDistance;
+                float dz = bot->GetPositionZ();
+                bool exact = bot->GetMap()->CheckCollisionAndGetValidCoords(bot, bot->GetPositionX(), bot->GetPositionY(),
+                                                                            bot->GetPositionZ(), dx, dy, dz);
+                if (!exact)
+                {
+                    dx = bot->GetPositionX() + cos(angle) * moveDistance;
+                    dy = bot->GetPositionY() + sin(angle) * moveDistance;
+                    dz = bot->GetPositionZ();
+                }
+
+                if (MoveTo(bot->GetMapId(), dx, dy, dz, false, false, true, exact,
+                          MovementPriority::MOVEMENT_NORMAL))
+                    return true;
+            }
+        }
     }
 
     return false;
 }
+
+
+
 
 bool ThorngrinEnrageAction::Execute(Event event)
 {

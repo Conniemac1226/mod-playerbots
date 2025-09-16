@@ -3,6 +3,11 @@
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
 
+namespace
+{
+    constexpr uint8 MAGTHERIDON_PHASE_UNKNOWN = 255;
+}
+
 bool HellfireChannelerNearTrigger::IsActive()
 {
     // Only during initial phase
@@ -359,39 +364,32 @@ bool ChannelerInterruptNeededTrigger::IsActive()
 
 bool MagtheridonPhaseTransitionTrigger::IsActive()
 {
-    static uint8 lastPhase = 255;
     Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
-    
-    if (!magtheridon)
+
+    if (!magtheridon || !magtheridon->IsAlive())
     {
-        lastPhase = 255;
+        _lastPhase = MAGTHERIDON_PHASE_UNKNOWN;
         return false;
     }
-    
+
     uint8 currentPhase = 0;
-    
-    // Determine current phase
+
     if (magtheridon->HasAura(SPELL_SHADOW_CAGE))
-    {
-        currentPhase = 0; // Channelers phase
-    }
+        currentPhase = 0;
     else if (magtheridon->GetHealthPct() <= 30.0f)
-    {
-        currentPhase = 2; // Cave in phase
-    }
+        currentPhase = 2;
     else
+        currentPhase = 1;
+
+    if (currentPhase != _lastPhase)
     {
-        currentPhase = 1; // Released phase
-    }
-    
-    if (currentPhase != lastPhase)
-    {
-        lastPhase = currentPhase;
+        _lastPhase = currentPhase;
         return true;
     }
-    
+
     return false;
 }
+
 
 bool ShadowBoltVolleyCastTrigger::IsActive()
 {
@@ -434,46 +432,52 @@ bool MindExhaustionCheckTrigger::IsActive()
 
 bool MagtheridonReleasedTrigger::IsActive()
 {
-    static bool wasReleased = false;
     Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
-    
-    if (!magtheridon)
+
+    if (!magtheridon || !magtheridon->IsAlive())
     {
-        wasReleased = false;
+        _wasReleased = false;
         return false;
     }
-    
+
     bool isReleased = !magtheridon->HasAura(SPELL_SHADOW_CAGE);
-    
-    if (isReleased && !wasReleased)
+
+    if (isReleased && !_wasReleased)
     {
-        wasReleased = true;
+        _wasReleased = true;
         return true;
     }
-    
-    wasReleased = isReleased;
+
+    _wasReleased = isReleased;
     return false;
 }
 
+
 bool MagtheridonLowHealthTrigger::IsActive()
 {
-    static bool wasLowHealth = false;
     Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
-    
-    if (!magtheridon)
+
+    if (!magtheridon || !magtheridon->IsAlive())
     {
-        wasLowHealth = false;
+        _wasLowHealth = false;
         return false;
     }
-    
+
     bool isLowHealth = magtheridon->GetHealthPct() <= 30.0f;
-    
-    if (isLowHealth && !wasLowHealth)
+
+    if (isLowHealth && !_wasLowHealth)
     {
-        wasLowHealth = true;
+        _wasLowHealth = true;
         return true;
     }
-    
-    wasLowHealth = isLowHealth;
+
+    _wasLowHealth = isLowHealth;
     return false;
 }
+
+
+
+
+
+
+

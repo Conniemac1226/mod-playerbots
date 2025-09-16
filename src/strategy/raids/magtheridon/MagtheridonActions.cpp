@@ -3,6 +3,15 @@
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
 #include "ScriptedCreature.h"
+#include "Spell.h"
+#include <algorithm>
+#include <limits>
+#include <iterator>
+namespace
+{
+    constexpr uint8 MAGTHERIDON_PHASE_UNKNOWN = std::numeric_limits<uint8>::max();
+}
+
 
 bool HellfireChannelerTargetAction::Execute(Event event)
 {
@@ -195,6 +204,66 @@ bool StopClickingCubeAction::isUseful()
         
     return false;
 }
+bool WaitForExhaustionAction::Execute(Event event)
+{
+    if (!bot->HasAura(SPELL_MIND_EXHAUSTION))
+        return false;
+
+    if (bot->HasAura(SPELL_SHADOW_GRASP))
+        bot->InterruptNonMeleeSpells(true);
+
+    GameObject* cube = FindNearestCube();
+    if (cube && bot->GetDistance(cube) < 5.0f)
+    {
+        Position recovery = GetRecoveryPosition(cube);
+        return MoveTo(bot->GetMapId(), recovery.GetPositionX(), recovery.GetPositionY(),
+                      recovery.GetPositionZ(), false, false, false, true,
+                      MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    bot->StopMoving();
+    return true;
+}
+
+bool WaitForExhaustionAction::isUseful()
+{
+    return bot->HasAura(SPELL_MIND_EXHAUSTION);
+}
+
+GameObject* WaitForExhaustionAction::FindNearestCube() const
+{
+    std::list<GameObject*> cubes;
+    bot->GetGameObjectListWithEntryInGrid(cubes, GO_MANTICRON_CUBE, 50.0f);
+
+    GameObject* nearest = nullptr;
+    float minDist = 9999.0f;
+
+    for (GameObject* cube : cubes)
+    {
+        if (!cube || cube->HasFlag(GAMEOBJECT_FLAGS, GO_FLAG_NOT_SELECTABLE))
+            continue;
+
+        float dist = bot->GetDistance(cube);
+        if (dist < minDist)
+        {
+            minDist = dist;
+            nearest = cube;
+        }
+    }
+
+    return nearest;
+}
+
+Position WaitForExhaustionAction::GetRecoveryPosition(GameObject* cube) const
+{
+    if (!cube)
+        return bot->GetPosition();
+
+    Position pos = cube->GetPosition();
+    float angle = cube->GetAngle(bot);
+    pos.RelocatePolarOffset(angle, 8.0f);
+    return pos;
+}
 
 bool AvoidQuakeAction::Execute(Event event)
 {
@@ -202,7 +271,7 @@ bool AvoidQuakeAction::Execute(Event event)
     
     return MoveTo(bot->GetMapId(), safePos.GetPositionX(), safePos.GetPositionY(),
                  safePos.GetPositionZ(), false, false, false, true,
-                 MovementPriority::MOVEMENT_COMBAT);
+                 MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool AvoidQuakeAction::isUseful()
@@ -247,7 +316,7 @@ bool AvoidDebrisAction::Execute(Event event)
     
     return MoveTo(bot->GetMapId(), safeSpot.GetPositionX(), safeSpot.GetPositionY(),
                  safeSpot.GetPositionZ(), false, false, false, true,
-                 MovementPriority::MOVEMENT_COMBAT);
+                 MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool AvoidDebrisAction::isUseful()
@@ -355,7 +424,7 @@ bool HandleCaveInAction::Execute(Event event)
     g_caveInSafePosition[botGuid] = true;
     
     return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, false, false, true,
-                 MovementPriority::MOVEMENT_COMBAT);
+                 MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool HandleCaveInAction::isUseful()
@@ -381,7 +450,7 @@ bool AvoidBlazeAction::Execute(Event event)
     
     return MoveTo(bot->GetMapId(), safePos.GetPositionX(), safePos.GetPositionY(),
                  safePos.GetPositionZ(), false, false, false, true,
-                 MovementPriority::MOVEMENT_COMBAT);
+                 MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool AvoidBlazeAction::isUseful()
@@ -455,7 +524,7 @@ bool SpreadForCleaveAction::Execute(Event event)
     
     return MoveTo(bot->GetMapId(), spreadPos.GetPositionX(), spreadPos.GetPositionY(),
                  spreadPos.GetPositionZ(), false, false, false, true,
-                 MovementPriority::MOVEMENT_COMBAT);
+                 MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool SpreadForCleaveAction::isUseful()
@@ -556,7 +625,7 @@ bool TankPositionAddsAction::Execute(Event event)
     
     return MoveTo(bot->GetMapId(), tankPos.GetPositionX(), tankPos.GetPositionY(),
                  tankPos.GetPositionZ(), false, false, false, true,
-                 MovementPriority::MOVEMENT_COMBAT);
+                 MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool TankPositionAddsAction::isUseful()
@@ -592,7 +661,7 @@ bool HealerPositionMagtheridonAction::Execute(Event event)
     
     return MoveTo(bot->GetMapId(), healPos.GetPositionX(), healPos.GetPositionY(),
                  healPos.GetPositionZ(), false, false, false, true,
-                 MovementPriority::MOVEMENT_COMBAT);
+                 MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool HealerPositionMagtheridonAction::isUseful()
@@ -626,7 +695,7 @@ bool BanishPhasePositionAction::Execute(Event event)
     
     return MoveTo(bot->GetMapId(), banishPos.GetPositionX(), banishPos.GetPositionY(),
                  banishPos.GetPositionZ(), false, false, false, true,
-                 MovementPriority::MOVEMENT_COMBAT);
+                 MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool BanishPhasePositionAction::isUseful()
@@ -655,13 +724,37 @@ Position BanishPhasePositionAction::GetBanishPosition()
     return pos;
 }
 
+bool BurnPhaseAction::Execute(Event event)
+{
+    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    if (!magtheridon || !magtheridon->IsAlive())
+        return false;
+
+    if (PlayerbotAI::IsHeal(bot))
+        return false;
+
+    return Attack(magtheridon);
+}
+
+bool BurnPhaseAction::isUseful()
+{
+    if (PlayerbotAI::IsHeal(bot))
+        return false;
+
+    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    if (!magtheridon || magtheridon->HasAura(SPELL_SHADOW_CAGE))
+        return false;
+
+    return magtheridon->IsAlive();
+}
+
 bool AvoidInfernalAction::Execute(Event event)
 {
     Position safePos = GetSafeFromInfernal();
-    
+
     return MoveTo(bot->GetMapId(), safePos.GetPositionX(), safePos.GetPositionY(),
                  safePos.GetPositionZ(), false, false, false, true,
-                 MovementPriority::MOVEMENT_COMBAT);
+                 MovementPriority::MOVEMENT_NORMAL);
 }
 
 bool AvoidInfernalAction::isUseful()
@@ -773,83 +866,100 @@ Unit* CoordinateChannelerInterruptAction::FindChannelerCasting()
 
 bool CoordinateChannelerInterruptAction::ShouldIInterrupt(Unit* channeler)
 {
-    // Check if other bots are already interrupting
     Group* group = bot->GetGroup();
     if (!group)
-        return true; // Solo, always interrupt
-        
-    uint32 interruptersInRange = 0;
-    uint32 myIndex = 999;
-    uint32 currentIndex = 0;
-    
+        return true;
+
+    GuidVector eligible;
     for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
         Player* member = itr->GetSource();
         if (!member || !member->IsAlive())
             continue;
-            
+
         if (member->GetDistance(channeler) > 30.0f)
             continue;
-            
-        // Check if they can interrupt
-        if (member->getClass() == CLASS_ROGUE ||
-            member->getClass() == CLASS_WARRIOR ||
-            member->getClass() == CLASS_MAGE ||
-            member->getClass() == CLASS_WARLOCK ||
-            member->getClass() == CLASS_SHAMAN)
+
+        uint8 memberClass = member->getClass();
+        if (memberClass == CLASS_ROGUE || memberClass == CLASS_WARRIOR || memberClass == CLASS_MAGE ||
+            memberClass == CLASS_WARLOCK || memberClass == CLASS_SHAMAN)
         {
-            if (member == bot)
-                myIndex = currentIndex;
-                
-            interruptersInRange++;
-            currentIndex++;
+            eligible.push_back(member->GetGUID());
         }
     }
-    
-    // Rotate interrupts among capable players
-    if (myIndex == 0 || interruptersInRange == 1)
+
+    if (eligible.empty())
         return true;
-        
+
+    std::sort(eligible.begin(), eligible.end());
+    ObjectGuid myGuid = bot->GetGUID();
+    auto it = std::find(eligible.begin(), eligible.end(), myGuid);
+    if (it == eligible.end())
+        return false;
+
+    uint32 myIndex = static_cast<uint32>(std::distance(eligible.begin(), it));
+    uint32 interruptersInRange = static_cast<uint32>(eligible.size());
+
+    if (interruptersInRange == 1)
+        return true;
+
+    uint32 rotationSeed = static_cast<uint32>(getMSTime() / 4000);
+    rotationSeed += channeler->GetGUID().GetCounter();
+    uint32 rotationIndex = rotationSeed % interruptersInRange;
+
+    if (myIndex == rotationIndex)
+        return true;
+
+    // Backup interrupter steps in during the final second of the cast
+    Spell* casting = channeler->FindCurrentSpellBySpellId(SPELL_DARK_MENDING);
+    if (!casting)
+        casting = channeler->FindCurrentSpellBySpellId(SPELL_SHADOW_BOLT_VOLLEY);
+
+    if (casting && casting->GetCastTimeRemaining() < 1000)
+    {
+        uint32 backupIndex = (rotationIndex + 1) % interruptersInRange;
+        return myIndex == backupIndex;
+    }
+
     return false;
+}
+MagtheridonPhaseTransitionAction::MagtheridonPhaseTransitionAction(PlayerbotAI* ai)
+    : Action(ai, "magtheridon phase transition"), _lastPhase(MAGTHERIDON_PHASE_UNKNOWN)
+{
 }
 
 bool MagtheridonPhaseTransitionAction::Execute(Event event)
 {
     uint8 newPhase = GetCurrentPhase();
     HandlePhaseChange(newPhase);
-    
+
     return true;
 }
-
 bool MagtheridonPhaseTransitionAction::isUseful()
 {
-    static uint8 lastPhase = 0;
     uint8 currentPhase = GetCurrentPhase();
-    
-    if (currentPhase != lastPhase)
+
+    if (currentPhase != _lastPhase)
     {
-        lastPhase = currentPhase;
+        _lastPhase = currentPhase;
         return true;
     }
-    
+
     return false;
 }
 
 uint8 MagtheridonPhaseTransitionAction::GetCurrentPhase()
 {
     Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
-    if (!magtheridon)
-        return 0;
-        
-    // Phase 0: Channelers alive, Magtheridon caged
+    if (!magtheridon || !magtheridon->IsAlive())
+        return MAGTHERIDON_PHASE_UNKNOWN;
+
     if (magtheridon->HasAura(SPELL_SHADOW_CAGE))
         return 0;
-        
-    // Phase 2: Below 30% health
+
     if (magtheridon->GetHealthPct() <= 30.0f)
         return 2;
-        
-    // Phase 1: Released and fighting
+
     return 1;
 }
 
@@ -858,17 +968,32 @@ void MagtheridonPhaseTransitionAction::HandlePhaseChange(uint8 newPhase)
     switch (newPhase)
     {
         case 0:
-            // Focus channelers
             botAI->ChangeStrategy("+magtheridon channelers", BotState::BOT_STATE_COMBAT);
+            botAI->ChangeStrategy("-magtheridon released", BotState::BOT_STATE_COMBAT);
+            botAI->ChangeStrategy("-magtheridon cave in", BotState::BOT_STATE_COMBAT);
             break;
         case 1:
-            // Magtheridon released
             botAI->ChangeStrategy("-magtheridon channelers", BotState::BOT_STATE_COMBAT);
             botAI->ChangeStrategy("+magtheridon released", BotState::BOT_STATE_COMBAT);
+            botAI->ChangeStrategy("-magtheridon cave in", BotState::BOT_STATE_COMBAT);
             break;
         case 2:
-            // Cave in phase
+            botAI->ChangeStrategy("-magtheridon channelers", BotState::BOT_STATE_COMBAT);
+            botAI->ChangeStrategy("+magtheridon released", BotState::BOT_STATE_COMBAT);
             botAI->ChangeStrategy("+magtheridon cave in", BotState::BOT_STATE_COMBAT);
+            break;
+        default:
+            botAI->ChangeStrategy("-magtheridon channelers", BotState::BOT_STATE_COMBAT);
+            botAI->ChangeStrategy("-magtheridon released", BotState::BOT_STATE_COMBAT);
+            botAI->ChangeStrategy("-magtheridon cave in", BotState::BOT_STATE_COMBAT);
             break;
     }
 }
+
+
+
+
+
+
+
+

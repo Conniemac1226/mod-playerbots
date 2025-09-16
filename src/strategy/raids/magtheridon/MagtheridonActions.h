@@ -3,9 +3,12 @@
 
 #include "Action.h"
 #include "MovementActions.h"
+#include "AttackAction.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 #include <map>
+
+class GameObject;
 
 enum MagtheridonNPCs
 {
@@ -94,6 +97,19 @@ public:
     StopClickingCubeAction(PlayerbotAI* ai) : Action(ai, "stop clicking cube") {}
     bool Execute(Event event) override;
     bool isUseful() override;
+};
+
+// Mind exhaustion recovery
+class WaitForExhaustionAction : public MovementAction
+{
+public:
+    WaitForExhaustionAction(PlayerbotAI* ai) : MovementAction(ai, "wait for exhaustion") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+
+private:
+    GameObject* FindNearestCube() const;
+    Position GetRecoveryPosition(GameObject* cube) const;
 };
 
 // Quake avoidance
@@ -204,6 +220,14 @@ public:
 private:
     Position GetBanishPosition();
 };
+// Burn phase execution
+class BurnPhaseAction : public AttackAction
+{
+public:
+    BurnPhaseAction(PlayerbotAI* ai) : AttackAction(ai, "burn phase") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
 
 // Infernal/Abyssal avoidance
 class AvoidInfernalAction : public MovementAction
@@ -235,13 +259,21 @@ private:
 class MagtheridonPhaseTransitionAction : public Action
 {
 public:
-    MagtheridonPhaseTransitionAction(PlayerbotAI* ai) : Action(ai, "magtheridon phase transition") {}
+    MagtheridonPhaseTransitionAction(PlayerbotAI* ai);
     bool Execute(Event event) override;
     bool isUseful() override;
-    
+
 private:
     uint8 GetCurrentPhase();
     void HandlePhaseChange(uint8 newPhase);
+
+    uint8 _lastPhase;
 };
 
 #endif
+
+
+
+
+
+
