@@ -129,15 +129,21 @@ bool ThorngrinHellfireTrigger::IsActive()
     {
         return false;
     }
-    
-    if (boss->HasAura(BOT_SPELL_HELLFIRE))
+
+    if (boss->FindCurrentSpellBySpellId(BOT_SPELL_HELLFIRE) || boss->FindCurrentSpellBySpellId(BOT_SPELL_HELLFIRE_HEROIC)
+        || boss->HasAura(BOT_SPELL_HELLFIRE) || boss->HasAura(BOT_SPELL_HELLFIRE_HEROIC))
     {
-        float distance = bot->GetExactDist2d(boss);
-        return distance < 15.0f;
+        if (bot->GetExactDist2d(boss) < 18.0f)
+            return true;
+
+        if (bot->HasAura(BOT_SPELL_HELLFIRE) || bot->HasAura(BOT_SPELL_HELLFIRE_HEROIC))
+            return true;
     }
-    
+
     return false;
 }
+
+
 
 bool ThorngrinEnrageTrigger::IsActive()
 {

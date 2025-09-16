@@ -15,6 +15,7 @@ public:
         creators["click manticron cube"] = &MagtheridonActionContext::click_manticron_cube;
         creators["stop clicking cube"] = &MagtheridonActionContext::stop_clicking_cube;
         creators["avoid quake"] = &MagtheridonActionContext::avoid_quake;
+        creators["wait for exhaustion"] = &MagtheridonActionContext::wait_for_exhaustion;
         creators["avoid debris"] = &MagtheridonActionContext::avoid_debris;
         creators["handle cave in"] = &MagtheridonActionContext::handle_cave_in;
         creators["avoid blaze"] = &MagtheridonActionContext::avoid_blaze;
@@ -26,6 +27,7 @@ public:
         creators["avoid infernal"] = &MagtheridonActionContext::avoid_infernal;
         creators["coordinate channeler interrupt"] = &MagtheridonActionContext::coordinate_channeler_interrupt;
         creators["magtheridon phase transition"] = &MagtheridonActionContext::magtheridon_phase_transition;
+        creators["burn phase"] = &MagtheridonActionContext::burn_phase;
     }
 
 private:
@@ -34,6 +36,7 @@ private:
     static Action* click_manticron_cube(PlayerbotAI* ai) { return new ClickManticronCubeAction(ai); }
     static Action* stop_clicking_cube(PlayerbotAI* ai) { return new StopClickingCubeAction(ai); }
     static Action* avoid_quake(PlayerbotAI* ai) { return new AvoidQuakeAction(ai); }
+    static Action* wait_for_exhaustion(PlayerbotAI* ai) { return new WaitForExhaustionAction(ai); }
     static Action* avoid_debris(PlayerbotAI* ai) { return new AvoidDebrisAction(ai); }
     static Action* handle_cave_in(PlayerbotAI* ai) { return new HandleCaveInAction(ai); }
     static Action* avoid_blaze(PlayerbotAI* ai) { return new AvoidBlazeAction(ai); }
@@ -45,6 +48,7 @@ private:
     static Action* avoid_infernal(PlayerbotAI* ai) { return new AvoidInfernalAction(ai); }
     static Action* coordinate_channeler_interrupt(PlayerbotAI* ai) { return new CoordinateChannelerInterruptAction(ai); }
     static Action* magtheridon_phase_transition(PlayerbotAI* ai) { return new MagtheridonPhaseTransitionAction(ai); }
+    static Action* burn_phase(PlayerbotAI* ai) { return new BurnPhaseAction(ai); }
 };
 
 #endif

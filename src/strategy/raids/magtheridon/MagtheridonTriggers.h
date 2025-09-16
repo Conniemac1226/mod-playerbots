@@ -129,8 +129,15 @@ public:
 class MagtheridonPhaseTransitionTrigger : public Trigger
 {
 public:
-    MagtheridonPhaseTransitionTrigger(PlayerbotAI* ai) : Trigger(ai, "magtheridon phase transition") {}
+    MagtheridonPhaseTransitionTrigger(PlayerbotAI* ai)
+        : Trigger(ai, "magtheridon phase transition"), _lastPhase(255)
+    {
+    }
+
     bool IsActive() override;
+
+private:
+    uint8 _lastPhase;
 };
 
 // Shadow Bolt Volley needs interrupt
@@ -153,16 +160,31 @@ public:
 class MagtheridonReleasedTrigger : public Trigger
 {
 public:
-    MagtheridonReleasedTrigger(PlayerbotAI* ai) : Trigger(ai, "magtheridon released") {}
+    MagtheridonReleasedTrigger(PlayerbotAI* ai)
+        : Trigger(ai, "magtheridon released"), _wasReleased(false)
+    {
+    }
+
     bool IsActive() override;
+
+private:
+    bool _wasReleased;
 };
 
 // Low health phase (30%)
 class MagtheridonLowHealthTrigger : public Trigger
 {
 public:
-    MagtheridonLowHealthTrigger(PlayerbotAI* ai) : Trigger(ai, "magtheridon low health") {}
+    MagtheridonLowHealthTrigger(PlayerbotAI* ai)
+        : Trigger(ai, "magtheridon low health"), _wasLowHealth(false)
+    {
+    }
+
     bool IsActive() override;
+
+private:
+    bool _wasLowHealth;
 };
 
 #endif
+

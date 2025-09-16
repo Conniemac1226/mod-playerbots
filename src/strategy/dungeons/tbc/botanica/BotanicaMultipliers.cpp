@@ -67,6 +67,11 @@ float SarannisAddMultiplier::GetValue(Action* action)
     if (!bot)
         return 1.0f;
 
+    Unit* boss = AI_VALUE2(Unit*, "find target", "commander sarannis");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return 1.0f;
+
+
     // WotLK pattern - check for any Sarannis add present
     const uint32 sarannisAdds[] = {
         NPC_BLOODWARDER_MENDER,     // Priority: Kill healer first
@@ -83,7 +88,7 @@ float SarannisAddMultiplier::GetValue(Action* action)
             {
                 if (unit->GetEntry() == addId)
                 {
-                    return 0.0f; // Block DpsAssist when any Sarannis add present
+                    return 0.0f; // Block DpsAssist only while Sarannis encounter adds active
                 }
             }
         }
