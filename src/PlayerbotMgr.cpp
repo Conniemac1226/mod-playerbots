@@ -151,7 +151,7 @@ void PlayerbotHolder::AddPlayerBot(ObjectGuid playerGuid, uint32 masterAccountId
     botLoading.insert(playerGuid);
 
     // Always login in with world session to avoid race condition
-    static_cast<World*>(sWorld.get())->AddQueryHolderCallback(CharacterDatabase.DelayQueryHolder(holder))
+    sWorld->AddQueryHolderCallback(CharacterDatabase.DelayQueryHolder(holder))
         .AfterComplete([this](SQLQueryHolderBase const& holder)
                         { HandlePlayerBotLoginCallback(static_cast<PlayerbotLoginQueryHolder const&>(holder)); });
 }
@@ -1876,3 +1876,5 @@ void PlayerbotMgr::HandleUnlinkAccountCommand(Player* player, const std::string&
 
     ChatHandler(player->GetSession()).PSendSysMessage("Account unlinked successfully.");
 }
+
+
