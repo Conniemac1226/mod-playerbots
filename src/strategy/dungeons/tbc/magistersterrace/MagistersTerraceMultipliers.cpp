@@ -82,7 +82,7 @@ float DelrissaAddMultiplier::GetValue(Action* action)
     for (auto& target : targets)
     {
         Unit* unit = botAI->GetUnit(target);
-        if (unit && unit->IsInCombat())
+        if (unit)
         {
             for (uint32 helperId : delrissaHelpers)
             {

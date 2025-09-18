@@ -344,7 +344,8 @@ bool DelrissaAddActiveTrigger::IsActive()
 
         for (uint32 addId : delrissaAdds)
         {
-            if (unit->GetEntry() == addId && unit->IsInCombat())
+            // Consider active if add is present and attackable near the encounter, regardless of its combat flag
+            if (unit->GetEntry() == addId)
                 return true;
         }
     }

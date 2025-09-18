@@ -1157,7 +1157,7 @@ bool AttackDelrissaAddAction::Execute(Event event)
         return false;
 
     // Check if Delrissa is in combat
-    Unit* boss = AI_VALUE2(Unit*, "find target", "priestess delrissa");
+    Unit* boss = bot->FindNearestCreature(NPC_DELRISSA, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         // Clear target lock when encounter is not active
@@ -1301,7 +1301,7 @@ bool InterruptDelrissaHelperAction::Execute(Event event)
         return false;
 
     // Check if Delrissa is in combat
-    Unit* boss = AI_VALUE2(Unit*, "find target", "priestess delrissa");
+    Unit* boss = bot->FindNearestCreature(NPC_DELRISSA, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -1454,6 +1454,6 @@ bool DelrissaDispelHandlingAction::isUseful()
         return false;
 
     // Check if Delrissa encounter is active
-    Unit* boss = AI_VALUE2(Unit*, "find target", "priestess delrissa");
+    Unit* boss = bot->FindNearestCreature(NPC_DELRISSA, 120.0f);
     return boss && boss->IsAlive() && boss->IsInCombat();
 }
