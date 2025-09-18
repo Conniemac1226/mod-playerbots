@@ -360,12 +360,14 @@ bool FleeSpiritAction::Execute(Event event)
     if (!closestSpirit)
         return false;
 
-    float angle = bot->GetAngle(closestSpirit) + M_PI;
-    float x = bot->GetPositionX() + cos(angle) * SEARCH_RANGE_SMALL;
-    float y = bot->GetPositionY() + sin(angle) * SEARCH_RANGE_SMALL;
-    float z = bot->GetPositionZ();
-    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                MovementPriority::MOVEMENT_FORCED);
+    // Prefer collision-aware flee helpers to avoid cutting through walls/objects
+    // Try a short, safe step away using MoveAway (checks LOS/collision and picks side angles)
+    const float fleeStep = 12.0f; // shorter controlled step within the corridor/room
+    if (MoveAway(closestSpirit, fleeStep))
+        return true;
+
+    // Fallback: use FleeManager-based positioning from the spirit’s location
+    return FleePosition(closestSpirit->GetPosition(), fleeStep, 600U);
 }
 
 bool FleeSpiritAction::isUseful()
@@ -611,6 +613,5 @@ bool AttackSythElementalsAction::isUseful()
     
     return false;
 }
-
 
 
