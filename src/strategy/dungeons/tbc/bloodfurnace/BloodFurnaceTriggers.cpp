@@ -102,16 +102,17 @@ bool BroggokSlimeSprayTrigger::IsActive()
 // Kelidan - Shadowmoon Channeler priority target trigger
 bool KelidanShadowmoonChannelerTrigger::IsActive()
 {
-    if (botAI->IsHeal(bot)) { return false; }
-
-    // Check if Kelidan encounter is active
-    Unit* boss = AI_VALUE2(Unit*, "find target", "kelidan the breaker");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    // Healers should not switch to adds for DPS
+    if (botAI->IsHeal(bot))
         return false;
 
-    // RESEARCHED: Channelers must be killed first - boss_kelidan_the_breaker.cpp:113
-    Unit* channeler = AI_VALUE2(Unit*, "find target", "shadowmoon channeler");
-    return channeler && channeler->IsAlive();
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Prefer reliable entry-based lookup and only react once combat has started
+    Creature* channeler = bot->FindNearestCreature(NPC_SHADOWMOON_CHANNELER, 120.0f);
+    return channeler && channeler->IsAlive() && channeler->IsInCombat();
 }
 
 // Kelidan - Burning Nova trigger

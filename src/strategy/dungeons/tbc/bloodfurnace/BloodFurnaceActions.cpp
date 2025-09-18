@@ -11,7 +11,7 @@ bool MakerExplodingBeakerAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "the maker");
+    Creature* boss = bot->FindNearestCreature(NPC_THE_MAKER, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -74,7 +74,7 @@ bool MakerExplodingBeakerAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "the maker");
+    Creature* boss = bot->FindNearestCreature(NPC_THE_MAKER, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -86,10 +86,6 @@ bool MakerDominationAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "the maker");
-    if (!boss || !boss->IsAlive())
         return false;
 
     // RESEARCHED: Domination every 2 min - boss_the_maker.cpp:53-56
@@ -155,7 +151,7 @@ bool BroggokAvoidPoisonCloudAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "broggok");
+    Creature* boss = bot->FindNearestCreature(NPC_BROGGOK, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -200,7 +196,7 @@ bool BroggokAvoidPoisonCloudAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "broggok");
+    Creature* boss = bot->FindNearestCreature(NPC_BROGGOK, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -216,7 +212,7 @@ bool BroggokInterruptPoisonBoltAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "broggok");
+    Creature* boss = bot->FindNearestCreature(NPC_BROGGOK, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -248,7 +244,7 @@ bool BroggokInterruptPoisonBoltAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "broggok");
+    Creature* boss = bot->FindNearestCreature(NPC_BROGGOK, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -316,17 +312,33 @@ bool BroggokAvoidSlimeSprayAction::isUseful()
 // Kelidan - Attack Shadowmoon Channelers first
 bool AttackShadowmoonChannelerAction::Execute(Event event)
 {
-    Unit* channeler = AI_VALUE2(Unit*, "find target", "shadowmoon channeler");
-    if (!channeler || AI_VALUE(Unit*, "current target") == channeler)
-    {
+    Player* bot = botAI->GetBot();
+    if (!bot)
         return false;
-    }
+
+    // Prefer reliable entry-based lookup instead of name-based find target
+    Creature* channeler = bot->FindNearestCreature(NPC_SHADOWMOON_CHANNELER, 120.0f);
+    if (!channeler || !channeler->IsAlive() || !channeler->IsInCombat())
+        return false;
+
+    if (AI_VALUE(Unit*, "current target") == channeler)
+        return false;
+
     return Attack(channeler);
 }
 
-bool AttackShadowmoonChannelerAction::isUseful() 
-{ 
-    return !botAI->IsHeal(bot); 
+bool AttackShadowmoonChannelerAction::isUseful()
+{
+    // Healers should not switch to adds for DPS
+    if (botAI->IsHeal(bot))
+        return false;
+
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Creature* channeler = bot->FindNearestCreature(NPC_SHADOWMOON_CHANNELER, 120.0f);
+    return channeler && channeler->IsAlive() && channeler->IsInCombat();
 }
 
 // Avoid Burning Nova area damage
@@ -336,7 +348,7 @@ bool KelidanBurningNovaAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "kelidan the breaker");
+    Creature* boss = bot->FindNearestCreature(NPC_KELIDAN, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -351,7 +363,8 @@ bool KelidanBurningNovaAction::Execute(Event event)
             float x = bot->GetPositionX() + cos(angle) * 25.0f;
             float y = bot->GetPositionY() + sin(angle) * 25.0f;
             float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            // Use forced movement to ensure bots stop attacking and reposition
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -364,7 +377,7 @@ bool KelidanBurningNovaAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "kelidan the breaker");
+    Creature* boss = bot->FindNearestCreature(NPC_KELIDAN, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -378,7 +391,7 @@ bool KelidanInterruptShadowBoltVolleyAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "kelidan the breaker");
+    Creature* boss = bot->FindNearestCreature(NPC_KELIDAN, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -410,7 +423,7 @@ bool KelidanInterruptShadowBoltVolleyAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "kelidan the breaker");
+    Creature* boss = bot->FindNearestCreature(NPC_KELIDAN, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -439,7 +452,7 @@ bool KelidanAvoidVortexAction::Execute(Event event)
             float x = bot->GetPositionX() + cos(angle) * 20.0f;
             float y = bot->GetPositionY() + sin(angle) * 20.0f;
             float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         }
     }
 
@@ -452,7 +465,7 @@ bool KelidanAvoidVortexAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "kelidan the breaker");
+    Creature* boss = bot->FindNearestCreature(NPC_KELIDAN, 120.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
