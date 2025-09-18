@@ -17,6 +17,7 @@ public:
 
         // Vexallus
         creators["attack pure energy"] = &MagistersTerraceActionContext::attack_pure_energy;
+        creators["spread out vexallus"] = &MagistersTerraceActionContext::spread_out_vexallus;
 
         // Selin Fireheart
         creators["avoid fel explosion"] = &MagistersTerraceActionContext::avoid_fel_explosion;
@@ -37,6 +38,7 @@ private:
 
     // Vexallus
     static Action* attack_pure_energy(PlayerbotAI* ai) { return new AttackPureEnergyAction(ai); }
+    static Action* spread_out_vexallus(PlayerbotAI* ai) { return new VexallusSpreadOutAction(ai); }
 
     // Selin Fireheart
     static Action* avoid_fel_explosion(PlayerbotAI* ai) { return new AvoidFelExplosionAction(ai); }

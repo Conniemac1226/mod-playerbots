@@ -6,6 +6,7 @@
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "Playerbots.h"
+#include "Group.h"
 
 // Kael'thas
 bool KaelthasCastingPyroblastTrigger::IsActive()
@@ -180,6 +181,33 @@ bool VexallusPureEnergySpawnedTrigger::IsActive()
     }
     
     return pureEnergyFound;
+}
+
+// Spread when Vexallus is active and we are too close to teammates
+bool VexallusSpreadOutTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_VEXALLUS, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    float tooClose = 8.0f;
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (!member || member == bot || !member->IsAlive())
+            continue;
+        if (bot->GetExactDist2d(member) < tooClose)
+            return true;
+    }
+    return false;
 }
 
 // Selin Fireheart

@@ -20,6 +20,11 @@ void MagistersTerraceStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         NextAction::array(0, new NextAction("attack pure energy", ACTION_NORMAL + 5), NULL)
     ));
 
+    triggers.push_back(new TriggerNode(
+        "vexallus spread out",
+        NextAction::array(0, new NextAction("spread out vexallus", ACTION_MOVE + 1), NULL)
+    ));
+
     // Priestess Delrissa
     triggers.push_back(new TriggerNode(
         "delrissa add active",

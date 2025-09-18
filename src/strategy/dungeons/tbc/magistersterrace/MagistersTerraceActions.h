@@ -48,6 +48,15 @@ public:
     bool isUseful() override;
 };
 
+// Vexallus spread
+class VexallusSpreadOutAction : public MovementAction
+{
+public:
+    VexallusSpreadOutAction(PlayerbotAI* ai) : MovementAction(ai, "spread out vexallus") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 // Selin Fireheart Actions
 class AvoidFelExplosionAction : public MovementAction
 {
@@ -89,4 +98,3 @@ public:
     bool Execute(Event event) override;
     bool isUseful() override;
 };
-

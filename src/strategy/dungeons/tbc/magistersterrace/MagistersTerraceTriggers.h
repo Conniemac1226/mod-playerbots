@@ -65,6 +65,13 @@ public:
     bool IsActive() override;
 };
 
+class VexallusSpreadOutTrigger : public Trigger
+{
+public:
+    VexallusSpreadOutTrigger(PlayerbotAI* ai) : Trigger(ai, "vexallus spread out") {}
+    bool IsActive() override;
+};
+
 // Selin Fireheart
 class SelinFireheartFelExplosionTrigger : public Trigger
 {

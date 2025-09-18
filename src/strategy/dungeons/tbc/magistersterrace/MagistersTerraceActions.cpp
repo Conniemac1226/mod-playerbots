@@ -9,6 +9,7 @@
 #include "AttackersValue.h"
 #include "Playerbots.h"
 #include "MoveSplineInit.h"
+#include "Group.h"
 
 // Per-bot state maps for Kael'thas gravity lapse
 std::map<ObjectGuid, uint32> g_kaelthas_lastMoveTime;
@@ -30,7 +31,7 @@ bool InterruptKaelthasPyroblastAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "kael'thas sunstrider");
+    Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -77,7 +78,7 @@ bool AvoidGravityLapseAction::Execute(Event event)
     uint32 currentTime = getMSTime();
 
     // Check if boss is in combat
-    Unit* boss = AI_VALUE2(Unit*, "find target", "kael'thas sunstrider");
+    Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -139,25 +140,22 @@ bool AvoidGravityLapseAction::Execute(Event event)
             return true; // Emergency ascent complete
         }
         
-        // Check for nearby dangerous spheres
+        // Check for nearby dangerous spheres (single pass)
         Unit* nearestSphere = nullptr;
         float sphereDistance = 50.0f;
-        
         const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
         for (auto& npc : npcs)
         {
             Unit* unit = botAI->GetUnit(npc);
             if (!unit || !unit->IsAlive())
                 continue;
-            
-            if (unit->GetEntry() == NPC_ARCANE_SPHERE)
+            if (unit->GetEntry() != NPC_ARCANE_SPHERE)
+                continue;
+            float distance = bot->GetDistance(unit);
+            if (distance < sphereDistance)
             {
-                float distance = bot->GetDistance(unit);
-                if (distance < sphereDistance)
-                {
-                    nearestSphere = unit;
-                    sphereDistance = distance;
-                }
+                nearestSphere = unit;
+                sphereDistance = distance;
             }
         }
         
@@ -199,28 +197,7 @@ bool AvoidGravityLapseAction::Execute(Event event)
         
         if (shouldMove)
         {
-            // SPHERE AVOIDANCE: Check for nearby Arcane Spheres first
-            Unit* nearestSphere = nullptr;
-            float sphereDistance = 50.0f;
-            
-            // Find closest Arcane Sphere using proven pattern
-            const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-            for (auto& npc : npcs)
-            {
-                Unit* unit = botAI->GetUnit(npc);
-                if (!unit || !unit->IsAlive())
-                    continue;
-                
-                if (unit->GetEntry() == NPC_ARCANE_SPHERE)
-                {
-                    float distance = bot->GetDistance(unit);
-                    if (distance < sphereDistance)
-                    {
-                        nearestSphere = unit;
-                        sphereDistance = distance;
-                    }
-                }
-            }
+            // Use nearestSphere/sphereDistance computed above
             
             float newX, newY, newZ;
             bool useAvoidanceMovement = false;
@@ -930,6 +907,81 @@ bool AttackPureEnergyAction::isUseful()
     return pureEnergyFound;
 }
 
+// Vexallus spread
+bool VexallusSpreadOutAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Tanks maintain position; avoid spreading for tanks
+    if (botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_VEXALLUS, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    Player* closest = nullptr;
+    float closestDist = 1000.0f;
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (!member || member == bot || !member->IsAlive())
+            continue;
+        float d = bot->GetExactDist2d(member);
+        if (d < closestDist)
+        {
+            closest = member;
+            closestDist = d;
+        }
+    }
+
+    if (!closest || closestDist >= 8.0f)
+        return false;
+
+    // Step away from the closest member by ~6-8 yards
+    float angle = bot->GetAngle(closest) + M_PI;
+    float step = 6.0f + frand(0.0f, 2.0f);
+    float x = bot->GetPositionX() + cos(angle) * step;
+    float y = bot->GetPositionY() + sin(angle) * step;
+    float z = bot->GetPositionZ();
+    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+}
+
+bool VexallusSpreadOutAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Healers and DPS should spread; tanks skip
+    if (botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_VEXALLUS, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // If any teammate is closer than 8y, we should spread
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (!member || member == bot || !member->IsAlive())
+            continue;
+        if (bot->GetExactDist2d(member) < 8.0f)
+            return true;
+    }
+    return false;
+}
+
 // Selin Fireheart Actions
 bool AvoidFelExplosionAction::Execute(Event event)
 {
@@ -937,7 +989,7 @@ bool AvoidFelExplosionAction::Execute(Event event)
     if (!bot)
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "selin fireheart");
+    Unit* boss = bot->FindNearestCreature(NPC_SELIN_FIREHEART, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
@@ -971,7 +1023,7 @@ bool AttackFelCrystalAction::Execute(Event event)
         return false;
 
     // Check if Selin is in combat
-    Unit* boss = AI_VALUE2(Unit*, "find target", "selin fireheart");
+    Unit* boss = bot->FindNearestCreature(NPC_SELIN_FIREHEART, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 

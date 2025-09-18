@@ -17,6 +17,7 @@ public:
 
         // Vexallus
         creators["vexallus pure energy spawned"] = &MagistersTerraceTriggerContext::vexallus_pure_energy_spawned;
+        creators["vexallus spread out"] = &MagistersTerraceTriggerContext::vexallus_spread_out;
 
         // Selin Fireheart
         creators["selin fireheart fel explosion"] = &MagistersTerraceTriggerContext::selin_fireheart_fel_explosion;
@@ -36,6 +37,7 @@ private:
 
     // Vexallus
     static Trigger* vexallus_pure_energy_spawned(PlayerbotAI* ai) { return new VexallusPureEnergySpawnedTrigger(ai); }
+    static Trigger* vexallus_spread_out(PlayerbotAI* ai) { return new VexallusSpreadOutTrigger(ai); }
 
     // Selin Fireheart
     static Trigger* selin_fireheart_fel_explosion(PlayerbotAI* ai) { return new SelinFireheartFelExplosionTrigger(ai); }
