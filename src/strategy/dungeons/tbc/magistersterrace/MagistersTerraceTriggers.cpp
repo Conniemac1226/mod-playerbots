@@ -1,4 +1,5 @@
 #include "MagistersTerraceTriggers.h"
+#include "MagistersTerraceActions.h"
 #include "SpellInfo.h"
 #include "Unit.h"
 #include "Spell.h"
@@ -244,79 +245,20 @@ bool FelCrystalNearbyTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if Selin is in combat and look for active crystals
     Unit* boss = bot->FindNearestCreature(NPC_SELIN_FIREHEART, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // ENHANCED DETECTION: Use multiple methods to find active crystals
-    bool crystalFound = false;
-    
-    // Method 1: Direct creature search with Cell visiting
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f); // Increased range
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 60.0f);
+    if (MagistersTerraceHelpers::SelectActiveFelCrystal(bot, botAI, boss))
+        return true;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+    if (boss->HasAura(SPELL_MANA_RAGE) ||
+        (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_MANA_RAGE)))
+        return true;
 
-        if (unit->GetEntry() == NPC_FEL_CRYSTAL)
-        {
-            // EXPANDED DETECTION: More comprehensive crystal state checking
-            bool isSelectable = !unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
-            bool isCasting = unit->HasUnitState(UNIT_STATE_CASTING) || unit->FindCurrentSpellBySpellId(SPELL_MANA_RAGE);
-            bool isChanneling = unit->HasAura(SPELL_MANA_RAGE) || boss->HasAura(SPELL_MANA_RAGE);
-            bool inCombat = unit->IsInCombat();
-            bool hasTarget = unit->GetVictim() != nullptr;
-            
-            // Crystal is active if ANY of these conditions are met
-            if (isSelectable || isCasting || isChanneling || inCombat || hasTarget)
-            {
-                crystalFound = true;
-                break;
-            }
-        }
-    }
-    
-    // Method 2: Check hostile NPCs list as backup
-    if (!crystalFound)
-    {
-        const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-        for (auto& npc : npcs)
-        {
-            Unit* unit = botAI->GetUnit(npc);
-            if (!unit || !unit->IsAlive())
-                continue;
-                
-            if (unit->GetEntry() == NPC_FEL_CRYSTAL)
-            {
-                // Any fel crystal in hostile list is considered active
-                crystalFound = true;
-                break;
-            }
-        }
-    }
-    
-    // Method 3: Boss state detection - if boss is channeling, there's likely an active crystal
-    if (!crystalFound)
-    {
-        bool bossChanneling = boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_MANA_RAGE);
-        bool bossHasAura = boss->HasAura(SPELL_MANA_RAGE);
-        
-        if (bossChanneling || bossHasAura)
-        {
-            crystalFound = true;
-        }
-    }
-
-    return crystalFound;
+    return false;
 }
 
-// Delrissa
 bool DelrissaAddActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -330,7 +272,7 @@ bool DelrissaAddActiveTrigger::IsActive()
 
     // Check for her adds (various entries)
     const uint32 delrissaAdds[] = {24557, 24558, 24554, 24561, 24559, 24555, 24553, 24556};
-    
+
     std::list<Unit*> targets;
     Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
     Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
@@ -351,3 +293,4 @@ bool DelrissaAddActiveTrigger::IsActive()
     }
     return false;
 }
+

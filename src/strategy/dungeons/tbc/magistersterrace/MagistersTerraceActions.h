@@ -6,6 +6,14 @@
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 
+class Player;
+class Unit;
+
+namespace MagistersTerraceHelpers
+{
+    Unit* SelectActiveFelCrystal(Player* bot, PlayerbotAI* botAI, Unit* boss);
+}
+
 // Kael'thas Actions
 class InterruptKaelthasPyroblastAction : public Action
 {

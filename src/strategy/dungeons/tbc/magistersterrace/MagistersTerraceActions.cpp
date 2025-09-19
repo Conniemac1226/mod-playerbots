@@ -6,6 +6,7 @@
 #include "CellImpl.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
+#include "ObjectAccessor.h"
 #include "AttackersValue.h"
 #include "Playerbots.h"
 #include "MoveSplineInit.h"
@@ -31,6 +32,143 @@ std::map<ObjectGuid, float> g_kaelthas_orbitRadius;
 std::map<ObjectGuid, ObjectGuid> g_delrissa_lockedTarget;
 std::map<ObjectGuid, uint32> g_delrissa_lockTime;
 
+// Per-bot state maps for Selin crystal focus
+std::map<ObjectGuid, ObjectGuid> g_selin_crystalLock;
+std::map<ObjectGuid, uint32> g_selin_crystalLockTime;
+Unit* MagistersTerraceHelpers::SelectActiveFelCrystal(Player* bot, PlayerbotAI* botAI, Unit* boss)
+{
+    if (!bot || !botAI || !boss)
+        return nullptr;
+
+    Unit* activeCrystal = nullptr;
+    float bestDistance = 80.0f;
+
+    auto considerUnit = [&](Unit* unit)
+    {
+        if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_FEL_CRYSTAL)
+            return;
+
+        bool selectable = !unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+        bool castingManaRage = unit->HasUnitState(UNIT_STATE_CASTING) || unit->FindCurrentSpellBySpellId(SPELL_MANA_RAGE);
+        bool targetingBoss = unit->GetVictim() == boss;
+
+        if (!selectable && !castingManaRage && !targetingBoss)
+            return;
+
+        float distance = bot->GetDistance(unit);
+        if (!activeCrystal || distance < bestDistance)
+        {
+            activeCrystal = unit;
+            bestDistance = distance;
+        }
+    };
+
+    if (Aura* manaRage = boss->GetAura(SPELL_MANA_RAGE))
+    {
+        ObjectGuid casterGuid = manaRage->GetCasterGUID();
+        if (casterGuid)
+        {
+            Unit* caster = botAI->GetUnit(casterGuid);
+            if (!caster)
+                caster = ObjectAccessor::GetUnit(*bot, casterGuid);
+
+            considerUnit(caster);
+            if (activeCrystal)
+                return activeCrystal;
+        }
+    }
+
+    if (AiObjectContext* context = botAI->GetAiObjectContext())
+    {
+        if (auto* npcsValue = context->GetValue<GuidVector>("nearest hostile npcs"))
+        {
+            GuidVector npcs = npcsValue->Get();
+            for (ObjectGuid const& guid : npcs)
+                considerUnit(botAI->GetUnit(guid));
+        }
+
+        if (!activeCrystal)
+        {
+            if (auto* possibleValue = context->GetValue<GuidVector>("possible targets"))
+            {
+                GuidVector possible = possibleValue->Get();
+                for (ObjectGuid const& guid : possible)
+                    considerUnit(botAI->GetUnit(guid));
+            }
+        }
+    }
+
+    if (!activeCrystal)
+    {
+        std::list<Unit*> targets;
+        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f);
+        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+        Cell::VisitObjects(bot, searcher, 80.0f);
+
+        for (Unit* unit : targets)
+            considerUnit(unit);
+    }
+
+    return activeCrystal;
+}
+
+namespace
+{
+    struct DelrissaHelperPriority
+    {
+        uint32 entry;
+        uint32 priority;
+    };
+
+    static const DelrissaHelperPriority kDelrissaHelperPriority[] =
+    {
+        {24554, 100}, // Eramas Brightblaze
+        {24558, 95},  // Elris Duskhallow
+        {24561, 85},  // Yazzaj
+        {24553, 80},  // Apoko
+        {24557, 70},  // Kagani Nightstrike
+        {24559, 65},  // Warlord Salaris
+        {24555, 50},  // Garaxxas
+        {24556, 45}   // Zelfan
+    };
+
+    Unit* SelectDelrissaHelperTarget(Player* bot, PlayerbotAI* botAI, GuidVector const& candidates, bool requireCombatCheck)
+    {
+        Unit* bestTarget = nullptr;
+        uint32 bestPriority = 0;
+        float bestDistance = 50.0f;
+
+        for (ObjectGuid const& guid : candidates)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            if (requireCombatCheck && !unit->IsInCombat())
+                continue;
+
+            if (!AttackersValue::IsValidTarget(unit, bot))
+                continue;
+
+            for (DelrissaHelperPriority const& helper : kDelrissaHelperPriority)
+            {
+                if (unit->GetEntry() != helper.entry)
+                    continue;
+
+                float distance = bot->GetDistance(unit);
+                if (helper.priority > bestPriority || (helper.priority == bestPriority && distance < bestDistance))
+                {
+                    bestTarget = unit;
+                    bestPriority = helper.priority;
+                    bestDistance = distance;
+                }
+                break;
+            }
+        }
+
+        return bestTarget;
+    }
+}
 // Per-bot state maps for Pure Energy timeout mechanism
 std::map<ObjectGuid, uint32> g_pureEnergy_lastSeenTime;
 std::map<ObjectGuid, uint32> g_pureEnergy_stuckTime;
@@ -981,113 +1119,60 @@ bool AttackFelCrystalAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Check if Selin is in combat
     Unit* boss = bot->FindNearestCreature(NPC_SELIN_FIREHEART, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // ENHANCED CRYSTAL DETECTION: Use the same multi-method approach as the trigger
+    ObjectGuid botGuid = bot->GetGUID();
+    uint32 currentTime = getMSTime();
+
+    static const uint32 TARGET_LOCK_DURATION = 4000U;
+
+    auto clearLock = [&]()
+    {
+        g_selin_crystalLock[botGuid] = ObjectGuid::Empty;
+        g_selin_crystalLockTime[botGuid] = 0;
+    };
+
     Unit* crystal = nullptr;
-    float closestDistance = 60.0f; // Increased detection range
 
-    // Method 1: Check hostile NPCs list first
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    for (auto& npc : npcs)
+    if (g_selin_crystalLock[botGuid] && g_selin_crystalLockTime[botGuid] &&
+        (currentTime - g_selin_crystalLockTime[botGuid]) < TARGET_LOCK_DURATION)
     {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
+        ObjectGuid lockedGuid = g_selin_crystalLock[botGuid];
+        crystal = botAI->GetUnit(lockedGuid);
+        if (!crystal)
+            crystal = ObjectAccessor::GetUnit(*bot, lockedGuid);
 
-        if (unit->GetEntry() == NPC_FEL_CRYSTAL)
+        if (!crystal || !crystal->IsAlive() || crystal->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE))
         {
-            // EXPANDED DETECTION: More comprehensive crystal state checking
-            bool isSelectable = !unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
-            bool isCasting = unit->HasUnitState(UNIT_STATE_CASTING) || unit->FindCurrentSpellBySpellId(SPELL_MANA_RAGE);
-            bool isChanneling = unit->HasAura(SPELL_MANA_RAGE) || boss->HasAura(SPELL_MANA_RAGE);
-            bool inCombat = unit->IsInCombat();
-            bool hasTarget = unit->GetVictim() != nullptr;
-            
-            // Crystal is active if ANY of these conditions are met
-            if (isSelectable || isCasting || isChanneling || inCombat || hasTarget)
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < closestDistance)
-                {
-                    crystal = unit;
-                    closestDistance = distance;
-                }
-            }
+            clearLock();
+            crystal = nullptr;
         }
     }
 
-    // Method 2: Direct creature search if no crystal found in hostile list
     if (!crystal)
-    {
-        std::list<Unit*> targets;
-        Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f); // Increased range
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-        Cell::VisitObjects(bot, searcher, 60.0f);
-
-        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-        {
-            Unit* unit = *i;
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            if (unit->GetEntry() == NPC_FEL_CRYSTAL)
-            {
-                // Same comprehensive detection as Method 1
-                bool isSelectable = !unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
-                bool isCasting = unit->HasUnitState(UNIT_STATE_CASTING) || unit->FindCurrentSpellBySpellId(SPELL_MANA_RAGE);
-                bool isChanneling = unit->HasAura(SPELL_MANA_RAGE) || boss->HasAura(SPELL_MANA_RAGE);
-                bool inCombat = unit->IsInCombat();
-                bool hasTarget = unit->GetVictim() != nullptr;
-                
-                if (isSelectable || isCasting || isChanneling || inCombat || hasTarget)
-                {
-                    float distance = bot->GetDistance(unit);
-                    if (distance < closestDistance)
-                    {
-                        crystal = unit;
-                        closestDistance = distance;
-                    }
-                }
-            }
-        }
-    }
-
-    // Method 3: If boss is channeling but no crystal found, find ANY crystal nearby
-    if (!crystal && (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_MANA_RAGE)))
-    {
-        std::list<Unit*> allTargets;
-        Acore::AnyUnitInObjectRangeCheck u_check_all(bot, 80.0f); // Even wider search
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher_all(bot, allTargets, u_check_all);
-        Cell::VisitObjects(bot, searcher_all, 80.0f);
-
-        for (std::list<Unit*>::iterator i = allTargets.begin(); i != allTargets.end(); ++i)
-        {
-            Unit* unit = *i;
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            // Accept ANY crystal if boss is channeling (emergency fallback)
-            if (unit->GetEntry() == NPC_FEL_CRYSTAL)
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < closestDistance)
-                {
-                    crystal = unit;
-                    closestDistance = distance;
-                }
-            }
-        }
-    }
+        crystal = MagistersTerraceHelpers::SelectActiveFelCrystal(bot, botAI, boss);
 
     if (crystal)
     {
+        g_selin_crystalLock[botGuid] = crystal->GetGUID();
+        g_selin_crystalLockTime[botGuid] = currentTime;
+
+        if (AiObjectContext* context = botAI->GetAiObjectContext())
+        {
+            if (auto* prioritized = context->GetValue<GuidVector>("prioritized targets"))
+            {
+                GuidVector focus;
+                focus.push_back(crystal->GetGUID());
+                prioritized->Set(focus);
+            }
+        }
+
         return Attack(crystal);
     }
 
+    clearLock();
     return false;
 }
 
@@ -1097,17 +1182,22 @@ bool AttackFelCrystalAction::isUseful()
     if (!bot || !botAI)
         return false;
 
-    // CRITICAL: HEALERS SHOULD NEVER ATTACK CRYSTALS - Always prioritize healing
     if (botAI->IsHeal(bot))
         return false;
 
-    Value<bool>* crystalValue = botAI->GetAiObjectContext()->GetValue<bool>("fel crystal nearby");
-    if (!crystalValue)
+    Unit* boss = bot->FindNearestCreature(NPC_SELIN_FIREHEART, 120.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
-    
-    return crystalValue->Get();
-}
 
+    if (MagistersTerraceHelpers::SelectActiveFelCrystal(bot, botAI, boss))
+        return true;
+
+    if (boss->HasAura(SPELL_MANA_RAGE) ||
+        (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_MANA_RAGE)))
+        return true;
+
+    return false;
+}
 // Delrissa Actions
 bool AttackDelrissaAddAction::Execute(Event event)
 {
@@ -1128,10 +1218,10 @@ bool AttackDelrissaAddAction::Execute(Event event)
 
     ObjectGuid botGuid = bot->GetGUID();
     uint32 currentTime = getMSTime();
-    
+
     // TARGET LOCKING MECHANISM: Prevent rapid target switching
     static const uint32 TARGET_LOCK_DURATION = 5000U; // 5 second minimum lock
-    
+
     // Check if we have a locked target that's still valid
     Unit* lockedTarget = nullptr;
     if (g_delrissa_lockedTarget[botGuid] && g_delrissa_lockTime[botGuid])
@@ -1140,9 +1230,9 @@ bool AttackDelrissaAddAction::Execute(Event event)
         if ((currentTime - g_delrissa_lockTime[botGuid]) < TARGET_LOCK_DURATION)
         {
             lockedTarget = botAI->GetUnit(g_delrissa_lockedTarget[botGuid]);
-            
+
             // Validate locked target is still attackable
-            if (lockedTarget && lockedTarget->IsAlive() && lockedTarget->IsInCombat() && 
+            if (lockedTarget && lockedTarget->IsAlive() &&
                 AttackersValue::IsValidTarget(lockedTarget, bot) && bot->GetDistance(lockedTarget) < 50.0f)
             {
                 // Continue attacking locked target
@@ -1163,63 +1253,13 @@ bool AttackDelrissaAddAction::Execute(Event event)
         }
     }
 
-    // PRIORITY-BASED targeting system (highest to lowest threat)
-    struct HelperPriority {
-        uint32 npcId;
-        uint32 priority;
-        const char* name;
-    };
+    GuidVector hostileNpcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* priorityTarget = SelectDelrissaHelperTarget(bot, botAI, hostileNpcs, true);
 
-    const HelperPriority delrissaHelpers[] = {
-        // PRIORITY 1: Dangerous Casters (highest threat)
-        {24554, 100, "Eramas Brightblaze"},      // Mage - Polymorph, Fireball
-        {24558, 95,  "Elris Duskhallow"},       // Warlock - Fear, Shadow Bolt
-        
-        // PRIORITY 2: Other Casters
-        {24561, 85,  "Yazzaj"},                 // Warlock - Fear, Shadow damage
-        {24553, 80,  "Apoko"},                  // Mage - Similar to Eramas
-        
-        // PRIORITY 3: Melee with special abilities
-        {24557, 70,  "Kagani Nightstrike"},    // Rogue - Gouge, Kidney Shot
-        {24559, 65,  "Warlord Salaris"},       // Warrior - Intercept, Mortal Strike
-        
-        // PRIORITY 4: Basic melee
-        {24555, 50,  "Garaxxas"},              // Melee DPS
-        {24556, 45,  "Zelfan"},                // Melee DPS
-    };
-
-    // Find highest priority target that's alive and in combat
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* priorityTarget = nullptr;
-    uint32 highestPriority = 0;
-    float targetDistance = 50.0f;
-
-    for (auto& npc : npcs)
+    if (!priorityTarget)
     {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive() || !unit->IsInCombat())
-            continue;
-
-        if (!AttackersValue::IsValidTarget(unit, bot))
-            continue;
-
-        // Check if this unit is one of Delrissa's helpers
-        for (const auto& helper : delrissaHelpers)
-        {
-            if (unit->GetEntry() == helper.npcId)
-            {
-                float distance = bot->GetDistance(unit);
-                
-                // SIMPLIFIED PRIORITY: Just pick highest priority within range
-                if (helper.priority > highestPriority && distance < 50.0f)
-                {
-                    priorityTarget = unit;
-                    highestPriority = helper.priority;
-                    targetDistance = distance;
-                }
-                break;
-            }
-        }
+        GuidVector possibleTargets = AI_VALUE(GuidVector, "possible targets");
+        priorityTarget = SelectDelrissaHelperTarget(bot, botAI, possibleTargets, false);
     }
 
     // If we found a priority target, lock onto it
@@ -1228,7 +1268,7 @@ bool AttackDelrissaAddAction::Execute(Event event)
         // Lock the target to prevent switching
         g_delrissa_lockedTarget[botGuid] = priorityTarget->GetGUID();
         g_delrissa_lockTime[botGuid] = currentTime;
-        
+
         return Attack(priorityTarget);
     }
 
@@ -1245,13 +1285,17 @@ bool AttackDelrissaAddAction::isUseful()
     if (botAI->IsHeal(bot))
         return false;
 
-    Value<bool>* addActiveValue = botAI->GetAiObjectContext()->GetValue<bool>("delrissa add active");
-    if (!addActiveValue)
+    Unit* boss = bot->FindNearestCreature(NPC_DELRISSA, 120.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
-    
-    return addActiveValue->Get();
-}
 
+    GuidVector hostileNpcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    if (SelectDelrissaHelperTarget(bot, botAI, hostileNpcs, false))
+        return true;
+
+    GuidVector possibleTargets = AI_VALUE(GuidVector, "possible targets");
+    return SelectDelrissaHelperTarget(bot, botAI, possibleTargets, false) != nullptr;
+}
 // Interrupt dangerous helper abilities
 bool InterruptDelrissaHelperAction::Execute(Event event)
 {
