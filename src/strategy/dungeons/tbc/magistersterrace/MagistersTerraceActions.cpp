@@ -11,9 +11,21 @@
 #include "MoveSplineInit.h"
 #include "Group.h"
 
+#include <algorithm>
+#include <cmath>
+
+namespace
+{
+    constexpr float PI_F = 3.14159265358979323846f;
+}
+
 // Per-bot state maps for Kael'thas gravity lapse
 std::map<ObjectGuid, uint32> g_kaelthas_lastMoveTime;
 std::map<ObjectGuid, bool> g_kaelthas_inSafePosition;
+std::map<ObjectGuid, Position> g_kaelthas_lastFlightPosition;
+std::map<ObjectGuid, uint32> g_kaelthas_stuckSince;
+std::map<ObjectGuid, float> g_kaelthas_orbitAngle;
+std::map<ObjectGuid, float> g_kaelthas_orbitRadius;
 
 // Per-bot state maps for Delrissa add targeting stability
 std::map<ObjectGuid, ObjectGuid> g_delrissa_lockedTarget;
@@ -97,20 +109,55 @@ bool AvoidGravityLapseAction::Execute(Event event)
 
     if (isInGravityLapse)
     {
+        static const float STUCK_MOVEMENT_EPSILON = 1.2f;
+        static const uint32 STUCK_TIME_THRESHOLD = 900;
+
+        Position currentPos;
+        currentPos.Relocate(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetOrientation());
+
+        bool isStuck = false;
+
+        auto lastPosIt = g_kaelthas_lastFlightPosition.find(botGuid);
+        if (lastPosIt == g_kaelthas_lastFlightPosition.end())
+        {
+            g_kaelthas_lastFlightPosition[botGuid] = currentPos;
+            g_kaelthas_stuckSince[botGuid] = currentTime;
+        }
+        else
+        {
+            float movedDistance = currentPos.GetExactDist2d(&lastPosIt->second);
+            auto stuckIt = g_kaelthas_stuckSince.find(botGuid);
+            if (stuckIt == g_kaelthas_stuckSince.end())
+                stuckIt = g_kaelthas_stuckSince.emplace(botGuid, currentTime).first;
+
+            if (movedDistance > STUCK_MOVEMENT_EPSILON)
+            {
+                stuckIt->second = currentTime;
+            }
+            else if ((currentTime - stuckIt->second) > STUCK_TIME_THRESHOLD)
+            {
+                isStuck = true;
+            }
+
+            lastPosIt->second = currentPos;
+        }
+
         // FLYING PHASE: Smart positioning - move when needed, heal/DPS when safe
         
         // Flying movement constants
         static const float MIN_MOVEMENT_INTERVAL = 400U;   // Move every 0.4 seconds (FASTER)
         static const float MIN_FLIGHT_HEIGHT = 12.0f;      // Higher minimum height above ground
-        static const float MAX_FLIGHT_HEIGHT = 20.0f;      // Maximum height (room ceiling)
-        static const float KITING_RADIUS = 15.0f;          // Larger kiting radius for better spread
-        static const float MAX_ROOM_RADIUS = 18.0f;        // Maximum safe distance from center
-        static const float SAFE_SPHERE_DISTANCE = 15.0f;   // Safe distance from spheres
+        static const float MAX_FLIGHT_HEIGHT = 22.0f;      // Slightly higher ceiling use
+        static const float KITING_RADIUS = 21.0f;          // Wider circular pattern
+        static const float MAX_ROOM_RADIUS = 26.0f;        // Allow full room coverage
+        static const float SAFE_SPHERE_DISTANCE = 18.0f;   // Safe distance from spheres
         
         // Get room center for circular flight pattern (Kael'thas boss room)
         Position roomCenter(148.5f, 187.0f, -16.6f); // Actual Kael'thas room center
         float distanceFromCenter = bot->GetDistance(roomCenter);
         float currentHeight = bot->GetPositionZ() - roomCenter.GetPositionZ();
+        bool nearRoomBoundary = distanceFromCenter > 16.0f;
+        bool blockedFromCenter = !bot->IsWithinLOS(roomCenter.GetPositionX(), roomCenter.GetPositionY(), roomCenter.GetPositionZ() + 2.0f);
         
         // CRITICAL: IMMEDIATE EMERGENCY ASCENT when gravity lapse first detected
         // This prevents initial fall that gets bots killed by spheres
@@ -191,253 +238,181 @@ bool AvoidGravityLapseAction::Execute(Event event)
         {
             shouldMove = true;
         }
-        
+
+        if (isStuck)
+        {
+            shouldMove = true;
+        }
+
+        if (nearestSphere && nearRoomBoundary)
+        {
+            shouldMove = true;
+        }
+
+        if (nearestSphere && blockedFromCenter)
+        {
+            shouldMove = true;
+        }
+
         // Update safe position status
         g_kaelthas_inSafePosition[botGuid] = !shouldMove && (!nearestSphere || sphereDistance > SAFE_SPHERE_DISTANCE);
         
         if (shouldMove)
         {
-            // Use nearestSphere/sphereDistance computed above
-            
-            float newX, newY, newZ;
-            bool useAvoidanceMovement = false;
-            
-            // SMART SPHERE AVOIDANCE: Move perpendicular to sphere direction to avoid walls
-            if (nearestSphere && sphereDistance < 15.0f)
+            static const float MIN_ORBIT_RADIUS = 14.0f;
+            static const float ANGLE_STEP = PI_F / 10.0f; // ~18 degrees per move
+
+            float& orbitAngle = g_kaelthas_orbitAngle[botGuid];
+            float& orbitRadius = g_kaelthas_orbitRadius[botGuid];
+
+            if (orbitRadius < MIN_ORBIT_RADIUS * 0.5f)
             {
-                useAvoidanceMovement = true;
-                
-                // Calculate vector from room center to bot (for wall avoidance)
-                float centerToBotX = bot->GetPositionX() - roomCenter.GetPositionX();
-                float centerToBotY = bot->GetPositionY() - roomCenter.GetPositionY();
-                float centerToBotDist = sqrt(centerToBotX * centerToBotX + centerToBotY * centerToBotY);
-                
-                // Calculate vector from sphere to bot
-                float sphereToBotX = bot->GetPositionX() - nearestSphere->GetPositionX();
-                float sphereToBotY = bot->GetPositionY() - nearestSphere->GetPositionY();
-                float sphereToBotDist = sqrt(sphereToBotX * sphereToBotX + sphereToBotY * sphereToBotY);
-                
-                if (sphereToBotDist > 0.1f)
-                {
-                    sphereToBotX /= sphereToBotDist;
-                    sphereToBotY /= sphereToBotDist;
-                }
-                
-                // If bot is near wall (> 10 yards from center), move perpendicular instead of away
-                if (centerToBotDist > 10.0f)
-                {
-                    // Move perpendicular to sphere direction (90 degrees)
-                    newX = bot->GetPositionX() + (-sphereToBotY) * 8.0f; // Perpendicular vector
-                    newY = bot->GetPositionY() + sphereToBotX * 8.0f;
-                    
-                    // If perpendicular movement goes further from center, try the other direction
-                    float newCenterDist = sqrt((newX - roomCenter.GetPositionX()) * (newX - roomCenter.GetPositionX()) + 
-                                             (newY - roomCenter.GetPositionY()) * (newY - roomCenter.GetPositionY()));
-                    if (newCenterDist > centerToBotDist)
-                    {
-                        // Try opposite perpendicular direction
-                        newX = bot->GetPositionX() + sphereToBotY * 8.0f;
-                        newY = bot->GetPositionY() + (-sphereToBotX) * 8.0f;
-                    }
-                }
-                else
-                {
-                    // Normal avoidance - move away from sphere
-                    newX = bot->GetPositionX() + sphereToBotX * 8.0f;
-                    newY = bot->GetPositionY() + sphereToBotY * 8.0f;
-                }
-                
-                // Ensure we don't go too far from room center (wall collision prevention)
-                float finalCenterDist = sqrt((newX - roomCenter.GetPositionX()) * (newX - roomCenter.GetPositionX()) + 
-                                           (newY - roomCenter.GetPositionY()) * (newY - roomCenter.GetPositionY()));
-                if (finalCenterDist > 12.0f) // Max 12 yards from center
-                {
-                    float scale = 12.0f / finalCenterDist;
-                    newX = roomCenter.GetPositionX() + (newX - roomCenter.GetPositionX()) * scale;
-                    newY = roomCenter.GetPositionY() + (newY - roomCenter.GetPositionY()) * scale;
-                }
-                
-                newZ = bot->GetPositionZ(); // Keep same altitude
-                
-                // Clamp Z coordinate to reasonable flight limits
-                float groundZ = roomCenter.GetPositionZ();
-                newZ = std::max(groundZ + 8.0f, std::min(groundZ + 15.0f, newZ));
+                orbitAngle = atan2(bot->GetPositionY() - roomCenter.GetPositionY(),
+                                   bot->GetPositionX() - roomCenter.GetPositionX());
+                orbitRadius = std::clamp(distanceFromCenter, MIN_ORBIT_RADIUS, MAX_ROOM_RADIUS - 0.5f);
             }
-            
-            // GROUP COHESION MOVEMENT: Keep bots together for healing range
-            if (!useAvoidanceMovement)
+
+            auto normalizeAngle = [](float angle) -> float
             {
-                // EMERGENCY ASCENT: If too low, move straight up first
-                if (currentHeight < MIN_FLIGHT_HEIGHT || abs(bot->GetPositionZ() - roomCenter.GetPositionZ()) < 4.0f)
-                {
-                    newX = bot->GetPositionX();
-                    newY = bot->GetPositionY();
-                    newZ = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT + 8.0f; // Force even higher altitude for safety
-                }
-                else
-                {
-                    // GROUP FORMATION: Try to stay near other group members
-                    Position groupCenter = roomCenter;
-                    int groupMemberCount = 0;
-                    float totalX = 0, totalY = 0, totalZ = 0;
-                    
-                    // Calculate average position of nearby group members
-                    Group* group = bot->GetGroup();
-                    if (group)
-                    {
-                        for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
-                        {
-                            Player* member = itr->GetSource();
-                            if (member && member != bot && member->IsAlive() && 
-                                member->HasAura(SPELL_GRAVITY_LAPSE_FLY) && 
-                                bot->GetDistance(member) < 50.0f)
-                            {
-                                totalX += member->GetPositionX();
-                                totalY += member->GetPositionY();
-                                totalZ += member->GetPositionZ();
-                                groupMemberCount++;
-                            }
-                        }
-                    }
-                    
-                    if (groupMemberCount > 0)
-                    {
-                        // Move towards group center but not too close
-                        groupCenter.Relocate(totalX / groupMemberCount, totalY / groupMemberCount, totalZ / groupMemberCount);
-                        float distanceToGroup = bot->GetDistance(groupCenter);
-                        
-                        if (distanceToGroup > 25.0f) // Too far from group
-                        {
-                            // Move closer to group
-                            float moveDistance = std::min(15.0f, distanceToGroup - 20.0f);
-                            float angle = bot->GetAngle(&groupCenter);
-                            newX = bot->GetPositionX() + cos(angle) * moveDistance;
-                            newY = bot->GetPositionY() + sin(angle) * moveDistance;
-                        }
-                        else if (distanceToGroup < 12.0f) // Too close to group
-                        {
-                            // Move away to maintain proper spread
-                            float angle = bot->GetAngle(&groupCenter) + M_PI; // Opposite direction
-                            newX = bot->GetPositionX() + cos(angle) * KITING_RADIUS;
-                            newY = bot->GetPositionY() + sin(angle) * KITING_RADIUS;
-                        }
-                        else
-                        {
-                            // Good distance, do circular movement around group with larger radius
-                            float currentAngle = atan2(bot->GetPositionY() - groupCenter.GetPositionY(), 
-                                                     bot->GetPositionX() - groupCenter.GetPositionX());
-                            float newAngle = currentAngle + (M_PI / 16.0f); // 11.25 degree increments (smoother)
-                            
-                            newX = groupCenter.GetPositionX() + cos(newAngle) * KITING_RADIUS; // Larger radius for better spread
-                            newY = groupCenter.GetPositionY() + sin(newAngle) * KITING_RADIUS;
-                        }
-                        
-                        newZ = groupCenter.GetPositionZ(); // Match group altitude
-                    }
-                    else
-                    {
-                        // No group members found, kite around room center with proper radius
-                        float currentAngle = atan2(bot->GetPositionY() - roomCenter.GetPositionY(), 
-                                                 bot->GetPositionX() - roomCenter.GetPositionX());
-                        
-                        float newAngle = currentAngle + (M_PI / 12.0f); // 15 degree increments (smoother)
-                        
-                        newX = roomCenter.GetPositionX() + cos(newAngle) * KITING_RADIUS; // Proper kiting radius
-                        newY = roomCenter.GetPositionY() + sin(newAngle) * KITING_RADIUS;
-                        newZ = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT + 5.0f;
-                    }
-                    
-                    // WALL COLLISION PREVENTION: Ensure all movement stays within safe bounds
-                    float distanceFromCenter = sqrt((newX - roomCenter.GetPositionX()) * (newX - roomCenter.GetPositionX()) + 
-                                                   (newY - roomCenter.GetPositionY()) * (newY - roomCenter.GetPositionY()));
-                    if (distanceFromCenter > MAX_ROOM_RADIUS) // Keep within safe room bounds
-                    {
-                        float scale = MAX_ROOM_RADIUS / distanceFromCenter;
-                        newX = roomCenter.GetPositionX() + (newX - roomCenter.GetPositionX()) * scale;
-                        newY = roomCenter.GetPositionY() + (newY - roomCenter.GetPositionY()) * scale;
-                    }
-                    
-                    // Clamp to safe flight limits
-                    newZ = std::max(roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT, 
-                                   std::min(roomCenter.GetPositionZ() + MAX_FLIGHT_HEIGHT, newZ));
-                }
-            }
-            
-            // CRITICAL: Use proper flying movement API to maintain altitude
-            bot->GetMotionMaster()->Clear(); // Clear any conflicting movement generators
-            bot->StopMoving(); // Stop current movement
-            
-            // Use MoveSplineInit for 3D flying movement that preserves altitude
-            bool moved = false;
-            if (bot->IsFlying() || bot->IsLevitating() || hasFlightAura)
+                while (angle > PI_F)
+                    angle -= 2.0f * PI_F;
+                while (angle < -PI_F)
+                    angle += 2.0f * PI_F;
+                return angle;
+            };
+
+            auto estimateSphereDistance = [&](float angle, float radius) -> float
             {
-                Movement::MoveSplineInit init(bot);
-                init.MoveTo(newX, newY, newZ, false, false);  // No pathfinding for flight
-                init.SetFly();                                // KEY: Enables flying movement mode
-                init.Launch();
-                
-                // Calculate movement tracking
-                float distance = bot->GetExactDist(newX, newY, newZ);
-                float delay = 1000.0f * distance / bot->GetSpeed(MOVE_FLIGHT);
-                AI_VALUE(LastMovement&, "last movement").Set(bot->GetMapId(), newX, newY, newZ, bot->GetOrientation(), delay, MovementPriority::MOVEMENT_FORCED);
-                moved = true;
+                if (!nearestSphere)
+                    return radius;
+                float px = roomCenter.GetPositionX() + std::cos(angle) * radius;
+                float py = roomCenter.GetPositionY() + std::sin(angle) * radius;
+                return std::hypot(px - nearestSphere->GetPositionX(), py - nearestSphere->GetPositionY());
+            };
+
+            float desiredAngle = orbitAngle + ANGLE_STEP;
+            float desiredRadius = std::clamp(orbitRadius, MIN_ORBIT_RADIUS, MAX_ROOM_RADIUS - 0.5f);
+
+            if (nearestSphere)
+            {
+                float forwardDist = estimateSphereDistance(normalizeAngle(orbitAngle + ANGLE_STEP), desiredRadius);
+                float backwardDist = estimateSphereDistance(normalizeAngle(orbitAngle - ANGLE_STEP), desiredRadius);
+                desiredAngle = (backwardDist > forwardDist) ? orbitAngle - ANGLE_STEP : orbitAngle + ANGLE_STEP;
+
+                if (sphereDistance < SAFE_SPHERE_DISTANCE)
+                {
+                    desiredRadius = std::clamp(orbitRadius + (SAFE_SPHERE_DISTANCE - sphereDistance) + 2.0f,
+                                               MIN_ORBIT_RADIUS, MAX_ROOM_RADIUS - 0.5f);
+                }
+                else if (sphereDistance > SAFE_SPHERE_DISTANCE + 5.0f)
+                {
+                    desiredRadius = std::clamp(orbitRadius - 1.0f, MIN_ORBIT_RADIUS, MAX_ROOM_RADIUS - 0.5f);
+                }
             }
             else
             {
-                // Fallback to ground movement if not flying
-                moved = MoveTo(bot->GetMapId(), newX, newY, newZ, 
-                              false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                float targetRadius = KITING_RADIUS;
+                if (desiredRadius < targetRadius)
+                    desiredRadius = std::min(targetRadius, desiredRadius + 1.0f);
+                else if (desiredRadius > targetRadius)
+                    desiredRadius = std::max(targetRadius, desiredRadius - 1.0f);
             }
-            
-            if (moved)
+
+            Position desiredDestination;
+            bool destinationFound = false;
+            const float altitudeBase = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT + 5.0f;
+            const float minAltitude = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT;
+            const float maxAltitude = roomCenter.GetPositionZ() + MAX_FLIGHT_HEIGHT;
+
+            auto makeDestination = [&](float angle, float radius) -> Position
             {
-                g_kaelthas_lastMoveTime[botGuid] = currentTime;
-                return true;
+                float x = roomCenter.GetPositionX() + std::cos(angle) * radius;
+                float y = roomCenter.GetPositionY() + std::sin(angle) * radius;
+                Position pos;
+                pos.Relocate(x, y, std::clamp(altitudeBase, minAltitude, maxAltitude));
+                return pos;
+            };
+
+            for (uint8 attempt = 0; attempt < 8 && !destinationFound; ++attempt)
+            {
+                float angleOffset = (attempt == 0 ? 0.0f : ((attempt % 2 == 0 ? 1.0f : -1.0f) *
+                                  (static_cast<float>((attempt + 1) / 2) * (ANGLE_STEP / 2.0f))));
+                float testAngle = normalizeAngle(desiredAngle + angleOffset);
+                float testRadius = desiredRadius;
+
+                if (nearestSphere)
+                {
+                    float predictedSphereDist = estimateSphereDistance(testAngle, testRadius);
+                    if (predictedSphereDist < SAFE_SPHERE_DISTANCE - 2.0f)
+                        continue;
+                }
+
+                Position candidate = makeDestination(testAngle, testRadius);
+                if (!bot->IsWithinLOS(candidate.GetPositionX(), candidate.GetPositionY(), candidate.GetPositionZ()))
+                    continue;
+
+                desiredDestination = candidate;
+                orbitAngle = testAngle;
+                orbitRadius = testRadius;
+                destinationFound = true;
             }
-            
-            // Fallback: 3D random movement if primary patterns fail
-            float randomAngle = frand(0, 2 * M_PI);
-            float verticalOffset = frand(0.0f, 4.0f); // Only UPWARD vertical movement to prevent falling
-            static const float FLIGHT_MOVEMENT_RADIUS = 15.0f; // Define missing constant
-            
-            float fallbackX = bot->GetPositionX() + cos(randomAngle) * FLIGHT_MOVEMENT_RADIUS;
-            float fallbackY = bot->GetPositionY() + sin(randomAngle) * FLIGHT_MOVEMENT_RADIUS;
-            float fallbackZ = roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT + 4.0f + verticalOffset; // Ensure high altitude
-            
-            // Clamp fallback Z to safe limits - NEVER go below minimum
-            fallbackZ = std::max(roomCenter.GetPositionZ() + MIN_FLIGHT_HEIGHT, 
-                               std::min(roomCenter.GetPositionZ() + MAX_FLIGHT_HEIGHT, fallbackZ));
-            
-            // FALLBACK: Also clear movement for fallback and force aerial positioning
-            bot->GetMotionMaster()->Clear();
-            bot->StopMoving();
-            
-            // Use flying movement API for fallback too
-            if (bot->IsFlying() || bot->IsLevitating() || hasFlightAura)
+
+            if (!destinationFound)
             {
-                Movement::MoveSplineInit init(bot);
-                init.MoveTo(fallbackX, fallbackY, fallbackZ, false, false);
-                init.SetFly();
-                init.Launch();
-                
-                float distance = bot->GetExactDist(fallbackX, fallbackY, fallbackZ);
-                float delay = 1000.0f * distance / bot->GetSpeed(MOVE_FLIGHT);
-                AI_VALUE(LastMovement&, "last movement").Set(bot->GetMapId(), fallbackX, fallbackY, fallbackZ, bot->GetOrientation(), delay, MovementPriority::MOVEMENT_FORCED);
-                moved = true;
+                float randomAngle = frand(0.0f, 2.0f * PI_F);
+                float randomRadius = std::clamp(KITING_RADIUS, MIN_ORBIT_RADIUS, MAX_ROOM_RADIUS - 0.5f);
+                desiredDestination = makeDestination(randomAngle, randomRadius);
+                orbitAngle = normalizeAngle(randomAngle);
+                orbitRadius = randomRadius;
             }
-            else
+
+            auto attemptFlightMove = [&](const Position& target) -> bool
             {
-                moved = MoveTo(bot->GetMapId(), fallbackX, fallbackY, fallbackZ,
-                              false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-            }
-            
-            if (moved)
+                Position copy = target;
+                copy.Relocate(target.GetPositionX(), target.GetPositionY(),
+                    std::clamp(target.GetPositionZ(), minAltitude, maxAltitude));
+
+                bot->GetMotionMaster()->Clear();
+                bot->StopMoving();
+
+                if (bot->IsFlying() || bot->IsLevitating() || hasFlightAura)
+                {
+                    Movement::MoveSplineInit init(bot);
+                    init.MoveTo(copy.GetPositionX(), copy.GetPositionY(), copy.GetPositionZ(), false, false);
+                    init.SetFly();
+                    init.Launch();
+
+                    float distance = bot->GetExactDist(copy.GetPositionX(), copy.GetPositionY(), copy.GetPositionZ());
+                    float speed = bot->GetSpeed(MOVE_FLIGHT);
+                    if (speed <= 0.0f)
+                        speed = bot->GetSpeed(MOVE_RUN);
+                    float delay = speed > 0.0f ? 1000.0f * (distance / speed) : 0.0f;
+                    delay = std::min(delay, static_cast<float>(sPlayerbotAIConfig->maxWaitForMove));
+                    AI_VALUE(LastMovement&, "last movement").Set(bot->GetMapId(), copy.GetPositionX(), copy.GetPositionY(), copy.GetPositionZ(),
+                                                                 bot->GetOrientation(), delay, MovementPriority::MOVEMENT_FORCED);
+                    g_kaelthas_lastMoveTime[botGuid] = currentTime;
+                    return true;
+                }
+
+                if (MoveTo(bot->GetMapId(), copy.GetPositionX(), copy.GetPositionY(), copy.GetPositionZ(),
+                           false, false, false, true, MovementPriority::MOVEMENT_FORCED))
+                {
+                    g_kaelthas_lastMoveTime[botGuid] = currentTime;
+                    return true;
+                }
+
+                return false;
+            };
+
+            bool moved = attemptFlightMove(desiredDestination);
+
+            if (!moved)
             {
-                g_kaelthas_lastMoveTime[botGuid] = currentTime;
-                return true;
+                Position fallbackDestination = makeDestination(frand(0.0f, 2.0f * PI_F), MAX_ROOM_RADIUS - 1.0f);
+                moved = attemptFlightMove(fallbackDestination);
             }
         }
-        
+
         // CONDITIONAL ACTION BLOCKING: Only block actions when spheres are close
         if (nearestSphere && sphereDistance < SAFE_SPHERE_DISTANCE)
         {
@@ -457,6 +432,10 @@ bool AvoidGravityLapseAction::Execute(Event event)
     }
     else
     {
+        g_kaelthas_lastFlightPosition.erase(botGuid);
+        g_kaelthas_stuckSince.erase(botGuid);
+        g_kaelthas_orbitAngle.erase(botGuid);
+        g_kaelthas_orbitRadius.erase(botGuid);
         // POST-FLIGHT PHASE: Gravity lapse has ended, force bots back to ground
         static std::map<ObjectGuid, bool> wasFlying;
         
@@ -542,28 +521,8 @@ bool AvoidGravityLapseAction::isUseful()
     if (!hasFlightAura && !hasDotAura)
         return false;
     
-    // Only be useful when there's a sphere nearby (< 12 yards)
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-        
-        if (unit->GetEntry() == NPC_ARCANE_SPHERE)
-        {
-            float distance = bot->GetDistance(unit);
-            if (distance < 12.0f) // Only when really close
-            {
-                return true; // Emergency movement needed
-            }
-        }
-    }
-    
-    // No immediate sphere threat - allow healing/DPS
-    return false;
+    return true;
 }
-
 bool FleeArcaneSphereAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
@@ -945,7 +904,7 @@ bool VexallusSpreadOutAction::Execute(Event event)
         return false;
 
     // Step away from the closest member by ~6-8 yards
-    float angle = bot->GetAngle(closest) + M_PI;
+    float angle = bot->GetAngle(closest) + PI_F;
     float step = 6.0f + frand(0.0f, 2.0f);
     float x = bot->GetPositionX() + cos(angle) * step;
     float y = bot->GetPositionY() + sin(angle) * step;
@@ -1457,3 +1416,5 @@ bool DelrissaDispelHandlingAction::isUseful()
     Unit* boss = bot->FindNearestCreature(NPC_DELRISSA, 120.0f);
     return boss && boss->IsAlive() && boss->IsInCombat();
 }
+
+
