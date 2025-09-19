@@ -83,6 +83,14 @@ public:
     bool isUseful() override;
 };
 
+class GruulPreSpreadAction : public MovementAction
+{
+public:
+    GruulPreSpreadAction(PlayerbotAI* ai) : MovementAction(ai, "gruul pre spread") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 class GruulCaveInAction : public MovementAction
 {
 public:

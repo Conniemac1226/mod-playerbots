@@ -29,6 +29,13 @@ public:
     bool IsActive() override;
 };
 
+class GruulPreSpreadTrigger : public Trigger
+{
+public:
+    GruulPreSpreadTrigger(PlayerbotAI* ai) : Trigger(ai, "gruul pre spread") {}
+    bool IsActive() override;
+};
+
 class GruulCaveInTrigger : public Trigger
 {
 public:

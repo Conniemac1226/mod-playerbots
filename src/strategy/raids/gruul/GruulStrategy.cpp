@@ -6,6 +6,8 @@ void GruulStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // Gruul the Dragonkiller
     triggers.push_back(new TriggerNode("gruul engaged",
         NextAction::array(0, new NextAction("gruul hurtful strike", ACTION_MOVE + 1), nullptr)));
+    triggers.push_back(new TriggerNode("gruul pre spread",
+        NextAction::array(0, new NextAction("gruul pre spread", ACTION_EMERGENCY - 1), nullptr)));
     triggers.push_back(new TriggerNode("gruul ground slam",
         NextAction::array(0, new NextAction("gruul ground slam", ACTION_EMERGENCY + 1), nullptr)));
     triggers.push_back(new TriggerNode("gruul shatter",

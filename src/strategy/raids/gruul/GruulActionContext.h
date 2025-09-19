@@ -12,6 +12,7 @@ public:
         // Gruul actions
         creators["gruul ground slam"] = &GruulActionContext::gruul_ground_slam;
         creators["gruul shatter position"] = &GruulActionContext::gruul_shatter_position;
+        creators["gruul pre spread"] = &GruulActionContext::gruul_pre_spread;
         creators["gruul cave in"] = &GruulActionContext::gruul_cave_in;
         creators["gruul hurtful strike"] = &GruulActionContext::gruul_hurtful_strike;
         creators["gruul tank swap"] = &GruulActionContext::gruul_tank_swap;
@@ -36,6 +37,7 @@ private:
     // Gruul actions
     static Action* gruul_ground_slam(PlayerbotAI* ai) { return new GruulGroundSlamAction(ai); }
     static Action* gruul_shatter_position(PlayerbotAI* ai) { return new GruulShatterPositionAction(ai); }
+    static Action* gruul_pre_spread(PlayerbotAI* ai) { return new GruulPreSpreadAction(ai); }
     static Action* gruul_cave_in(PlayerbotAI* ai) { return new GruulCaveInAction(ai); }
     static Action* gruul_hurtful_strike(PlayerbotAI* ai) { return new GruulHurtfulStrikeAction(ai); }
     static Action* gruul_tank_swap(PlayerbotAI* ai) { return new GruulTankSwapAction(ai); }

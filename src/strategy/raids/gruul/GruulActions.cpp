@@ -11,11 +11,102 @@
 #include "SpellInfo.h"
 #include "Group.h"
 #include "GroupReference.h"
+#include "ObjectAccessor.h"
+#include <algorithm>
 #include <map>
 #include <vector>
 
 // Track Ground Slam timing for shatter positioning
 std::map<ObjectGuid, time_t> groundSlamTimes;
+
+// Remember the personal spread destination we assigned for the current slam
+std::map<ObjectGuid, Position> gruulShatterTargets;
+
+// Track which ranged bots already reached their pre-spread slot
+std::map<ObjectGuid, bool> gruulPreSpreadSettled;
+
+namespace
+{
+    constexpr float MELEE_SHATTER_RADIUS = 17.0f;
+    constexpr float RANGED_SHATTER_RADIUS = 24.0f;
+
+    Position ComputeSpreadDestination(PlayerbotAI* botAI, Player* bot, Unit* gruul)
+    {
+        if (!botAI || !bot || !gruul)
+            return Position();
+
+        uint32 slotIndex = 0;
+        uint32 totalParticipants = 0;
+
+        if (Group* group = bot->GetGroup())
+        {
+            std::vector<Player*> participants;
+            Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
+            for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); ++itr)
+            {
+                Player* member = ObjectAccessor::FindPlayer(itr->guid);
+                if (!member || !member->IsAlive() || member->IsCharmed())
+                    continue;
+
+                if (member->GetMapId() != bot->GetMapId())
+                    continue;
+
+                if (gruul->GetDistance(member) > 200.0f)
+                    continue;
+
+                participants.push_back(member);
+            }
+
+            if (!participants.empty())
+            {
+                std::sort(participants.begin(), participants.end(), [](Player* a, Player* b) {
+                    return a->GetGUID() < b->GetGUID();
+                });
+
+                auto it = std::find(participants.begin(), participants.end(), bot);
+                if (it != participants.end())
+                    slotIndex = static_cast<uint32>(std::distance(participants.begin(), it));
+                else
+                    slotIndex = bot->GetGUID().GetCounter() % participants.size();
+
+                totalParticipants = static_cast<uint32>(participants.size());
+            }
+        }
+
+        if (totalParticipants == 0)
+        {
+            totalParticipants = 8; // fallback ring size
+            slotIndex = bot->GetGUID().GetCounter() % totalParticipants;
+        }
+
+        const float angleStep = (2.0f * static_cast<float>(M_PI)) / static_cast<float>(totalParticipants);
+        float targetAngle = angleStep * static_cast<float>(slotIndex);
+
+        // Small jitter keeps players from perfectly stacking even when GUIDs are adjacent
+        float jitter = ((bot->GetGUID().GetCounter() % 101) / 100.0f - 0.5f) * (angleStep * 0.3f);
+        targetAngle = Position::NormalizeOrientation(targetAngle + jitter);
+
+        float radius = botAI->IsMelee(bot) ? MELEE_SHATTER_RADIUS : RANGED_SHATTER_RADIUS;
+
+        // Ranged bots prefer a slightly larger ring to ease melee space
+        if (!botAI->IsMelee(bot))
+            radius += 4.0f;
+
+        Position destination = gruul->GetPosition();
+        destination.RelocatePolarOffset(targetAngle, radius);
+
+        float x = destination.GetPositionX();
+        float y = destination.GetPositionY();
+        float z = destination.GetPositionZ();
+
+        // Allow the map to clamp the position if needed; fall back to raw height if no collision data.
+        if (!bot->GetMap()->CheckCollisionAndGetValidCoords(bot, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), x, y, z))
+            z = bot->GetMap()->GetHeight(x, y, z);
+
+        destination.Relocate(x, y, z);
+        return destination;
+    }
+}
 
 // Track kill order for council
 static std::vector<uint32> councilKillOrder = {
@@ -54,11 +145,27 @@ bool GruulGroundSlamAction::Execute(Event event)
     // CRITICAL: Spread IMMEDIATELY on Ground Slam detection!
     // We have 9.7 seconds before Shatter - this is our ONLY chance to position
     groundSlamTimes[bot->GetGUID()] = time(nullptr);
-    
-    // WotLK Standard Pattern: Use disperse distance AI value system
-    // This leverages the proven spreading AI used in Ulduar, ICC, etc.
-    SET_AI_VALUE(float, "disperse distance", 15.0f); // 15 yards spread for Gruul
-    
+
+    gruulPreSpreadSettled.erase(bot->GetGUID());
+
+    const float spreadDistance = botAI->IsMelee(bot) ? MELEE_SHATTER_RADIUS : RANGED_SHATTER_RADIUS;
+
+    // WotLK Standard Pattern: Use disperse distance AI value system with a slightly larger buffer
+    SET_AI_VALUE(float, "disperse distance", spreadDistance);
+
+    Position targetPos = ComputeSpreadDestination(botAI, bot, gruul);
+    if (targetPos != Position())
+    {
+        gruulShatterTargets[bot->GetGUID()] = targetPos;
+        MoveTo(bot->GetMapId(), targetPos.GetPositionX(), targetPos.GetPositionY(), targetPos.GetPositionZ(),
+               false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+    }
+    else
+    {
+        gruulShatterTargets.erase(bot->GetGUID());
+    }
+
+    botAI->SetNextCheckDelay(250);
     return true;
 }
 
@@ -72,19 +179,97 @@ bool GruulShatterPositionAction::Execute(Event event)
     Unit* gruul = bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f);
     if (!gruul)
         return false;
-        
-    // Shatter happens 9.7 seconds after Ground Slam
-    // By this time, bots should already be spread out and will be petrified
-    // Clear the spread distance as positioning is complete
-    
-    // WotLK Standard Pattern: Clear disperse distance after spread complete
+
+    gruulShatterTargets.erase(bot->GetGUID());
+    groundSlamTimes.erase(bot->GetGUID());
+    gruulPreSpreadSettled[bot->GetGUID()] = true;
+
     if (AI_VALUE(float, "disperse distance") > 0.0f)
     {
         SET_AI_VALUE(float, "disperse distance", 0.0f);
         return true;
     }
-    
+
     return false;
+}
+
+bool GruulPreSpreadAction::Execute(Event event)
+{
+    Unit* gruul = bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f, true);
+    if (!gruul || !gruul->IsInCombat())
+        return false;
+
+    if (botAI->IsMelee(bot))
+        return false;
+
+    if (groundSlamTimes.find(bot->GetGUID()) != groundSlamTimes.end())
+        return false;
+
+    auto settledIt = gruulPreSpreadSettled.find(bot->GetGUID());
+    if (settledIt != gruulPreSpreadSettled.end())
+    {
+        auto destIt = gruulShatterTargets.find(bot->GetGUID());
+        if (destIt != gruulShatterTargets.end())
+        {
+            if (bot->GetExactDist2d(destIt->second.GetPositionX(), destIt->second.GetPositionY()) <= 6.0f)
+                return false;
+        }
+
+        gruulPreSpreadSettled.erase(settledIt);
+    }
+
+    const float desiredSpread = RANGED_SHATTER_RADIUS + 4.0f;
+
+    if (AI_VALUE(float, "disperse distance") < desiredSpread)
+        SET_AI_VALUE(float, "disperse distance", desiredSpread);
+
+    Position targetPos = ComputeSpreadDestination(botAI, bot, gruul);
+    if (targetPos == Position())
+        return false;
+
+    gruulShatterTargets[bot->GetGUID()] = targetPos;
+
+    if (bot->GetExactDist2d(targetPos.GetPositionX(), targetPos.GetPositionY()) <= 4.0f)
+    {
+        gruulPreSpreadSettled[bot->GetGUID()] = true;
+        if (AI_VALUE(float, "disperse distance") > 0.0f)
+            SET_AI_VALUE(float, "disperse distance", 0.0f);
+        return false;
+    }
+
+    bool moved = MoveTo(bot->GetMapId(), targetPos.GetPositionX(), targetPos.GetPositionY(), targetPos.GetPositionZ(),
+                        false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+    if (moved)
+        botAI->SetNextCheckDelay(300);
+
+    return moved;
+}
+
+bool GruulPreSpreadAction::isUseful()
+{
+    if (!bot || !bot->IsAlive() || botAI->IsMelee(bot))
+        return false;
+
+    Unit* gruul = bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f, true);
+    if (!gruul || !gruul->IsInCombat())
+        return false;
+
+    if (groundSlamTimes.find(bot->GetGUID()) != groundSlamTimes.end())
+        return false;
+
+    if (gruulPreSpreadSettled.count(bot->GetGUID()))
+        return false;
+
+    const float desiredSpread = RANGED_SHATTER_RADIUS + 4.0f;
+    if (AI_VALUE(float, "disperse distance") < desiredSpread)
+        return true;
+
+    auto it = gruulShatterTargets.find(bot->GetGUID());
+    if (it == gruulShatterTargets.end())
+        return true;
+
+    const Position& targetPos = it->second;
+    return bot->GetExactDist2d(targetPos.GetPositionX(), targetPos.GetPositionY()) > 4.5f;
 }
 
 bool GruulShatterPositionAction::isUseful()
@@ -175,6 +360,28 @@ bool GruulHurtfulStrikeAction::isUseful()
 // High King Maulgar Actions
 bool MaulgarFocusTargetAction::Execute(Event event)
 {
+    // Highest priority: if a Wild Fel Stalker is already our target, stay on it
+    if (Unit* current = AI_VALUE(Unit*, "current target"))
+    {
+        if (current->IsAlive() && current->IsInCombat() && current->GetEntry() == NPC_WILD_FEL_STALKER)
+        {
+            return Attack(current);
+        }
+    }
+
+    // Check for any active Wild Fel Stalker adds and switch to them immediately
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const ObjectGuid& guid : targets)
+    {
+        if (Unit* unit = botAI->GetUnit(guid))
+        {
+            if (unit->IsAlive() && unit->IsInCombat() && unit->GetEntry() == NPC_WILD_FEL_STALKER)
+            {
+                return Attack(unit);
+            }
+        }
+    }
+
     // Stick to current council target if valid to prevent ping-pong
     if (Unit* current = AI_VALUE(Unit*, "current target"))
     {

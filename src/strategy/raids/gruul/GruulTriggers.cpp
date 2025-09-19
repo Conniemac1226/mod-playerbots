@@ -16,6 +16,8 @@
 
 // External reference to Ground Slam timing tracker (defined in GruulActions.cpp)
 extern std::map<ObjectGuid, time_t> groundSlamTimes;
+extern std::map<ObjectGuid, Position> gruulShatterTargets;
+extern std::map<ObjectGuid, bool> gruulPreSpreadSettled;
 
 // Helper function to check if a unit is casting a specific spell
 static bool IsCastingSpell(Unit* unit, uint32 spellId)
@@ -75,11 +77,20 @@ bool GruulGroundSlamTrigger::IsActive()
         time_t timeSinceSlam = time(nullptr) - it->second;
         if (timeSinceSlam < 12) // 12 seconds buffer (9.7s + safety margin)
         {
-            // Use WotLK pattern: check if we need to maintain spread distance
-            return AI_VALUE(float, "disperse distance") == 0.0f; // Trigger if not spreading
+            // Keep pushing bots toward their assigned spread destination until they settle
+            auto destIt = gruulShatterTargets.find(bot->GetGUID());
+            if (destIt != gruulShatterTargets.end() && !bot->HasAura(GRUUL_SPELL_STONED))
+            {
+                float distance2d = bot->GetExactDist2d(destIt->second.GetPositionX(), destIt->second.GetPositionY());
+                if (distance2d > 4.0f)
+                    return true;
+            }
+
+            // Fallback for older behaviour - if disperse distance somehow reset, fire again
+            return AI_VALUE(float, "disperse distance") <= 0.0f;
         }
     }
-    
+
     return false;
 }
 
@@ -111,6 +122,30 @@ bool GruulShatterTrigger::IsActive()
     }
     
     return false;
+}
+
+bool GruulPreSpreadTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || botAI->IsMelee(bot))
+        return false;
+
+    Unit* gruul = bot->FindNearestCreature(NPC_GRUUL_THE_DRAGONKILLER, 150.0f, true);
+    if (!gruul || !gruul->IsInCombat())
+        return false;
+
+    if (groundSlamTimes.find(bot->GetGUID()) != groundSlamTimes.end())
+        return false;
+
+    if (gruulPreSpreadSettled.count(bot->GetGUID()))
+        return false;
+
+    auto it = gruulShatterTargets.find(bot->GetGUID());
+    if (it == gruulShatterTargets.end())
+        return true;
+
+    float distance2d = bot->GetExactDist2d(it->second.GetPositionX(), it->second.GetPositionY());
+    return distance2d > 6.0f;
 }
 
 bool GruulCaveInTrigger::IsActive()

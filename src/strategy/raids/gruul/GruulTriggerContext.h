@@ -12,6 +12,7 @@ public:
         creators["gruul engaged"] = &GruulTriggerContext::gruul_engaged;
         creators["gruul ground slam"] = &GruulTriggerContext::gruul_ground_slam;
         creators["gruul shatter"] = &GruulTriggerContext::gruul_shatter;
+        creators["gruul pre spread"] = &GruulTriggerContext::gruul_pre_spread;
         creators["gruul cave in"] = &GruulTriggerContext::gruul_cave_in;
         creators["gruul reverberation"] = &GruulTriggerContext::gruul_reverberation;
         creators["gruul hurtful strike"] = &GruulTriggerContext::gruul_hurtful_strike;
@@ -40,6 +41,7 @@ private:
     static Trigger* gruul_engaged(PlayerbotAI* ai) { return new GruulEngagedTrigger(ai); }
     static Trigger* gruul_ground_slam(PlayerbotAI* ai) { return new GruulGroundSlamTrigger(ai); }
     static Trigger* gruul_shatter(PlayerbotAI* ai) { return new GruulShatterTrigger(ai); }
+    static Trigger* gruul_pre_spread(PlayerbotAI* ai) { return new GruulPreSpreadTrigger(ai); }
     static Trigger* gruul_cave_in(PlayerbotAI* ai) { return new GruulCaveInTrigger(ai); }
     static Trigger* gruul_reverberation(PlayerbotAI* ai) { return new GruulReverberationTrigger(ai); }
     static Trigger* gruul_hurtful_strike(PlayerbotAI* ai) { return new GruulHurtfulStrikeTrigger(ai); }
