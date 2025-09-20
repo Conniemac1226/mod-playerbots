@@ -79,6 +79,8 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             creators["tbc-bot"] = &DungeonStrategyContext::tbc_bot;      // The Botanica
             creators["tbc-mech"] = &DungeonStrategyContext::tbc_mech;    // The Mechanar
             
+            // ...
+
             // Wrath of the Lich King
             creators["wotlk-uk"] = &DungeonStrategyContext::wotlk_uk;       // Utgarde Keep
             creators["wotlk-nex"] = &DungeonStrategyContext::wotlk_nex;     // The Nexus
@@ -132,8 +134,8 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         static Strategy* wotlk_toc(PlayerbotAI* botAI) { return new WotlkDungeonToCStrategy(botAI); }
         // NYI from here down
         static Strategy* wotlk_hor(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
-        
-        
+
+
 };
 
 #endif
