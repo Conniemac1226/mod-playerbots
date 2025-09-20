@@ -41,8 +41,11 @@ public:
         creators["illhoof imps"] = &KarazhanActionContext::illhoof_imps;
         
         // Netherspite
-        creators["netherspite beam"] = &KarazhanActionContext::netherspite_beam;
-        creators["netherspite void zone"] = &KarazhanActionContext::netherspite_void_zone;
+        creators["karazhan netherspite block red beam"] = &KarazhanActionContext::karazhan_netherspite_block_red_beam;
+        creators["karazhan netherspite block blue beam"] = &KarazhanActionContext::karazhan_netherspite_block_blue_beam;
+        creators["karazhan netherspite block green beam"] = &KarazhanActionContext::karazhan_netherspite_block_green_beam;
+        creators["karazhan netherspite avoid beam and void zone"] = &KarazhanActionContext::karazhan_netherspite_avoid_beam_and_void_zone;
+        creators["karazhan netherspite banish phase avoid void zone"] = &KarazhanActionContext::karazhan_netherspite_banish_phase_avoid_void_zone;
         
         // Prince Malchezaar
         creators["malchezaar infernal"] = &KarazhanActionContext::malchezaar_infernal;
@@ -97,8 +100,11 @@ private:
     static Action* illhoof_imps(PlayerbotAI* ai) { return new IllhoofImpsAction(ai); }
     
     // Netherspite
-    static Action* netherspite_beam(PlayerbotAI* ai) { return new NetherspiteBeamAction(ai); }
-    static Action* netherspite_void_zone(PlayerbotAI* ai) { return new NetherspiteVoidZoneAction(ai); }
+    static Action* karazhan_netherspite_block_red_beam(PlayerbotAI* ai) { return new KarazhanNetherspiteBlockRedBeamAction(ai); }
+    static Action* karazhan_netherspite_block_blue_beam(PlayerbotAI* ai) { return new KarazhanNetherspiteBlockBlueBeamAction(ai); }
+    static Action* karazhan_netherspite_block_green_beam(PlayerbotAI* ai) { return new KarazhanNetherspiteBlockGreenBeamAction(ai); }
+    static Action* karazhan_netherspite_avoid_beam_and_void_zone(PlayerbotAI* ai) { return new KarazhanNetherspiteAvoidBeamAndVoidZoneAction(ai); }
+    static Action* karazhan_netherspite_banish_phase_avoid_void_zone(PlayerbotAI* ai) { return new KarazhanNetherspiteBanishPhaseAvoidVoidZoneAction(ai); }
     
     // Prince Malchezaar
     static Action* malchezaar_infernal(PlayerbotAI* ai) { return new MalchezaarInfernalAction(ai); }

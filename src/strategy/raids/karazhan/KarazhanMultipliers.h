@@ -45,4 +45,18 @@ public:
     float GetValue(Action* action) override;
 };
 
+class NetherspiteBlueAndGreenBeamMultiplier : public Multiplier
+{
+public:
+    NetherspiteBlueAndGreenBeamMultiplier(PlayerbotAI* ai) : Multiplier(ai, "netherspite blue and green beam") {}
+    float GetValue(Action* action) override;
+};
+
+class NetherspiteRedBeamMultiplier : public Multiplier
+{
+public:
+    NetherspiteRedBeamMultiplier(PlayerbotAI* ai) : Multiplier(ai, "netherspite red beam") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

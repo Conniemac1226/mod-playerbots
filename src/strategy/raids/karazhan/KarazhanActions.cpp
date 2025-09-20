@@ -2,6 +2,7 @@
 #include "KarazhanTriggers.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
+#include "PlayerbotMgr.h"
 #include "Player.h"
 #include "Unit.h"
 #include "Creature.h"
@@ -17,8 +18,10 @@
 #include "ObjectGuid.h"
 #include "Position.h"
 #include <algorithm>
-#include <array>
+#include <ctime>
 #include <cmath>
+#include <map>
+#include <tuple>
 #include <vector>
  
 
@@ -45,48 +48,6 @@ static bool IsCastingSpell(Unit* unit, uint32 spellId)
 std::map<ObjectGuid, uint32> g_karazhan_lastMoveTime;
 std::map<ObjectGuid, bool> g_karazhan_inSafePosition;
 std::map<ObjectGuid, uint32> g_karazhan_lastPhaseTime;
-static constexpr std::array<float, 3> s_anchorRadii = { 6.0f, 13.0f, 10.5f };
-static constexpr std::array<uint32, 3> s_portalEntries = { NPC_NETHER_PORTAL_PERSEVERANCE, NPC_NETHER_PORTAL_SERENITY, NPC_NETHER_PORTAL_DOMINANCE };
-static constexpr std::array<uint32, 3> s_portalBuffs = { SPELL_PORTAL_PERSEVERANCE, SPELL_PORTAL_SERENITY, SPELL_PORTAL_DOMINANCE };
-static constexpr std::array<uint32, 3> s_exhaustionSpells = { SPELL_EXHAUSTION_PERSEVERANCE, SPELL_EXHAUSTION_SERENITY, SPELL_EXHAUSTION_DOMINANCE };
-
-static void ClampToNetherspiteRoom(Position const& home, float& x, float& y)
-{
-    float hx = home.GetPositionX();
-    float hy = home.GetPositionY();
-
-    // Empirically derived from portal placement in boss_netherspite.cpp (Celestial Watch extents)
-    constexpr float MAX_HORIZONTAL = 58.0f;   // west/east span toward Perseverance/Dominance portals
-    constexpr float MAX_FORWARD = 42.0f;      // back wall toward Dominance portal (higher Y)
-    constexpr float MAX_BACKWARD = 62.0f;     // doorway side toward Serenity portal (lower Y)
-
-    float dx = x - hx;
-    float dy = y - hy;
-
-    dx = std::clamp(dx, -MAX_HORIZONTAL, MAX_HORIZONTAL);
-    dy = std::clamp(dy, -MAX_BACKWARD, MAX_FORWARD);
-
-    if (dx == 0.0f && dy == 0.0f)
-    {
-        x = hx;
-        y = hy;
-        return;
-    }
-
-    float limitX = MAX_HORIZONTAL;
-    float limitY = dy >= 0.0f ? MAX_FORWARD : MAX_BACKWARD;
-
-    float norm = (dx * dx) / (limitX * limitX) + (dy * dy) / (limitY * limitY);
-    if (norm > 1.0f)
-    {
-        float angle = std::atan2(dy * limitX, dx * limitY);
-        dx = limitX * std::cos(angle);
-        dy = limitY * std::sin(angle);
-    }
-
-    x = hx + dx;
-    y = hy + dy;
-}
 
 // Chess throttles to protect server integrity
 static std::map<ObjectGuid, uint32> g_chess_lastMoveTime;
@@ -1132,623 +1093,720 @@ bool IllhoofImpsAction::isUseful()
 }
 
 // Netherspite Actions
-// Dynamic portal positions (queried in Execute)
-
-// Utility: check if unit has banish auras used by core boss script
-static inline bool IsNetherspiteBanish(Unit* u)
+namespace
 {
-    // boss_netherspite.cpp uses SPELL_BANISH_VISUAL (39833) and SPELL_BANISH_ROOT (42716)
-    return u && (u->HasAura(39833) || u->HasAura(42716));
-}
+    static std::map<ObjectGuid, uint32> g_netherspiteBeamMoveTimes;
+    static std::map<ObjectGuid, bool> g_netherspiteLastMoveSideways;
+    static std::map<ObjectGuid, bool> g_netherspiteWasBlockingBlueBeam;
+    static std::map<ObjectGuid, bool> g_netherspiteWasBlockingGreenBeam;
 
-// Utility: distance from point P to infinite line AB, and check if P is between A and B in projection
-static inline bool IsNearBeamLine(const Position& a, const Position& b, const Position& p, float maxDist)
-{
-    const float ax = a.GetPositionX(), ay = a.GetPositionY();
-    const float bx = b.GetPositionX(), by = b.GetPositionY();
-    const float px = p.GetPositionX(), py = p.GetPositionY();
-    const float abx = bx - ax, aby = by - ay;
-    const float apx = px - ax, apy = py - ay;
-    const float abLen2 = abx * abx + aby * aby;
-    if (abLen2 < 0.01f)
-        return false;
-    const float t = (apx * abx + apy * aby) / abLen2;
-    if (t <= 0.0f || t >= 1.0f)
-        return false; // must be between portal and boss
-    const float cx = ax + t * abx;
-    const float cy = ay + t * aby;
-    const float dx = px - cx, dy = py - cy;
-    const float d2 = dx * dx + dy * dy;
-    return d2 <= (maxDist * maxDist);
-}
-
-bool NetherspiteBeamAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    AiObjectContext* context = botAI->GetAiObjectContext();
-    if (!context)
-        return false;
-
-    uint32 nowTick = getMSTime();
-    uint32 lastTick = AI_VALUE(uint32, "netherspite last beam tick");
-    if (lastTick && nowTick - lastTick < 400)
-        return false;
-    SET_AI_VALUE(uint32, "netherspite last beam tick", nowTick);
-
-    if (bot->HasAura(SPELL_VOID_ZONE) || AI_VALUE2(bool, "has area debuff", "self target"))
-        return false;
-
-    Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
-    if (!netherspite || !netherspite->IsInCombat())
-        return false;
-
-    bool portalActive = !IsNetherspiteBanish(netherspite);
-    bool storedPortalActive = AI_VALUE(bool, "netherspite portal active");
-    if (portalActive != storedPortalActive)
+    static bool IsNetherspiteBanished(Unit* boss)
     {
-        SET_AI_VALUE(bool, "netherspite portal active", portalActive);
-        if (portalActive)
-            SET_AI_VALUE(uint32, "netherspite portal start", nowTick);
-        else
-        {
-            SET_AI_VALUE(uint32, "netherspite portal start", 0u);
-            SET_AI_VALUE(uint32, "netherspite beam hold start", 0u);
-            SET_AI_VALUE(uint32, "netherspite beam cooldown until", 0u);
-        }
+        return boss && boss->HasAura(SPELL_NETHERSPITE_BANISHED);
+    }
+}
+
+class KarazhanNetherspiteHelper
+{
+public:
+    KarazhanNetherspiteHelper(Player* bot, PlayerbotAI* botAI) : m_bot(bot), m_botAI(botAI) {}
+
+    Position GetPositionOnBeam(Unit* boss, Unit* portal, float distanceFromBoss) const
+    {
+        if (!boss || !portal)
+            return Position();
+
+        float bx = boss->GetPositionX();
+        float by = boss->GetPositionY();
+        float bz = boss->GetPositionZ();
+        float px = portal->GetPositionX();
+        float py = portal->GetPositionY();
+
+        float dx = px - bx;
+        float dy = py - by;
+        float length = std::sqrt(dx * dx + dy * dy);
+
+        if (length == 0.0f)
+            return Position(bx, by, bz);
+
+        dx /= length;
+        dy /= length;
+
+        float targetX = bx + dx * distanceFromBoss;
+        float targetY = by + dy * distanceFromBoss;
+        return Position(targetX, targetY, bz);
     }
 
-    if (!portalActive)
-        return false;
-
-    std::array<Position, 3> portalPositions;
-    auto findPortalPos = [&](uint32 entry, Position& out) -> bool
+    std::vector<Player*> GetBlueBlockers() const
     {
-        if (Creature* c = bot->FindNearestCreature(entry, 120.0f, true))
+        std::vector<Player*> blueBlockers;
+        if (Group* group = m_bot->GetGroup())
         {
-            out.Relocate(c->GetPosition());
-            return true;
-        }
-
-        std::list<Unit*> units;
-        Acore::AnyUnitInObjectRangeCheck check(bot, 120.0f);
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, units, check);
-        Cell::VisitObjects(bot, searcher, 120.0f);
-        for (Unit* u : units)
-        {
-            if (u && u->GetEntry() == entry)
+            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
             {
-                out.Relocate(u->GetPosition());
-                return true;
+                Player* member = itr->GetSource();
+                if (!member || !member->IsAlive() || !GET_PLAYERBOT_AI(member))
+                    continue;
+
+                bool isDps = m_botAI->IsDps(member);
+                bool isWarrior = member->getClass() == CLASS_WARRIOR;
+                bool isRogue = member->getClass() == CLASS_ROGUE;
+                bool hasExhaustion = member->HasAura(SPELL_EXHAUSTION_DOMINANCE);
+                Aura* blueBuff = member->GetAura(SPELL_BLUE_BEAM_DEBUFF);
+                bool overStack = blueBuff && blueBuff->GetStackAmount() >= 25;
+
+                if (isDps && !isWarrior && !isRogue && !hasExhaustion && !overStack)
+                    blueBlockers.push_back(member);
             }
         }
-        return false;
-    };
-
-    for (size_t i = 0; i < portalPositions.size(); ++i)
-    {
-        if (!findPortalPos(s_portalEntries[i], portalPositions[i]))
-            return false;
+        return blueBlockers;
     }
 
-    Position home = netherspite->GetPosition();
-    if (Creature* nsCreature = netherspite->ToCreature())
-        home = nsCreature->GetHomePosition();
-
-    auto collectVoidZones = [&]() -> std::vector<Unit*>
+    std::vector<Player*> GetGreenBlockers() const
     {
-        std::vector<Unit*> zones;
-        GuidVector hostile = context->GetValue<GuidVector>("nearest hostile npcs")->Get();
-        for (ObjectGuid const& guid : hostile)
+        std::vector<Player*> greenBlockers;
+        if (Group* group = m_bot->GetGroup())
         {
-            Unit* unit = botAI->GetUnit(guid);
-            if (!unit || !unit->IsAlive())
-                continue;
-            if (unit->GetEntry() == 17470) // Minor Void Zone trigger
-                zones.push_back(unit);
-        }
-        return zones;
-    };
-
-    std::vector<Unit*> voidZones = collectVoidZones();
-    auto isPositionSafe = [&](float x, float y) -> bool
-    {
-        constexpr float hazardRadius = 4.5f;
-        for (Unit* zone : voidZones)
-        {
-            if (!zone)
-                continue;
-            float dx = x - zone->GetPositionX();
-            float dy = y - zone->GetPositionY();
-            if ((dx * dx + dy * dy) <= (hazardRadius * hazardRadius))
-                return false;
-        }
-        return true;
-    };
-
-    std::vector<Player*> members;
-    auto considerMember = [&](Player* member)
-    {
-        if (!member || !member->IsAlive())
-            return;
-        if (member->GetMapId() != bot->GetMapId())
-            return;
-        if (member->GetDistance(netherspite) > 120.0f)
-            return;
-        members.push_back(member);
-    };
-
-    if (Group* group = bot->GetGroup())
-    {
-        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
-            considerMember(ref->GetSource());
-    }
-    if (std::none_of(members.begin(), members.end(), [&](Player* member) { return member == bot; }))
-        considerMember(bot);
-    if (members.empty())
-        members.push_back(bot);
-
-    auto getAI = [&](Player* player) -> PlayerbotAI*
-    {
-        return player ? GET_PLAYERBOT_AI(player) : nullptr;
-    };
-
-    auto hasBuffStacks = [&](Player* player, uint32 spellId, uint8 threshold) -> bool
-    {
-        if (!player)
-            return false;
-        if (Aura* aura = player->GetAura(spellId))
-            return aura->GetStackAmount() >= threshold;
-        return false;
-    };
-
-    Player* redBlocker = nullptr;
-    for (Player* member : members)
-    {
-        PlayerbotAI* memberAI = getAI(member);
-        if (!memberAI)
-            continue;
-        if (memberAI->IsMainTank(member) && !member->HasAura(SPELL_EXHAUSTION_PERSEVERANCE) && !hasBuffStacks(member, SPELL_PORTAL_PERSEVERANCE, 8))
-        {
-            redBlocker = member;
-            break;
-        }
-    }
-    if (!redBlocker)
-    {
-        for (Player* member : members)
-        {
-            PlayerbotAI* memberAI = getAI(member);
-            if (!memberAI)
-                continue;
-            if (memberAI->IsTank(member) && !member->HasAura(SPELL_EXHAUSTION_PERSEVERANCE))
+            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
             {
+                Player* member = itr->GetSource();
+                if (!member || !member->IsAlive() || !GET_PLAYERBOT_AI(member))
+                    continue;
+
+                bool hasExhaustion = member->HasAura(SPELL_EXHAUSTION_SERENITY);
+                Aura* greenBuff = member->GetAura(SPELL_GREEN_BEAM_DEBUFF);
+                bool overStack = greenBuff && greenBuff->GetStackAmount() >= 25;
+                bool isRogue = member->getClass() == CLASS_ROGUE;
+                bool isDpsWarrior = member->getClass() == CLASS_WARRIOR && m_botAI->IsDps(member);
+                bool eligibleRogueWarrior = (isRogue || isDpsWarrior) && !hasExhaustion;
+                bool isHealer = m_botAI->IsHeal(member);
+                bool eligibleHealer = isHealer && !hasExhaustion && !overStack;
+
+                if (eligibleRogueWarrior || eligibleHealer)
+                    greenBlockers.push_back(member);
+            }
+        }
+        return greenBlockers;
+    }
+
+    std::tuple<Player*, Player*, Player*> GetCurrentBeamBlockers() const
+    {
+        Player* redBlocker = nullptr;
+        Player* greenBlocker = nullptr;
+        Player* blueBlocker = nullptr;
+
+        if (Group* group = m_bot->GetGroup())
+        {
+            for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
+            {
+                Player* member = itr->GetSource();
+                if (!member || !member->IsAlive())
+                    continue;
+
+                PlayerbotAI* memberAI = sPlayerbotsMgr->GetPlayerbotAI(member);
+                if (!memberAI || !memberAI->IsTank(member))
+                    continue;
+                if (member->HasAura(SPELL_EXHAUSTION_PERSEVERANCE))
+                    continue;
+
                 redBlocker = member;
                 break;
             }
         }
-    }
-    if (!redBlocker && botAI->IsTank(bot))
-        redBlocker = bot;
-    if (!redBlocker)
-        redBlocker = members.front();
 
-    Player* greenBlocker = nullptr;
-    for (Player* member : members)
-    {
-        if (member == redBlocker)
-            continue;
-        PlayerbotAI* memberAI = getAI(member);
-        if (!memberAI)
-            continue;
-        if (member->HasAura(SPELL_EXHAUSTION_SERENITY) || hasBuffStacks(member, SPELL_PORTAL_SERENITY, 25))
-            continue;
-        bool isRogue = member->getClass() == CLASS_ROGUE;
-        bool isDpsWarrior = member->getClass() == CLASS_WARRIOR && memberAI->IsDps(member);
-        if (isRogue || isDpsWarrior)
-        {
-            greenBlocker = member;
-            break;
-        }
+        std::vector<Player*> greenBlockers = GetGreenBlockers();
+        if (!greenBlockers.empty())
+            greenBlocker = greenBlockers.front();
+
+        std::vector<Player*> blueBlockers = GetBlueBlockers();
+        if (!blueBlockers.empty())
+            blueBlocker = blueBlockers.front();
+
+        return std::make_tuple(redBlocker, greenBlocker, blueBlocker);
     }
-    if (!greenBlocker)
+
+    std::vector<Unit*> GetAllVoidZones() const
     {
-        for (Player* member : members)
+        std::vector<Unit*> voidZones;
+        GuidVector npcs = m_botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs")->Get();
+        for (ObjectGuid const& npcGuid : npcs)
         {
-            if (member == redBlocker)
+            Unit* unit = m_botAI->GetUnit(npcGuid);
+            if (unit && unit->GetEntry() == NPC_VOID_ZONE)
+                voidZones.push_back(unit);
+        }
+        return voidZones;
+    }
+
+    bool IsSafePosition(float x, float y, float /*z*/, const std::vector<Unit*>& hazards, float hazardRadius) const
+    {
+        for (Unit* hazard : hazards)
+        {
+            if (!hazard)
                 continue;
-            PlayerbotAI* memberAI = getAI(member);
-            if (!memberAI)
-                continue;
-            if (memberAI->IsHeal(member) && !member->HasAura(SPELL_EXHAUSTION_SERENITY) && !hasBuffStacks(member, SPELL_PORTAL_SERENITY, 25))
-            {
-                greenBlocker = member;
-                break;
-            }
-        }
-    }
-    if (!greenBlocker)
-    {
-        for (Player* member : members)
-        {
-            if (member == redBlocker)
-                continue;
-            PlayerbotAI* memberAI = getAI(member);
-            if (memberAI && memberAI->IsDps(member) && !member->HasAura(SPELL_EXHAUSTION_SERENITY))
-            {
-                greenBlocker = member;
-                break;
-            }
-        }
-    }
-    if (!greenBlocker)
-        greenBlocker = (redBlocker == bot) ? nullptr : bot;
 
-    Player* blueBlocker = nullptr;
-    for (Player* member : members)
-    {
-        if (member == redBlocker || member == greenBlocker)
-            continue;
-        PlayerbotAI* memberAI = getAI(member);
-        if (!memberAI)
-            continue;
-        if (memberAI->IsDps(member) && member->getClass() != CLASS_WARRIOR && member->getClass() != CLASS_ROGUE &&
-            !member->HasAura(SPELL_EXHAUSTION_DOMINANCE) && !hasBuffStacks(member, SPELL_PORTAL_DOMINANCE, 25))
-        {
-            blueBlocker = member;
-            break;
-        }
-    }
-    if (!blueBlocker)
-    {
-        for (Player* member : members)
-        {
-            if (member == redBlocker || member == greenBlocker)
-                continue;
-            PlayerbotAI* memberAI = getAI(member);
-            if (!memberAI)
-                continue;
-            if (memberAI->IsHeal(member) && !member->HasAura(SPELL_EXHAUSTION_DOMINANCE) && !hasBuffStacks(member, SPELL_PORTAL_DOMINANCE, 25))
-            {
-                blueBlocker = member;
-                break;
-            }
-        }
-    }
-    if (!blueBlocker)
-    {
-        for (Player* member : members)
-        {
-            if (member == redBlocker || member == greenBlocker)
-                continue;
-            blueBlocker = member;
-            break;
-        }
-    }
-    if (!blueBlocker)
-        blueBlocker = bot;
-
-    std::array<Player*, 3> blockers = { redBlocker, greenBlocker, blueBlocker };
-
-    auto indexForAura = [&]() -> int
-    {
-        for (int i = 0; i < 3; ++i)
-        {
-            if (bot->GetAura(s_portalBuffs[i]))
-                return i;
-        }
-        return -1;
-    };
-
-    auto moveToAnchor = [&](int colorIndex, float lateralOffset) -> bool
-    {
-        if (colorIndex < 0 || colorIndex > 2)
-            return false;
-
-        float dirX = portalPositions[colorIndex].GetPositionX() - home.GetPositionX();
-        float dirY = portalPositions[colorIndex].GetPositionY() - home.GetPositionY();
-        float len = std::sqrt(dirX * dirX + dirY * dirY);
-        if (len < 0.5f)
-            return false;
-        dirX /= len;
-        dirY /= len;
-
-        float anchorRadius = s_anchorRadii[colorIndex];
-        float x = home.GetPositionX() + dirX * anchorRadius;
-        float y = home.GetPositionY() + dirY * anchorRadius;
-        float z = netherspite->GetPositionZ();
-
-        if (colorIndex != 0)
-        {
-            float px = -dirY;
-            float py = dirX;
-            float side = (bot->GetGUID().GetCounter() & 1) ? 1.0f : -1.0f;
-            x += px * side * lateralOffset;
-            y += py * side * lateralOffset;
-        }
-
-        ClampToNetherspiteRoom(home, x, y);
-        if (!isPositionSafe(x, y))
-            return false;
-
-        if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT))
-            return true;
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
-    };
-
-    auto sidestepOffBeam = [&](int colorIndex) -> bool
-    {
-        if (colorIndex < 0 || colorIndex > 2)
-            return false;
-
-        float ax = portalPositions[colorIndex].GetPositionX();
-        float ay = portalPositions[colorIndex].GetPositionY();
-        float bx = netherspite->GetPositionX();
-        float by = netherspite->GetPositionY();
-
-        float vx = bx - ax;
-        float vy = by - ay;
-        float len = std::sqrt(vx * vx + vy * vy);
-        if (len < 0.5f)
-            return false;
-        vx /= len;
-        vy /= len;
-
-        float px = -vy;
-        float py = vx;
-
-        float tx = bot->GetPositionX() + px * 7.0f;
-        float ty = bot->GetPositionY() + py * 7.0f;
-        float tz = bot->GetPositionZ();
-
-        ClampToNetherspiteRoom(home, tx, ty);
-        if (!isPositionSafe(tx, ty))
-        {
-            tx = bot->GetPositionX() - px * 7.0f;
-            ty = bot->GetPositionY() - py * 7.0f;
-            ClampToNetherspiteRoom(home, tx, ty);
-            if (!isPositionSafe(tx, ty))
+            float dx = x - hazard->GetPositionX();
+            float dy = y - hazard->GetPositionY();
+            float dist = std::sqrt(dx * dx + dy * dy);
+            if (dist < hazardRadius)
                 return false;
         }
+        return true;
+    }
 
-        if (MoveTo(bot->GetMapId(), tx, ty, tz, false, true, false, true, MovementPriority::MOVEMENT_FORCED))
-            return true;
-        return MoveTo(bot->GetMapId(), tx, ty, tz, false, true, false, false, MovementPriority::MOVEMENT_FORCED);
-    };
+private:
+    Player* m_bot;
+    PlayerbotAI* m_botAI;
+};
 
-    auto applyCooldown = [&](uint32 duration)
+bool KarazhanNetherspiteBlockRedBeamAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+    Unit* redPortal = bot->FindNearestCreature(NPC_NETHER_PORTAL_PERSEVERANCE, 150.0f);
+    Group* group = bot->GetGroup();
+
+    if (!boss || !redPortal || !group)
+        return false;
+
+    Player* eligibleTank = nullptr;
+    for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
-        SET_AI_VALUE(uint32, "netherspite beam cooldown until", nowTick + duration);
-        SET_AI_VALUE(uint32, "netherspite beam hold start", 0u);
-    };
+        Player* member = itr->GetSource();
+        if (!member || !member->IsAlive())
+            continue;
 
-    uint32 cooldownUntil = AI_VALUE(uint32, "netherspite beam cooldown until");
-    bool coolingDown = cooldownUntil && nowTick < cooldownUntil;
+        PlayerbotAI* memberAI = sPlayerbotsMgr->GetPlayerbotAI(member);
+        if (!memberAI || !memberAI->IsTank(member))
+            continue;
 
-    int assignedIndex = -1;
-    for (int i = 0; i < 3; ++i)
+        if (member->HasAura(SPELL_EXHAUSTION_PERSEVERANCE))
+            continue;
+
+        eligibleTank = member;
+        break;
+    }
+
+    if (!eligibleTank)
+        return false;
+
+    KarazhanNetherspiteHelper helper(bot, botAI);
+    Position beamPos = helper.GetPositionOnBeam(boss, redPortal, 18.0f);
+
+    if (bot != eligibleTank)
+        return false;
+
+    bot->Yell("I'm moving to block the red beam!", LANG_UNIVERSAL);
+
+    ObjectGuid botGuid = bot->GetGUID();
+    uint32 intervalSecs = 5;
+
+    if (g_netherspiteBeamMoveTimes[botGuid] == 0)
     {
-        if (blockers[i] && blockers[i]->GetGUID() == bot->GetGUID())
+        g_netherspiteBeamMoveTimes[botGuid] = time(nullptr);
+        g_netherspiteLastMoveSideways[botGuid] = false;
+    }
+
+    if (time(nullptr) - g_netherspiteBeamMoveTimes[botGuid] >= intervalSecs)
+    {
+        g_netherspiteLastMoveSideways[botGuid] = !g_netherspiteLastMoveSideways[botGuid];
+        g_netherspiteBeamMoveTimes[botGuid] = time(nullptr);
+    }
+
+    if (!g_netherspiteLastMoveSideways[botGuid])
+    {
+        return MoveTo(bot->GetMapId(), beamPos.GetPositionX(), beamPos.GetPositionY(), beamPos.GetPositionZ(),
+                      false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+    }
+
+    float bx = boss->GetPositionX();
+    float by = boss->GetPositionY();
+    float px = redPortal->GetPositionX();
+    float py = redPortal->GetPositionY();
+    float dx = px - bx;
+    float dy = py - by;
+    float length = std::sqrt(dx * dx + dy * dy);
+    if (length == 0.0f)
+        return false;
+
+    dx /= length;
+    dy /= length;
+    float perpDx = -dy;
+    float perpDy = dx;
+    float sideX = beamPos.GetPositionX() + perpDx * 3.0f;
+    float sideY = beamPos.GetPositionY() + perpDy * 3.0f;
+    float sideZ = beamPos.GetPositionZ();
+
+    return MoveTo(bot->GetMapId(), sideX, sideY, sideZ,
+                  false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+}
+
+bool KarazhanNetherspiteBlockRedBeamAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+    Unit* redPortal = bot->FindNearestCreature(NPC_NETHER_PORTAL_PERSEVERANCE, 150.0f);
+
+    if (!boss || !redPortal)
+        return false;
+
+    static std::map<ObjectGuid, bool> lastBossBanishState;
+    ObjectGuid botGuid = bot->GetGUID();
+    bool bossIsBanished = IsNetherspiteBanished(boss);
+
+    if (lastBossBanishState[botGuid] != bossIsBanished)
+    {
+        if (!bossIsBanished)
         {
-            assignedIndex = i;
+            g_netherspiteBeamMoveTimes[botGuid] = 0;
+            g_netherspiteLastMoveSideways[botGuid] = false;
+        }
+        lastBossBanishState[botGuid] = bossIsBanished;
+    }
+
+    return !bossIsBanished;
+}
+
+bool KarazhanNetherspiteBlockBlueBeamAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+    Unit* bluePortal = bot->FindNearestCreature(NPC_NETHER_PORTAL_DOMINANCE, 150.0f);
+    if (!boss || !bluePortal)
+        return false;
+
+    KarazhanNetherspiteHelper helper(bot, botAI);
+    std::vector<Player*> blueBlockers = helper.GetBlueBlockers();
+
+    ObjectGuid botGuid = bot->GetGUID();
+    Player* assignedBlocker = blueBlockers.empty() ? nullptr : blueBlockers.front();
+    bool isBlockingNow = bot == assignedBlocker;
+    bool wasBlocking = g_netherspiteWasBlockingBlueBeam[botGuid];
+
+    if (wasBlocking && !isBlockingNow)
+    {
+        bot->Yell("I'm leaving the blue beam--next blocker up!", LANG_UNIVERSAL);
+        g_netherspiteWasBlockingBlueBeam[botGuid] = false;
+    }
+
+    if (!isBlockingNow)
+        return false;
+
+    if (!wasBlocking)
+        bot->Yell("I'm moving to block the blue beam!", LANG_UNIVERSAL);
+
+    g_netherspiteWasBlockingBlueBeam[botGuid] = true;
+
+    std::vector<Unit*> voidZones = helper.GetAllVoidZones();
+    float bx = boss->GetPositionX();
+    float by = boss->GetPositionY();
+    float bz = boss->GetPositionZ();
+    float px = bluePortal->GetPositionX();
+    float py = bluePortal->GetPositionY();
+    float dx = px - bx;
+    float dy = py - by;
+    float length = std::sqrt(dx * dx + dy * dy);
+    if (length == 0.0f)
+        return false;
+
+    dx /= length;
+    dy /= length;
+
+    float bestDist = 150.0f;
+    Position bestPos;
+    bool found = false;
+
+    for (float dist = 18.0f; dist <= 25.0f; dist += 0.5f)
+    {
+        float candidateX = bx + dx * dist;
+        float candidateY = by + dy * dist;
+        float candidateZ = bz;
+
+        bool outsideAllVoidZones = true;
+        for (Unit* voidZone : voidZones)
+        {
+            if (!voidZone)
+                continue;
+
+            float voidDist = std::sqrt(std::pow(candidateX - voidZone->GetPositionX(), 2.0f) +
+                                       std::pow(candidateY - voidZone->GetPositionY(), 2.0f));
+            if (voidDist < 4.0f)
+            {
+                outsideAllVoidZones = false;
+                break;
+            }
+        }
+
+        if (!outsideAllVoidZones)
+            continue;
+
+        float distToIdeal = std::fabs(dist - 18.0f);
+        if (!found || distToIdeal < bestDist)
+        {
+            bestDist = distToIdeal;
+            bestPos = Position(candidateX, candidateY, candidateZ);
+            found = true;
+        }
+    }
+
+    if (!found)
+        return false;
+
+    return MoveTo(bot->GetMapId(), bestPos.GetPositionX(), bestPos.GetPositionY(), bestPos.GetPositionZ(),
+                  false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+}
+
+bool KarazhanNetherspiteBlockBlueBeamAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+    Unit* bluePortal = bot->FindNearestCreature(NPC_NETHER_PORTAL_DOMINANCE, 150.0f);
+
+    return boss && bluePortal && !IsNetherspiteBanished(boss);
+}
+
+bool KarazhanNetherspiteBlockGreenBeamAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+    Unit* greenPortal = bot->FindNearestCreature(NPC_NETHER_PORTAL_SERENITY, 150.0f);
+    if (!boss || !greenPortal)
+        return false;
+
+    KarazhanNetherspiteHelper helper(bot, botAI);
+    std::vector<Player*> greenBlockers = helper.GetGreenBlockers();
+
+    ObjectGuid botGuid = bot->GetGUID();
+    Player* assignedBlocker = greenBlockers.empty() ? nullptr : greenBlockers.front();
+    bool isBlockingNow = bot == assignedBlocker;
+    bool wasBlocking = g_netherspiteWasBlockingGreenBeam[botGuid];
+
+    if (wasBlocking && !isBlockingNow)
+    {
+        bot->Yell("I'm leaving the green beam--next blocker up!", LANG_UNIVERSAL);
+        g_netherspiteWasBlockingGreenBeam[botGuid] = false;
+    }
+
+    if (!isBlockingNow)
+        return false;
+
+    if (!wasBlocking)
+        bot->Yell("I'm moving to block the green beam!", LANG_UNIVERSAL);
+
+    g_netherspiteWasBlockingGreenBeam[botGuid] = true;
+
+    std::vector<Unit*> voidZones = helper.GetAllVoidZones();
+    float bx = boss->GetPositionX();
+    float by = boss->GetPositionY();
+    float bz = boss->GetPositionZ();
+    float px = greenPortal->GetPositionX();
+    float py = greenPortal->GetPositionY();
+    float dx = px - bx;
+    float dy = py - by;
+    float length = std::sqrt(dx * dx + dy * dy);
+    if (length == 0.0f)
+        return false;
+
+    dx /= length;
+    dy /= length;
+
+    float bestDist = 150.0f;
+    Position bestPos;
+    bool found = false;
+
+    for (float dist = 18.0f; dist <= 25.0f; dist += 0.5f)
+    {
+        float candidateX = bx + dx * dist;
+        float candidateY = by + dy * dist;
+        float candidateZ = bz;
+
+        bool outsideAllVoidZones = true;
+        for (Unit* voidZone : voidZones)
+        {
+            if (!voidZone)
+                continue;
+
+            float voidDist = std::sqrt(std::pow(candidateX - voidZone->GetPositionX(), 2.0f) +
+                                       std::pow(candidateY - voidZone->GetPositionY(), 2.0f));
+            if (voidDist < 4.0f)
+            {
+                outsideAllVoidZones = false;
+                break;
+            }
+        }
+
+        if (!outsideAllVoidZones)
+            continue;
+
+        float distToIdeal = std::fabs(dist - 18.0f);
+        if (!found || distToIdeal < bestDist)
+        {
+            bestDist = distToIdeal;
+            bestPos = Position(candidateX, candidateY, candidateZ);
+            found = true;
+        }
+    }
+
+    if (!found)
+        return false;
+
+    return MoveTo(bot->GetMapId(), bestPos.GetPositionX(), bestPos.GetPositionY(), bestPos.GetPositionZ(),
+                  false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+}
+
+bool KarazhanNetherspiteBlockGreenBeamAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+    Unit* greenPortal = bot->FindNearestCreature(NPC_NETHER_PORTAL_SERENITY, 150.0f);
+
+    return boss && greenPortal && !IsNetherspiteBanished(boss);
+}
+
+bool KarazhanNetherspiteAvoidBeamAndVoidZoneAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+    if (!boss)
+        return false;
+
+    KarazhanNetherspiteHelper helper(bot, botAI);
+    auto [redBlocker, greenBlocker, blueBlocker] = helper.GetCurrentBeamBlockers();
+    if (bot == redBlocker || bot == greenBlocker || bot == blueBlocker)
+        return false;
+
+    std::vector<Unit*> voidZones = helper.GetAllVoidZones();
+
+    bool nearVoidZone = std::any_of(voidZones.begin(), voidZones.end(), [&](Unit* vz)
+    {
+        return vz && bot->GetExactDist2d(vz) < 4.0f;
+    });
+
+    struct BeamAvoid
+    {
+        Unit* portal;
+        float minDist;
+        float maxDist;
+    };
+
+    std::vector<BeamAvoid> beams;
+    Unit* redPortal = bot->FindNearestCreature(NPC_NETHER_PORTAL_PERSEVERANCE, 150.0f);
+    Unit* bluePortal = bot->FindNearestCreature(NPC_NETHER_PORTAL_DOMINANCE, 150.0f);
+    Unit* greenPortal = bot->FindNearestCreature(NPC_NETHER_PORTAL_SERENITY, 150.0f);
+
+    auto addBeam = [&](Unit* portal)
+    {
+        if (!portal)
+            return;
+
+        float bx = boss->GetPositionX();
+        float by = boss->GetPositionY();
+        float px = portal->GetPositionX();
+        float py = portal->GetPositionY();
+        float dx = px - bx;
+        float dy = py - by;
+        float length = std::sqrt(dx * dx + dy * dy);
+        beams.push_back({ portal, 0.0f, length });
+    };
+
+    addBeam(redPortal);
+    addBeam(bluePortal);
+    addBeam(greenPortal);
+
+    bool nearBeam = false;
+    for (const auto& beam : beams)
+    {
+        if (!beam.portal)
+            continue;
+
+        float bx = boss->GetPositionX();
+        float by = boss->GetPositionY();
+        float px = beam.portal->GetPositionX();
+        float py = beam.portal->GetPositionY();
+        float dx = px - bx;
+        float dy = py - by;
+        float length = std::sqrt(dx * dx + dy * dy);
+        if (length == 0.0f)
+            continue;
+
+        dx /= length;
+        dy /= length;
+        float botdx = bot->GetPositionX() - bx;
+        float botdy = bot->GetPositionY() - by;
+        float t = (botdx * dx + botdy * dy);
+        float beamX = bx + dx * t;
+        float beamY = by + dy * t;
+        float distToBeam = std::sqrt(std::pow(bot->GetPositionX() - beamX, 2.0f) +
+                                     std::pow(bot->GetPositionY() - beamY, 2.0f));
+        if (distToBeam < 5.0f && t > beam.minDist && t < beam.maxDist)
+        {
+            nearBeam = true;
             break;
         }
     }
 
-    int auraIndex = indexForAura();
-
-    if (assignedIndex == -1)
-    {
-        if (auraIndex != -1 && sidestepOffBeam(auraIndex))
-        {
-            applyCooldown(3000);
-            return true;
-        }
+    if (!nearVoidZone && !nearBeam)
         return false;
-    }
 
-    if (bot->HasAura(s_exhaustionSpells[assignedIndex]))
+    const float minMoveDist = 3.0f;
+    const float maxSearchDist = 20.0f;
+    const float stepAngle = static_cast<float>(M_PI) / 18.0f;
+    const float stepDist = 0.5f;
+    float bossZ = boss->GetPositionZ();
+    Position bestCandidate;
+    float bestDist = 0.0f;
+    bool found = false;
+
+    for (float angle = 0.0f; angle < static_cast<float>(2 * M_PI); angle += stepAngle)
     {
-        if (sidestepOffBeam(assignedIndex))
+        for (float dist = 5.0f; dist <= maxSearchDist; dist += stepDist)
         {
-            applyCooldown(4000);
-            return true;
-        }
-        return false;
-    }
+            float cx = bot->GetPositionX() + std::cos(angle) * dist;
+            float cy = bot->GetPositionY() + std::sin(angle) * dist;
+            float cz = bossZ;
 
-    constexpr uint8 STACK_LIMITS[3] = { 8, 25, 25 };
-    constexpr float LATERAL_OFFSETS[3] = { 0.0f, 2.5f, 2.5f };
-
-    Aura* myBuff = bot->GetAura(s_portalBuffs[assignedIndex]);
-    if (myBuff)
-    {
-        uint32 holdStart = AI_VALUE(uint32, "netherspite beam hold start");
-        if (!holdStart)
-            SET_AI_VALUE(uint32, "netherspite beam hold start", nowTick);
-
-        if (myBuff->GetStackAmount() >= STACK_LIMITS[assignedIndex])
-        {
-            if (sidestepOffBeam(assignedIndex))
+            bool insideVoid = std::any_of(voidZones.begin(), voidZones.end(), [&](Unit* vz)
             {
-                applyCooldown(3500);
-                return true;
-            }
-        }
-    }
-    else
-        SET_AI_VALUE(uint32, "netherspite beam hold start", 0u);
+                return vz && Position(cx, cy, cz).GetExactDist2d(vz) < 4.0f;
+            });
 
-    if (!isPositionSafe(bot->GetPositionX(), bot->GetPositionY()))
-    {
-        if (sidestepOffBeam(assignedIndex))
-        {
-            applyCooldown(2500);
-            return true;
-        }
-    }
+            if (insideVoid)
+                continue;
 
-    if (coolingDown && !myBuff)
-        return false;
-
-    float tolerance = (assignedIndex == 0) ? 1.5f : 2.5f;
-    if (!myBuff || !IsNearBeamLine(portalPositions[assignedIndex], netherspite->GetPosition(), bot->GetPosition(), tolerance))
-    {
-        if (moveToAnchor(assignedIndex, LATERAL_OFFSETS[assignedIndex]))
-            return true;
-    }
-
-    return false;
-}
-
-
-bool NetherspiteBeamAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-    Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
-    return netherspite && netherspite->IsInCombat();
-}
-
-bool NetherspiteVoidZoneAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
-
-    Position roomCenter;
-    roomCenter.Relocate(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetOrientation());
-    if (Creature* nsCreature = netherspite ? netherspite->ToCreature() : nullptr)
-        roomCenter.Relocate(nsCreature->GetHomePosition());
-
-    AiObjectContext* context = botAI->GetAiObjectContext();
-
-    auto fleeFromPoint = [&](float hx, float hy, float radius, float pushDistance) -> bool
-    {
-        float dx = bot->GetPositionX() - hx;
-        float dy = bot->GetPositionY() - hy;
-        float dist2d = std::sqrt(dx * dx + dy * dy);
-        if (dist2d > radius)
-            return false;
-
-        if (dist2d < 0.1f)
-        {
-            dx = std::cos(bot->GetOrientation());
-            dy = std::sin(bot->GetOrientation());
-            dist2d = 1.0f;
-        }
-
-        float nx = bot->GetPositionX() + dx * (pushDistance / dist2d);
-        float ny = bot->GetPositionY() + dy * (pushDistance / dist2d);
-        float nz = bot->GetPositionZ();
-
-        ClampToNetherspiteRoom(roomCenter, nx, ny);
-
-        bool moved = MoveTo(bot->GetMapId(), nx, ny, nz, false, true, false, true, MovementPriority::MOVEMENT_FORCED);
-        if (!moved)
-            moved = MoveTo(bot->GetMapId(), nx, ny, nz, false, true, false, false, MovementPriority::MOVEMENT_FORCED);
-
-        if (moved && context)
-        {
-            uint32 coolUntil = getMSTime() + 2500;
-            SET_AI_VALUE(uint32, "netherspite beam cooldown until", coolUntil);
-            SET_AI_VALUE(uint32, "netherspite beam hold start", 0u);
-        }
-
-        return moved;
-    };
-
-    if (netherspite)
-    {
-        if (Spell* sp = netherspite->FindCurrentSpellBySpellId(SPELL_VOID_ZONE))
-        {
-            if (SpellDestination const* dst = sp->m_targets.GetDst())
+            bool tooCloseToBeam = false;
+            for (const auto& beam : beams)
             {
-                float hx = dst->_position.GetPositionX();
-                float hy = dst->_position.GetPositionY();
-                if (fleeFromPoint(hx, hy, 15.0f, 18.0f))
-                    return true;
-            }
+                if (!beam.portal)
+                    continue;
 
-            if (sp->m_targets.GetUnitTarget() == bot)
-            {
-                if (fleeFromPoint(bot->GetPositionX(), bot->GetPositionY(), 0.5f, 18.0f))
-                    return true;
-            }
-        }
-    }
+                float bx = boss->GetPositionX();
+                float by = boss->GetPositionY();
+                float px = beam.portal->GetPositionX();
+                float py = beam.portal->GetPositionY();
+                float dx = px - bx;
+                float dy = py - by;
+                float length = std::sqrt(dx * dx + dy * dy);
+                if (length == 0.0f)
+                    continue;
 
-    if (Aura* aura = AI_VALUE(Aura*, "area debuff"))
-    {
-        if (!aura->IsRemoved() && !aura->IsExpired() && aura->GetType() == DYNOBJ_AURA_TYPE)
-        {
-            if (DynamicObject* dyn = aura->GetDynobjOwner())
-            {
-                const SpellInfo* info = aura->GetSpellInfo();
-                if (dyn->IsInWorld() && info && info->Id == SPELL_VOID_ZONE)
+                dx /= length;
+                dy /= length;
+                float botdx = cx - bx;
+                float botdy = cy - by;
+                float t = (botdx * dx + botdy * dy);
+                float beamX = bx + dx * t;
+                float beamY = by + dy * t;
+                float distToBeam = std::sqrt(std::pow(cx - beamX, 2.0f) + std::pow(cy - beamY, 2.0f));
+                if (distToBeam < 5.0f && t > beam.minDist && t < beam.maxDist)
                 {
-                    float radius = dyn->GetRadius();
-                    if (radius > 0.0f && bot->GetDistance(dyn) <= radius)
-                    {
-                        if (fleeFromPoint(dyn->GetPositionX(), dyn->GetPositionY(), radius + 0.5f, radius + 8.0f))
-                            return true;
-                    }
+                    tooCloseToBeam = true;
+                    break;
                 }
             }
+
+            if (tooCloseToBeam)
+                continue;
+
+            float moveDist = std::sqrt(std::pow(cx - bot->GetPositionX(), 2.0f) +
+                                        std::pow(cy - bot->GetPositionY(), 2.0f));
+            if (moveDist < minMoveDist)
+                continue;
+
+            if (!found || moveDist < bestDist)
+            {
+                bestCandidate = Position(cx, cy, cz);
+                bestDist = moveDist;
+                found = true;
+            }
         }
     }
 
-    if (bot->HasAura(SPELL_VOID_ZONE) && netherspite)
+    if (!found)
+        return false;
+
+    if (!helper.IsSafePosition(bestCandidate.GetPositionX(), bestCandidate.GetPositionY(),
+                               bestCandidate.GetPositionZ(), voidZones, 4.0f))
+        return false;
+
+    return MoveTo(bot->GetMapId(), bestCandidate.GetPositionX(), bestCandidate.GetPositionY(), bestCandidate.GetPositionZ(),
+                  false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+}
+
+bool KarazhanNetherspiteAvoidBeamAndVoidZoneAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+    if (!boss || IsNetherspiteBanished(boss))
+        return false;
+
+    KarazhanNetherspiteHelper helper(bot, botAI);
+    auto [redBlocker, greenBlocker, blueBlocker] = helper.GetCurrentBeamBlockers();
+    if (bot == redBlocker || bot == blueBlocker || bot == greenBlocker)
+        return false;
+
+    return true;
+}
+
+bool KarazhanNetherspiteBanishPhaseAvoidVoidZoneAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    KarazhanNetherspiteHelper helper(bot, botAI);
+    std::vector<Unit*> voidZones = helper.GetAllVoidZones();
+
+    for (Unit* vz : voidZones)
     {
-        float angle = bot->GetAngle(netherspite) + M_PI;
-        float nx = bot->GetPositionX() + std::cos(angle) * 12.0f;
-        float ny = bot->GetPositionY() + std::sin(angle) * 12.0f;
-        float nz = bot->GetPositionZ();
-        ClampToNetherspiteRoom(roomCenter, nx, ny);
-        if (MoveTo(bot->GetMapId(), nx, ny, nz, false, true, false, true, MovementPriority::MOVEMENT_FORCED))
-            return true;
-        return MoveTo(bot->GetMapId(), nx, ny, nz, false, true, false, false, MovementPriority::MOVEMENT_FORCED);
+        if (vz && vz->GetEntry() == NPC_VOID_ZONE && bot->GetExactDist2d(vz) < 4.0f)
+            return FleePosition(vz->GetPosition(), 4.0f);
     }
 
     return false;
 }
 
-
-bool NetherspiteVoidZoneAction::isUseful()
+bool KarazhanNetherspiteBanishPhaseAvoidVoidZoneAction::isUseful()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-    
-    // Active when Netherspite is present and void zones may affect us
-    Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
-    if (!netherspite || !netherspite->IsInCombat())
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+    if (!boss || !IsNetherspiteBanished(boss))
         return false;
 
-    // Useful if: (a) we are taking zone aura ticks, or (b) boss is casting Void Zone and we are target/near destination
-    if (bot->HasAura(SPELL_VOID_ZONE))
-        return true;
-
-    if (Spell* sp = netherspite->FindCurrentSpellBySpellId(SPELL_VOID_ZONE))
+    KarazhanNetherspiteHelper helper(bot, botAI);
+    std::vector<Unit*> voidZones = helper.GetAllVoidZones();
+    for (Unit* vz : voidZones)
     {
-        if (sp->m_targets.GetUnitTarget() == bot)
+        if (vz && bot->GetExactDist2d(vz) < 4.0f)
             return true;
-        if (SpellDestination const* dst = sp->m_targets.GetDst())
-        {
-            float dx = bot->GetPositionX() - dst->_position.GetPositionX();
-            float dy = bot->GetPositionY() - dst->_position.GetPositionY();
-            if ((dx * dx + dy * dy) < (10.0f * 10.0f))
-                return true;
-        }
     }
-    // Also useful if an active Minor Void Zone trigger exists close to the bot
-    if (bot->FindNearestCreature(17470, 12.0f, true))
-        return true;
+
     return false;
 }
 

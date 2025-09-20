@@ -42,8 +42,7 @@ public:
         creators["illhoof imps"] = &KarazhanTriggerContext::illhoof_imps;
         
         // Netherspite
-        creators["netherspite beams"] = &KarazhanTriggerContext::netherspite_beams;
-        creators["netherspite void zone"] = &KarazhanTriggerContext::netherspite_void_zone;
+        creators["karazhan netherspite"] = &KarazhanTriggerContext::karazhan_netherspite;
         
         // Prince Malchezaar
         creators["malchezaar infernal"] = &KarazhanTriggerContext::malchezaar_infernal;
@@ -96,8 +95,7 @@ private:
     static Trigger* illhoof_imps(PlayerbotAI* ai) { return new IllhoofImpsTrigger(ai); }
     
     // Netherspite
-    static Trigger* netherspite_beams(PlayerbotAI* ai) { return new NetherspiteBeamsTrigger(ai); }
-    static Trigger* netherspite_void_zone(PlayerbotAI* ai) { return new NetherspiteVoidZoneTrigger(ai); }
+    static Trigger* karazhan_netherspite(PlayerbotAI* ai) { return new KarazhanNetherspiteTrigger(ai); }
     
     // Prince Malchezaar
     static Trigger* malchezaar_infernal(PlayerbotAI* ai) { return new MalchezaarInfernalTrigger(ai); }

@@ -50,11 +50,15 @@ void KarazhanStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("illhoof imps",
         NextAction::array(0, new NextAction("illhoof imps", ACTION_HIGH + 4), nullptr)));
     
-    // Netherspite - SINGLE BOSS - keeping triggers
-    triggers.push_back(new TriggerNode("netherspite beams",
-        NextAction::array(0, new NextAction("netherspite beam", ACTION_HIGH + 3), nullptr)));
-    triggers.push_back(new TriggerNode("netherspite void zone",
-        NextAction::array(0, new NextAction("netherspite void zone", ACTION_MOVE + 5), nullptr)));
+    // Netherspite - MULTI-ROLE beam assignments per original PR strategy
+    triggers.push_back(new TriggerNode("karazhan netherspite",
+        NextAction::array(0,
+            new NextAction("karazhan netherspite block red beam", ACTION_EMERGENCY + 8),
+            new NextAction("karazhan netherspite block blue beam", ACTION_EMERGENCY + 8),
+            new NextAction("karazhan netherspite block green beam", ACTION_EMERGENCY + 8),
+            new NextAction("karazhan netherspite avoid beam and void zone", ACTION_EMERGENCY + 7),
+            new NextAction("karazhan netherspite banish phase avoid void zone", ACTION_RAID + 1),
+            nullptr)));
     
     // Prince Malchezaar - SPAWNED ADDS ENCOUNTER - per CLAUDE.md:645-658
     triggers.push_back(new TriggerNode("malchezaar infernal",
@@ -91,6 +95,8 @@ void KarazhanStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
     multipliers.push_back(new IllhoofAddMultiplier(botAI));
     multipliers.push_back(new MalchezaarAddMultiplier(botAI));
     multipliers.push_back(new NightbaneAddMultiplier(botAI));
+    multipliers.push_back(new NetherspiteBlueAndGreenBeamMultiplier(botAI));
+    multipliers.push_back(new NetherspiteRedBeamMultiplier(botAI));
     
     // multipliers.push_back(new AttumenMultiplier(botAI));
 }

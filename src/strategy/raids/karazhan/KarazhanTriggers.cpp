@@ -494,67 +494,15 @@ bool IllhoofImpsTrigger::IsActive()
     return imp && imp->IsAlive() && imp->IsInCombat();
 }
 
-// Netherspite triggers
-bool NetherspiteBeamsTrigger::IsActive()
+// Netherspite trigger
+bool KarazhanNetherspiteTrigger::IsActive()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot)
+    Unit* boss = AI_VALUE2(Unit*, "find target", "netherspite");
+
+    if (!boss || !boss->IsAlive())
         return false;
 
-    Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
-    if (!netherspite || !netherspite->IsInCombat())
-        return false;
-        
-    // Only trigger during portal phase (when NOT banished per boss script)
-    // SPELL_BANISH_VISUAL (39833) and SPELL_BANISH_ROOT (42716)
-    if (netherspite->HasAura(39833) || netherspite->HasAura(42716))
-        return false;
     return true;
-}
-
-bool NetherspiteVoidZoneTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    // Check if in Void Zone
-    if (bot->HasAura(SPELL_VOID_ZONE))
-        return true;
-
-    // Generic dynamic-aoe detection (shared with AvoidAoeAction)
-    if (AI_VALUE2(bool, "has area debuff", "self target"))
-        return true;
-        
-    // Generic hazard proximity: Minor Void Zone trigger creature (DB entry 17470)
-    if (Unit* hz = bot->FindNearestCreature(17470, 12.0f, true))
-        return true;
-        
-    // Check if Netherspite is casting Void Zone and bot is the target
-    Unit* netherspite = bot->FindNearestCreature(NPC_NETHERSPITE, 100.0f);
-    if (netherspite)
-    {
-        // Prefer exact spell match via Unit::FindCurrentSpellBySpellId
-        if (Spell* sp = netherspite->FindCurrentSpellBySpellId(SPELL_VOID_ZONE))
-        {
-            // If the unit target is us, preemptively react
-            if (Unit* castTarget = sp->m_targets.GetUnitTarget())
-            {
-                if (castTarget == bot)
-                    return true;
-            }
-            // If there is a destination position targeted and we are close to it, react as well
-            if (SpellDestination const* dst = sp->m_targets.GetDst())
-            {
-                float dx = bot->GetPositionX() - dst->_position.GetPositionX();
-                float dy = bot->GetPositionY() - dst->_position.GetPositionY();
-                if ((dx * dx + dy * dy) < (10.0f * 10.0f))
-                    return true;
-            }
-        }
-    }
-    
-    return false;
 }
 
 // Prince Malchezaar triggers

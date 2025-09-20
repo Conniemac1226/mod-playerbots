@@ -132,18 +132,11 @@ public:
     bool IsActive() override;
 };
 
-// Netherspite triggers
-class NetherspiteBeamsTrigger : public Trigger
+// Netherspite trigger
+class KarazhanNetherspiteTrigger : public Trigger
 {
 public:
-    NetherspiteBeamsTrigger(PlayerbotAI* ai) : Trigger(ai, "netherspite beams") {}
-    bool IsActive() override;
-};
-
-class NetherspiteVoidZoneTrigger : public Trigger
-{
-public:
-    NetherspiteVoidZoneTrigger(PlayerbotAI* ai) : Trigger(ai, "netherspite void zone") {}
+    KarazhanNetherspiteTrigger(PlayerbotAI* ai) : Trigger(ai, "karazhan netherspite") {}
     bool IsActive() override;
 };
 

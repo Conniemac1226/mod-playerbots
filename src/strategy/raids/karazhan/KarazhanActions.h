@@ -57,6 +57,7 @@ enum KarazhanNPCs
     NPC_NETHER_PORTAL_PERSEVERANCE = 17369, // Red
     NPC_NETHER_PORTAL_SERENITY     = 17367, // Green
     NPC_NETHER_PORTAL_DOMINANCE    = 17368, // Blue
+    NPC_VOID_ZONE                  = 16697,
     
     // Chess Event
     NPC_ECHO_OF_MEDIVH         = 16816,
@@ -131,6 +132,9 @@ enum KarazhanSpells
     SPELL_EXHAUSTION_PERSEVERANCE = 38637, // PlayerDebuff[RED]
     SPELL_EXHAUSTION_SERENITY     = 38638, // PlayerDebuff[GREEN]
     SPELL_EXHAUSTION_DOMINANCE    = 38639, // PlayerDebuff[BLUE]
+    SPELL_GREEN_BEAM_DEBUFF   = 30422,
+    SPELL_BLUE_BEAM_DEBUFF    = 30423,
+    SPELL_NETHERSPITE_BANISHED = 39833,
     
     // Prince Malchezaar
     SPELL_SHADOW_WORD_PAIN     = 30854,
@@ -310,18 +314,42 @@ public:
 };
 
 // Netherspite
-class NetherspiteBeamAction : public MovementAction
+class KarazhanNetherspiteBlockRedBeamAction : public MovementAction
 {
 public:
-    NetherspiteBeamAction(PlayerbotAI* ai) : MovementAction(ai, "netherspite beam") {}
+    KarazhanNetherspiteBlockRedBeamAction(PlayerbotAI* ai) : MovementAction(ai, "karazhan netherspite block red beam") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
 
-class NetherspiteVoidZoneAction : public MovementAction
+class KarazhanNetherspiteBlockBlueBeamAction : public MovementAction
 {
 public:
-    NetherspiteVoidZoneAction(PlayerbotAI* ai) : MovementAction(ai, "netherspite void zone") {}
+    KarazhanNetherspiteBlockBlueBeamAction(PlayerbotAI* ai) : MovementAction(ai, "karazhan netherspite block blue beam") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class KarazhanNetherspiteBlockGreenBeamAction : public MovementAction
+{
+public:
+    KarazhanNetherspiteBlockGreenBeamAction(PlayerbotAI* ai) : MovementAction(ai, "karazhan netherspite block green beam") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class KarazhanNetherspiteAvoidBeamAndVoidZoneAction : public MovementAction
+{
+public:
+    KarazhanNetherspiteAvoidBeamAndVoidZoneAction(PlayerbotAI* ai) : MovementAction(ai, "karazhan netherspite avoid beam and void zone") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class KarazhanNetherspiteBanishPhaseAvoidVoidZoneAction : public MovementAction
+{
+public:
+    KarazhanNetherspiteBanishPhaseAvoidVoidZoneAction(PlayerbotAI* ai) : MovementAction(ai, "karazhan netherspite banish phase avoid void zone") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
