@@ -28,6 +28,7 @@ const uint32 SPELL_MIND_REND = 36924;
 const uint32 ARC_SPELL_DOMINATION = 37162;
 
 const uint32 NPC_HARBINGER_ILLUSION = 21466;
+const uint32 NPC_MELLICHAR = 20904;
 
 // Warden Mellichar's adds
 const uint32 NPC_TRICKSTER = 20905;

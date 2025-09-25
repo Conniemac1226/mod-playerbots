@@ -11,10 +11,47 @@
 static std::map<ObjectGuid, uint32> g_dalliah_lastMoveTime;
 static std::map<ObjectGuid, bool> g_dalliah_inSafePosition;
 
+namespace
+{
+    void FocusPriorityTarget(PlayerbotAI* botAI, Unit* unit)
+    {
+        if (!botAI || !unit)
+            return;
+
+        AiObjectContext* context = botAI->GetAiObjectContext();
+        Player* bot = botAI->GetBot();
+
+        if (!context || !bot)
+            return;
+
+        if (unit->GetEntry() == NPC_MELLICHAR)
+            return;
+
+        if (auto* prioritized = context->GetValue<GuidVector>("prioritized targets"))
+        {
+            GuidVector focus = prioritized->Get();
+            if (focus.size() != 1 || focus.front() != unit->GetGUID())
+            {
+                GuidVector singleTarget;
+                singleTarget.push_back(unit->GetGUID());
+                prioritized->Set(singleTarget);
+            }
+        }
+
+        if (!botAI->IsHeal(bot))
+        {
+            if (auto* dpsTarget = context->GetValue<Unit*>("dps target"))
+            {
+                dpsTarget->Set(unit);
+            }
+        }
+    }
+}
+
 bool AttackMellicharAddsAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || botAI->IsHeal(bot))
         return false;
 
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
@@ -30,18 +67,17 @@ bool AttackMellicharAddsAction::Execute(Event event)
     for (auto& targetGuid : targets)
     {
         Unit* unit = botAI->GetUnit(targetGuid);
-        if (!unit || !unit->IsAlive())
+        if (!unit || !unit->IsAlive() || !bot->IsValidAttackTarget(unit))
             continue;
 
         for (uint32 addId : mellicharAdds)
         {
             if (unit->GetEntry() == addId)
             {
-                if (currentTarget && currentTarget->GetGUID() == unit->GetGUID())
-                {
+                FocusPriorityTarget(botAI, unit);
+
+                if (bot->IsValidAttackTarget(unit) && Attack(unit))
                     return true;
-                }
-                return Attack(unit);
             }
         }
     }
@@ -52,7 +88,7 @@ bool AttackMellicharAddsAction::Execute(Event event)
 bool AttackMellicharAddsAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || botAI->IsHeal(bot))
         return false;
     
     // RESEARCHED: arcatraz.cpp - Warden releases hostile adds in sequence
@@ -68,7 +104,7 @@ bool AttackMellicharAddsAction::isUseful()
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
+        if (!unit || !unit->IsAlive() || !bot->IsValidAttackTarget(unit))
             continue;
 
         for (uint32 addId : mellicharAdds)
@@ -83,6 +119,10 @@ bool AttackMellicharAddsAction::isUseful()
 
 bool MellicharStopAttackAction::Execute(Event event)
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
     Unit* warden = AI_VALUE2(Unit*, "find target", "warden mellichar");
     if (!warden)
         return false;
@@ -92,6 +132,23 @@ bool MellicharStopAttackAction::Execute(Event event)
     {
         botAI->InterruptSpell();
         bot->SetSelection(ObjectGuid::Empty);
+
+        AiObjectContext* botContext = botAI->GetAiObjectContext();
+        if (botContext)
+        {
+            if (auto* prioritized = botContext->GetValue<GuidVector>("prioritized targets"))
+            {
+                prioritized->Reset();
+            }
+            if (auto* dpsTarget = botContext->GetValue<Unit*>("dps target"))
+            {
+                dpsTarget->Set(nullptr);
+            }
+            if (auto* current = botContext->GetValue<Unit*>("current target"))
+            {
+                current->Set(nullptr);
+            }
+        }
         return true;
     }
 
@@ -433,37 +490,29 @@ bool SkyrissIllusionAction::isUseful()
 
 bool SkyrissIllusionAction::Execute(Event event)
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "harbinger skyriss");
     if (!boss || !boss->IsInCombat())
     {
         return false;
     }
     
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
-        if (!unit)
-        {
+        if (!unit || unit->GetEntry() != NPC_HARBINGER_ILLUSION || !unit->IsAlive())
             continue;
-        }
-        
-        if (unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive())
-        {
-            // FORCE TARGET SWITCH: Illusions are priority over main boss
-            // Only avoid switching if already targeting the EXACT same illusion
-            if (currentTarget && currentTarget->GetGUID() == unit->GetGUID())
-            {
-                return true; // Already targeting this exact illusion
-            }
-            
-            // PRIORITY SWITCH: Target the illusion immediately
-            return Attack(unit);
-        }
+
+        FocusPriorityTarget(botAI, unit);
+
+        if (bot->IsValidAttackTarget(unit) && Attack(unit))
+            return true;
     }
-    
+
     return false;
 }
 
