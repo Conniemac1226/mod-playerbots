@@ -1,9 +1,7 @@
 #include "Playerbots.h"
 #include "ShadowLabyrinthTriggers.h"
 #include "ShadowLabyrinthActions.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
+#include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
 
 bool HellmawCorrosiveAcidTrigger::IsActive()
 {
@@ -140,50 +138,17 @@ bool VorpilVoidTravelerTrigger::IsActive()
     // Method 2: Direct creature search if not found in hostile list
     if (!voidTravelerFound)
     {
-        std::list<Unit*> targets;
-        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f);
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-        Cell::VisitObjects(bot, searcher, 80.0f);
-
-        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+        TbcDungeon::ForEachNearbyNpc(botAI, bot, 100.0f, [&](Unit* unit)
         {
-            Unit* unit = *i;
-            if (!unit || !unit->IsAlive())
-                continue;
+            if (voidTravelerFound)
+                return;
 
             if (unit->GetEntry() == NPC_VOID_TRAVELER)
             {
                 voidTravelerFound = true;
-                // Update last seen time for timeout system
                 g_voidTraveler_lastSeenTime[botGuid] = currentTime;
-                break;
             }
-        }
-    }
-
-    // Method 3: Emergency fallback - find ANY Void Traveler if none found above
-    if (!voidTravelerFound)
-    {
-        std::list<Unit*> allTargets;
-        Acore::AnyUnitInObjectRangeCheck u_check_all(bot, 100.0f); // Maximum search range
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher_all(bot, allTargets, u_check_all);
-        Cell::VisitObjects(bot, searcher_all, 100.0f);
-
-        for (std::list<Unit*>::iterator i = allTargets.begin(); i != allTargets.end(); ++i)
-        {
-            Unit* unit = *i;
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            // Accept ANY Void Traveler as emergency target
-            if (unit->GetEntry() == NPC_VOID_TRAVELER)
-            {
-                voidTravelerFound = true;
-                // Update last seen time for timeout system
-                g_voidTraveler_lastSeenTime[botGuid] = currentTime;
-                break;
-            }
-        }
+        });
     }
     
     return voidTravelerFound;

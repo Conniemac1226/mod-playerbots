@@ -3,6 +3,7 @@
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 #include "PlayerbotMgr.h"
+#include "AiObjectContext.h"
 #include "Player.h"
 #include "Unit.h"
 #include "Creature.h"
@@ -17,11 +18,13 @@
 #include "GroupReference.h"
 #include "ObjectGuid.h"
 #include "Position.h"
+#include "Value.h"
 #include <algorithm>
 #include <ctime>
 #include <cmath>
 #include <map>
 #include <tuple>
+#include <unordered_set>
 #include <vector>
  
 
@@ -52,6 +55,101 @@ std::map<ObjectGuid, uint32> g_karazhan_lastPhaseTime;
 // Chess throttles to protect server integrity
 static std::map<ObjectGuid, uint32> g_chess_lastMoveTime;
 static std::map<ObjectGuid, uint32> g_chess_lastAbilityTime;
+
+namespace
+{
+    GuidVector FetchNearbyNpcGuids(PlayerbotAI* botAI, char const* cacheName)
+    {
+        if (!botAI)
+            return {};
+
+        if (AiObjectContext* context = botAI->GetAiObjectContext())
+        {
+            if (Value<GuidVector>* cache = context->GetValue<GuidVector>(cacheName))
+                return cache->Get();
+        }
+
+        return {};
+    }
+
+    template <typename Predicate>
+    void ForEachNearbyNpc(PlayerbotAI* botAI, float maxDistance, Predicate&& predicate)
+    {
+        if (!botAI)
+            return;
+
+        Player* bot = botAI->GetBot();
+        if (!bot)
+            return;
+
+        std::unordered_set<ObjectGuid> seen;
+
+        auto visitCache = [&](char const* cacheName)
+        {
+            GuidVector guids = FetchNearbyNpcGuids(botAI, cacheName);
+            for (ObjectGuid const& guid : guids)
+            {
+                if (!seen.insert(guid).second)
+                    continue;
+
+                Unit* unit = botAI->GetUnit(guid);
+                if (!unit || !unit->IsAlive())
+                    continue;
+
+                if (maxDistance > 0.0f && bot->GetDistance(unit) > maxDistance)
+                    continue;
+
+                predicate(unit);
+            }
+        };
+
+        visitCache("nearest hostile npcs");
+        visitCache("nearest friendly npcs");
+    }
+
+    Unit* FindClosestNpcByEntry(PlayerbotAI* botAI, uint32 entry, float maxDistance)
+    {
+        Unit* closest = nullptr;
+        float closestDist = maxDistance;
+
+        ForEachNearbyNpc(botAI, maxDistance, [&](Unit* unit)
+        {
+            if (unit->GetEntry() != entry)
+                return;
+
+            Player* bot = botAI->GetBot();
+            if (!bot)
+                return;
+
+            float distance = bot->GetDistance(unit);
+            if (distance <= closestDist)
+            {
+                closestDist = distance;
+                closest = unit;
+            }
+        });
+
+        return closest;
+    }
+
+    template <typename Predicate>
+    bool AnyNearbyChessPiece(PlayerbotAI* botAI, Predicate&& predicate)
+    {
+        bool found = false;
+        ForEachNearbyNpc(botAI, 120.0f, [&](Unit* unit)
+        {
+            if (found)
+                return;
+
+            if (Creature* c = unit->ToCreature())
+            {
+                if (predicate(c))
+                    found = true;
+            }
+        });
+        return found;
+    }
+}
 
 bool AttumenAvoidChargeAction::Execute(Event event)
 {
@@ -122,27 +220,8 @@ bool AttumenPositionAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find Attumen (unmounted)
-    Unit* attumen = nullptr;
-    Unit* midnight = nullptr;
-    
-    // Search for both bosses
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_ATTUMEN_UNMOUNTED)
-            attumen = unit;
-        else if (unit->GetEntry() == NPC_MIDNIGHT)
-            midnight = unit;
-    }
+    Unit* attumen = FindClosestNpcByEntry(botAI, NPC_ATTUMEN_UNMOUNTED, 100.0f);
+    Unit* midnight = FindClosestNpcByEntry(botAI, NPC_MIDNIGHT, 100.0f);
 
     // During phase 2 (both bosses up), tanks need to separate them
     if (attumen && midnight)
@@ -190,29 +269,10 @@ bool AttumenPositionAction::isUseful()
     if (!bot)
         return false;
 
-    // Check for phase 2 (both bosses up)
-    bool hasAttumen = false;
-    bool hasMidnight = false;
-    
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
+    Unit* attumen = FindClosestNpcByEntry(botAI, NPC_ATTUMEN_UNMOUNTED, 100.0f);
+    Unit* midnight = FindClosestNpcByEntry(botAI, NPC_MIDNIGHT, 100.0f);
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_ATTUMEN_UNMOUNTED)
-            hasAttumen = true;
-        else if (unit->GetEntry() == NPC_MIDNIGHT)
-            hasMidnight = true;
-    }
-    
-    // Useful during phase 2 when both are up
-    return hasAttumen && hasMidnight;
+    return attumen && midnight;
 }
 
 // Moroes Actions
@@ -2153,7 +2213,7 @@ bool NightbaneSkeletonAction::isUseful()
 
 // Chess Event Actions
 // Helper to detect active chess environment even if GAME_IN_SESSION aura is not present on the bot
-static bool IsChessEnvironmentActive(Player* bot)
+static bool IsChessEnvironmentActive(Player* bot, PlayerbotAI* botAI)
 {
     if (!bot)
         return false;
@@ -2172,22 +2232,17 @@ static bool IsChessEnvironmentActive(Player* bot)
         }
     }
 
-    // Scan nearby: treat event as active only if any piece is currently controlled
-    std::list<Unit*> units;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 120.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, units, u_check);
-    Cell::VisitObjects(bot, searcher, 120.0f);
-    for (Unit* u : units)
+    if (botAI && AnyNearbyChessPiece(botAI, [](Creature* piece)
     {
-        Creature* c = u ? u->ToCreature() : nullptr;
-        if (!c)
-            continue;
-        uint32 e = c->GetEntry();
-        bool isHumanPiece = (e == NPC_HUMAN_FOOTMAN || e == NPC_HUMAN_CONJURER || e == NPC_HUMAN_CLERIC || e == NPC_HUMAN_CHARGER || e == NPC_CHESS_KING_LLANE);
-        bool isOrcPiece   = (e == NPC_ORC_GRUNT || e == NPC_ORC_WARLOCK || e == NPC_ORC_NECROLYTE || e == NPC_ORC_WOLF || e == NPC_WARCHIEF_BLACKHAND);
-        if ((isHumanPiece || isOrcPiece) && c->GetCharmerGUID())
-            return true;
+        uint32 entry = piece->GetEntry();
+        bool isHumanPiece = entry == NPC_HUMAN_FOOTMAN || entry == NPC_HUMAN_CONJURER || entry == NPC_HUMAN_CLERIC || entry == NPC_HUMAN_CHARGER || entry == NPC_CHESS_KING_LLANE;
+        bool isOrcPiece = entry == NPC_ORC_GRUNT || entry == NPC_ORC_WARLOCK || entry == NPC_ORC_NECROLYTE || entry == NPC_ORC_WOLF || entry == NPC_WARCHIEF_BLACKHAND;
+        return (isHumanPiece || isOrcPiece) && !piece->GetCharmerGUID().IsEmpty();
+    }))
+    {
+        return true;
     }
+
     return false;
 }
 bool ChessEventMoveAction::Execute(Event event)
@@ -2205,7 +2260,7 @@ bool ChessEventMoveAction::Execute(Event event)
     if (!vehicle)
     {
         // Try to possess a chess piece only if event is active around us
-        if (!IsChessEnvironmentActive(bot))
+        if (!IsChessEnvironmentActive(bot, botAI))
             return false;
 
         // Skip if bot recently left a piece (server aura blocks immediate re-entry)
@@ -2240,27 +2295,21 @@ bool ChessEventMoveAction::Execute(Event event)
 
         // Build list of free pieces on our side, grouped by entry
         std::map<uint32, std::vector<Creature*>> freeByEntry;
+        ForEachNearbyNpc(botAI, 120.0f, [&](Unit* unit)
         {
-            std::list<Unit*> units;
-            Acore::AnyUnitInObjectRangeCheck u_check(bot, 90.0f);
-            Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, units, u_check);
-            Cell::VisitObjects(bot, searcher, 90.0f);
-            for (Unit* u : units)
-            {
-                Creature* c = u ? u->ToCreature() : nullptr;
-                if (!c)
-                    continue;
-                uint32 e = c->GetEntry();
-                // Filter to our side
-                bool ours = isHorde ? (e == NPC_ORC_GRUNT || e == NPC_ORC_WARLOCK || e == NPC_ORC_NECROLYTE || e == NPC_ORC_WOLF || e == NPC_WARCHIEF_BLACKHAND)
-                                    : (e == NPC_HUMAN_FOOTMAN || e == NPC_HUMAN_CONJURER || e == NPC_HUMAN_CLERIC || e == NPC_HUMAN_CHARGER || e == NPC_CHESS_KING_LLANE);
-                if (!ours)
-                    continue;
-                if (!c->IsAlive() || c->GetCharmer() || c->GetVehicle())
-                    continue;
-                freeByEntry[e].push_back(c);
-            }
-        }
+            Creature* c = unit->ToCreature();
+            if (!c)
+                return;
+
+            uint32 entry = c->GetEntry();
+            bool ours = isHorde ? (entry == NPC_ORC_GRUNT || entry == NPC_ORC_WARLOCK || entry == NPC_ORC_NECROLYTE || entry == NPC_ORC_WOLF || entry == NPC_WARCHIEF_BLACKHAND)
+                                 : (entry == NPC_HUMAN_FOOTMAN || entry == NPC_HUMAN_CONJURER || entry == NPC_HUMAN_CLERIC || entry == NPC_HUMAN_CHARGER || entry == NPC_CHESS_KING_LLANE);
+
+            if (!ours || !c->IsAlive() || c->GetCharmer() || c->GetVehicle())
+                return;
+
+            freeByEntry[entry].push_back(c);
+        });
 
         // Filter duplicates and reserve logic
         const uint32 now = getMSTime();
@@ -2410,19 +2459,22 @@ bool ChessEventMoveAction::Execute(Event event)
     
     // Find nearest enemy piece as target
     float closestDistance = 100.0f;
-    for (uint32 enemyId : enemyPieceIds)
+    ForEachNearbyNpc(botAI, 90.0f, [&](Unit* unit)
     {
-        Unit* enemy = bot->FindNearestCreature(enemyId, 60.0f);
-        if (enemy && enemy->IsAlive())
+        if (!unit->IsAlive())
+            return;
+
+        uint32 entry = unit->GetEntry();
+        if (std::find(enemyPieceIds.begin(), enemyPieceIds.end(), entry) == enemyPieceIds.end())
+            return;
+
+        float distance = controller->GetDistance(unit);
+        if (distance < closestDistance)
         {
-            float distance = controller->GetDistance(enemy);
-            if (distance < closestDistance)
-            {
-                target = enemy;
-                closestDistance = distance;
-            }
+            target = unit;
+            closestDistance = distance;
         }
-    }
+    });
     
     if (!target)
     {
@@ -2485,7 +2537,7 @@ bool ChessEventMoveAction::isUseful()
     // Useful if already controlling a piece or the chess environment is active around us
     if (bot->GetVehicleBase())
         return true;
-    if (IsChessEnvironmentActive(bot))
+    if (IsChessEnvironmentActive(bot, botAI))
         return true;
     return false;
 }
@@ -2814,77 +2866,65 @@ bool KarazhanInterruptRotationAction::Execute(Event event)
     InterruptRotation& rotation = g_interruptRotation[instanceId];
     uint32 currentTime = getMSTime();
     
-    // Find targets that need interrupting
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 30.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 30.0f);
-    
-    for (Unit* target : targets)
+    bool interrupted = false;
+
+    ForEachNearbyNpc(botAI, 30.0f, [&](Unit* target)
     {
-        if (!target || !target->IsAlive() || !target->IsHostileTo(bot))
-            continue;
-            
-        // Check if casting an interruptible spell
-        if (target->HasUnitState(UNIT_STATE_CASTING))
+        if (interrupted || !target->IsHostileTo(bot))
+            return;
+
+        if (!target->HasUnitState(UNIT_STATE_CASTING))
+            return;
+
+        bool shouldInterrupt = false;
+        uint32 npcId = target->GetEntry();
+
+        if (npcId == NPC_SHADE_OF_ARAN && IsCastingSpell(target, SPELL_ARCANE_MISSILES))
+            shouldInterrupt = true;
+
+        if ((npcId == NPC_BARONESS_DOROTHEA || npcId == NPC_LORD_ROBIN) && target->HasUnitState(UNIT_STATE_CASTING))
+            shouldInterrupt = true;
+
+        if (npcId == NPC_DOROTHEE && target->HasUnitState(UNIT_STATE_CASTING))
+            shouldInterrupt = true;
+
+        if (!shouldInterrupt)
+            return;
+
+        if (currentTime - rotation.lastInterruptTime <= 2000 && rotation.lastInterrupter != bot->GetGUID())
+            return;
+
+        bool spellInterrupted = false;
+        switch (bot->getClass())
         {
-            // Priority interrupts for specific spells
-            bool shouldInterrupt = false;
-            uint32 npcId = target->GetEntry();
-            
-            // Shade of Aran - interrupt Arcane Missiles
-            if (npcId == NPC_SHADE_OF_ARAN && IsCastingSpell(target, SPELL_ARCANE_MISSILES))
-                shouldInterrupt = true;
-                
-            // Moroes adds - interrupt heals
-            if ((npcId == NPC_BARONESS_DOROTHEA || npcId == NPC_LORD_ROBIN) &&
-                target->HasUnitState(UNIT_STATE_CASTING))
-                shouldInterrupt = true;
-                
-            // Opera Dorothee - interrupt Water Bolt
-            if (npcId == NPC_DOROTHEE && target->HasUnitState(UNIT_STATE_CASTING))
-                shouldInterrupt = true;
-                
-            if (shouldInterrupt)
-            {
-                // Check if it's our turn in rotation
-                if (currentTime - rotation.lastInterruptTime > 2000 || // 2 sec rotation
-                    rotation.lastInterrupter == bot->GetGUID())
-                {
-                    bool interrupted = false;
-                    
-                    // Use class interrupt
-                    switch (bot->getClass())
-                    {
-                        case CLASS_WARRIOR:
-                            interrupted = botAI->CastSpell(6552, target); // Pummel
-                            break;
-                        case CLASS_ROGUE:
-                            interrupted = botAI->CastSpell(1766, target); // Kick
-                            break;
-                        case CLASS_MAGE:
-                            interrupted = botAI->CastSpell(2139, target); // Counterspell
-                            break;
-                        case CLASS_SHAMAN:
-                            interrupted = botAI->CastSpell(8042, target); // Earth Shock
-                            break;
-                        case CLASS_DEATH_KNIGHT:
-                            interrupted = botAI->CastSpell(47528, target); // Mind Freeze
-                            break;
-                    }
-                    
-                    if (interrupted)
-                    {
-                        rotation.lastInterruptTime = currentTime;
-                        rotation.lastInterrupter = bot->GetGUID();
-                        return true;
-                    }
-                }
-            }
+            case CLASS_WARRIOR:
+                spellInterrupted = botAI->CastSpell(6552, target); // Pummel
+                break;
+            case CLASS_ROGUE:
+                spellInterrupted = botAI->CastSpell(1766, target); // Kick
+                break;
+            case CLASS_MAGE:
+                spellInterrupted = botAI->CastSpell(2139, target); // Counterspell
+                break;
+            case CLASS_SHAMAN:
+                spellInterrupted = botAI->CastSpell(8042, target); // Earth Shock
+                break;
+            case CLASS_DEATH_KNIGHT:
+                spellInterrupted = botAI->CastSpell(47528, target); // Mind Freeze
+                break;
+            default:
+                break;
         }
-    }
-    
-    return false;
+
+        if (spellInterrupted)
+        {
+            rotation.lastInterruptTime = currentTime;
+            rotation.lastInterrupter = bot->GetGUID();
+            interrupted = true;
+        }
+    });
+
+    return interrupted;
 }
 
 bool KarazhanInterruptRotationAction::isUseful()

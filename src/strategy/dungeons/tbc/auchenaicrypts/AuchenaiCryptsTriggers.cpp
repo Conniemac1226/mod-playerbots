@@ -1,9 +1,7 @@
 #include "AuchenaiCryptsTriggers.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "Playerbots.h"
 #include "AttackersValue.h"
+#include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
 
 bool ShirrakFocusFireSpawnedTrigger::IsActive()
 {
@@ -11,27 +9,22 @@ bool ShirrakFocusFireSpawnedTrigger::IsActive()
     if (!bot)
         return false;
 
-    // IMMEDIATE: Check for Focus Fire creature spawn (happens 3 seconds before damage)
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 60.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    bool focusWithin10 = false;
+    bool focusWithin15 = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, 60.0f, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (unit->GetEntry() != NPC_FOCUS_FIRE)
+            return;
 
-        // Focus Fire creature detection - spawns 3 seconds before damage
-        if (unit->GetEntry() == NPC_FOCUS_FIRE)
-        {
-            // Check if Focus Fire is near us (within 10 yards means we're the target)
-            float distance = bot->GetDistance(unit);
-            if (distance < 10.0f)  // Focus Fire spawned on us - MOVE NOW!
-                return true;
-        }
-    }
+        float distance = bot->GetDistance(unit);
+        if (distance < 10.0f)
+            focusWithin10 = true;
+        if (distance < 15.0f)
+            focusWithin15 = true;
+    });
+
+    if (focusWithin10)
+        return true;
     
     // FALLBACK: Check if boss is casting Focus Cast (happens after creature spawn)
     Unit* boss = AI_VALUE2(Unit*, "find target", "shirrak the dead watcher");
@@ -40,12 +33,8 @@ bool ShirrakFocusFireSpawnedTrigger::IsActive()
         if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_FOCUS_CAST))
         {
             // Boss is casting - check for any Focus Fire near us
-            for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-            {
-                Unit* unit = *i;
-                if (unit && unit->GetEntry() == NPC_FOCUS_FIRE && bot->GetDistance(unit) < 15.0f)
-                    return true;
-            }
+            if (focusWithin15)
+                return true;
         }
     }
     
@@ -79,23 +68,11 @@ bool ShirrakFocusFireEndedTrigger::IsActive()
     
     // Check if Focus Fire creature currently exists
     bool focusFireExists = false;
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 60.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, 60.0f, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
         if (unit->GetEntry() == NPC_FOCUS_FIRE)
-        {
             focusFireExists = true;
-            break;
-        }
-    }
+    });
     
     bool hadFocusFire = hadFocusFireMap[botGuid];
     

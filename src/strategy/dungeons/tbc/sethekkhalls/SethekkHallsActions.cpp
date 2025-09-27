@@ -1,11 +1,9 @@
 #include "SethekkHallsActions.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "Value.h"
 #include "Playerbots.h"
 #include "AttackersValue.h"
+#include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
 
 std::map<ObjectGuid, uint32> g_ikiss_lastMoveTime;
 std::map<ObjectGuid, bool> g_ikiss_inSafePosition;
@@ -55,38 +53,29 @@ bool InterruptControllerAction::Execute(Event event)
     if (!bot)
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_MEDIUM);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_MEDIUM);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    bool interrupted = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_MEDIUM, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (interrupted || unit->GetEntry() != NPC_TIME_LOST_CONTROLLER || !unit->IsInCombat())
+            return;
 
-        if (unit->GetEntry() == NPC_TIME_LOST_CONTROLLER && unit->IsInCombat())
+        if (!unit->HasUnitState(UNIT_STATE_CASTING) || !unit->FindCurrentSpellBySpellId(SPELL_SUMMON_TOTEM))
+            return;
+
+        if (Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt"))
         {
-            if (unit->HasUnitState(UNIT_STATE_CASTING) && unit->FindCurrentSpellBySpellId(SPELL_SUMMON_TOTEM))
+            for (uint32 spellId : spellIdsValue->Get())
             {
-                Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "interrupt");
-                if (spellIdsValue)
+                if (botAI->CanCastSpell(spellId, unit, false) && botAI->CastSpell(spellId, unit))
                 {
-                    std::list<uint32> spellIds = spellIdsValue->Get();
-                    for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
-                    {
-                        uint32 spellId = *it;
-                        if (botAI->CanCastSpell(spellId, unit, false))
-                        {
-                            return botAI->CastSpell(spellId, unit);
-                        }
-                    }
+                    interrupted = true;
+                    return;
                 }
             }
         }
-    }
-    return false;
+    });
+
+    return interrupted;
 }
 
 bool InterruptControllerAction::isUseful()
@@ -95,26 +84,20 @@ bool InterruptControllerAction::isUseful()
     if (!bot)
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_MEDIUM);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_MEDIUM);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    bool interruptNeeded = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_MEDIUM, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (interruptNeeded)
+            return;
 
-        if (unit->GetEntry() == NPC_TIME_LOST_CONTROLLER && unit->IsInCombat())
-        {
-            if (unit->HasUnitState(UNIT_STATE_CASTING) && unit->FindCurrentSpellBySpellId(SPELL_SUMMON_TOTEM))
-            {
-                return true;
-            }
-        }
-    }
-    return false;
+        if (unit->GetEntry() != NPC_TIME_LOST_CONTROLLER || !unit->IsInCombat())
+            return;
+
+        if (unit->HasUnitState(UNIT_STATE_CASTING) && unit->FindCurrentSpellBySpellId(SPELL_SUMMON_TOTEM))
+            interruptNeeded = true;
+    });
+
+    return interruptNeeded;
 }
 
 
@@ -332,30 +315,20 @@ bool FleeSpiritAction::Execute(Event event)
     if (!bot)
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_SMALL);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_SMALL);
-
     Unit* closestSpirit = nullptr;
     float closestDistance = SEARCH_RANGE_SMALL;
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_SMALL, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (unit->GetEntry() != NPC_SETHEKK_SPIRIT)
+            return;
 
-        if (unit->GetEntry() == NPC_SETHEKK_SPIRIT)
+        float distance = bot->GetDistance(unit);
+        if (distance < closestDistance)
         {
-            float distance = bot->GetDistance(unit);
-            if (distance < closestDistance)
-            {
-                closestSpirit = unit;
-                closestDistance = distance;
-            }
+            closestDistance = distance;
+            closestSpirit = unit;
         }
-    }
+    });
 
     if (!closestSpirit)
         return false;
@@ -376,22 +349,14 @@ bool FleeSpiritAction::isUseful()
     if (!bot)
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_SMALL);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_SMALL);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    bool spiritNearby = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_SMALL, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
         if (unit->GetEntry() == NPC_SETHEKK_SPIRIT)
-            return true;
-    }
-    
-    return false;
+            spiritNearby = true;
+    });
+
+    return spiritNearby;
 }
 
 bool AttackBroodOfAnzuAction::Execute(Event event)
@@ -434,23 +399,17 @@ bool AttackBroodOfAnzuAction::isUseful()
     if (botAI->IsHeal(bot))
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    bool targetAvailable = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_LARGE, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (targetAvailable)
+            return;
 
         if (unit->GetEntry() == NPC_BROOD_OF_ANZU && AttackersValue::IsValidTarget(unit, bot))
-        {
-            return true;
-        }
-    }
-    return false;
+            targetAvailable = true;
+    });
+
+    return targetAvailable;
 }
 
 bool ContinueFightWithCharmedAllyAction::Execute(Event event)
@@ -462,31 +421,23 @@ bool ContinueFightWithCharmedAllyAction::Execute(Event event)
     if (bot->IsCharmed())
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
-
     Unit* controller = nullptr;
     float closestDistance = SEARCH_RANGE_LARGE;
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_LARGE, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (unit->GetEntry() != NPC_TIME_LOST_CONTROLLER || !unit->IsInCombat() || unit->IsCharmed())
+            return;
 
-        if (unit->GetEntry() == NPC_TIME_LOST_CONTROLLER && unit->IsInCombat() && 
-            !unit->IsCharmed() && AttackersValue::IsValidTarget(unit, bot))
+        if (!AttackersValue::IsValidTarget(unit, bot))
+            return;
+
+        float distance = bot->GetDistance(unit);
+        if (distance < closestDistance)
         {
-            float distance = bot->GetDistance(unit);
-            if (distance < closestDistance)
-            {
-                controller = unit;
-                closestDistance = distance;
-            }
+            closestDistance = distance;
+            controller = unit;
         }
-    }
+    });
 
     if (controller)
     {
@@ -508,30 +459,19 @@ bool ContinueFightWithCharmedAllyAction::isUseful()
     if (!bot || bot->IsCharmed())
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
-
     bool hasCharmedAlly = false;
     bool hasTotem = false;
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_LARGE, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (!unit->IsAlive())
+            return;
 
         if (unit->IsPlayer() && bot->IsInSameGroupWith(unit->ToPlayer()) && unit->IsCharmed())
-        {
             hasCharmedAlly = true;
-        }
 
         if (unit->GetEntry() == NPC_CHARMING_TOTEM)
-        {
             hasTotem = true;
-        }
-    }
+    });
 
     return hasCharmedAlly && !hasTotem;
 }
@@ -544,34 +484,26 @@ bool AttackSythElementalsAction::Execute(Event event)
 
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
-
     Unit* elemental = nullptr;
     float closestDistance = SEARCH_RANGE_LARGE;
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_LARGE, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (!(unit->GetEntry() == NPC_SYTH_FIRE_ELEMENTAL ||
+              unit->GetEntry() == NPC_SYTH_FROST_ELEMENTAL ||
+              unit->GetEntry() == NPC_SYTH_ARCANE_ELEMENTAL ||
+              unit->GetEntry() == NPC_SYTH_SHADOW_ELEMENTAL))
+            return;
 
-        if ((unit->GetEntry() == NPC_SYTH_FIRE_ELEMENTAL ||
-             unit->GetEntry() == NPC_SYTH_FROST_ELEMENTAL ||
-             unit->GetEntry() == NPC_SYTH_ARCANE_ELEMENTAL ||
-             unit->GetEntry() == NPC_SYTH_SHADOW_ELEMENTAL) &&
-            AttackersValue::IsValidTarget(unit, bot))
+        if (!AttackersValue::IsValidTarget(unit, bot))
+            return;
+
+        float distance = bot->GetDistance(unit);
+        if (distance < closestDistance)
         {
-            float distance = bot->GetDistance(unit);
-            if (distance < closestDistance)
-            {
-                elemental = unit;
-                closestDistance = distance;
-            }
+            closestDistance = distance;
+            elemental = unit;
         }
-    }
+    });
 
     if (elemental && currentTarget != elemental)
     {
@@ -590,16 +522,11 @@ bool AttackSythElementalsAction::isUseful()
     if (botAI->IsHeal(bot))
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_LARGE);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_LARGE);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    bool elementalPresent = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_LARGE, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (elementalPresent)
+            return;
 
         if ((unit->GetEntry() == NPC_SYTH_FIRE_ELEMENTAL ||
              unit->GetEntry() == NPC_SYTH_FROST_ELEMENTAL ||
@@ -607,11 +534,9 @@ bool AttackSythElementalsAction::isUseful()
              unit->GetEntry() == NPC_SYTH_SHADOW_ELEMENTAL) &&
             AttackersValue::IsValidTarget(unit, bot))
         {
-            return true;
+            elementalPresent = true;
         }
-    }
-    
-    return false;
+    });
+
+    return elementalPresent;
 }
-
-

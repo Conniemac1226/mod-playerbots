@@ -3,11 +3,9 @@
 #include "SpellInfo.h"
 #include "Unit.h"
 #include "Spell.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "Playerbots.h"
 #include "Group.h"
+#include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
 
 // Kael'thas
 bool KaelthasCastingPyroblastTrigger::IsActive()
@@ -58,21 +56,7 @@ bool KaelthasArcaneSphereNearbyTrigger::IsActive()
     if (!bot)
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 15.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 15.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_ARCANE_SPHERE)
-            return true;
-    }
-    return false;
+    return TbcDungeon::FindClosestNpcByEntry(botAI, bot, NPC_ARCANE_SPHERE, 15.0f) != nullptr;
 }
 
 bool KaelthasMTFlamestrikeTrigger::IsActive()
@@ -86,21 +70,7 @@ bool KaelthasMTFlamestrikeTrigger::IsActive()
         return false;
 
     // Check for flamestrike trigger creatures within dangerous range
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 12.0f); // 12 yard avoidance radius
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 12.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_FLAMESTRIKE_TRIGGER)
-            return true;
-    }
-    return false;
+    return TbcDungeon::FindClosestNpcByEntry(botAI, bot, NPC_FLAMESTRIKE_TRIGGER, 12.0f) != nullptr;
 }
 
 // Vexallus
@@ -133,27 +103,16 @@ bool VexallusPureEnergySpawnedTrigger::IsActive()
         }
     }
 
-    // Method 2: Direct creature search with wider range
     if (!pureEnergyFound)
     {
-        std::list<Unit*> targets;
-        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f); // Increased range significantly
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-        Cell::VisitObjects(bot, searcher, 80.0f);
-
-        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+        TbcDungeon::ForEachNearbyNpc(botAI, bot, 80.0f, [&](Unit* unit)
         {
-            Unit* unit = *i;
-            if (!unit || !unit->IsAlive())
-                continue;
+            if (pureEnergyFound)
+                return;
 
-            // Accept ANY Pure Energy regardless of combat state
             if (unit->GetEntry() == NPC_PURE_ENERGY)
-            {
                 pureEnergyFound = true;
-                break;
-            }
-        }
+        });
     }
 
     // CRITICAL FIX: DO NOT use aura detection - it causes false positives
@@ -273,24 +232,22 @@ bool DelrissaAddActiveTrigger::IsActive()
     // Check for her adds (various entries)
     const uint32 delrissaAdds[] = {24557, 24558, 24554, 24561, 24559, 24555, 24553, 24556};
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 50.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 50.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    bool addPresent = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, 50.0f, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (addPresent)
+            return;
 
         for (uint32 addId : delrissaAdds)
         {
-            // Consider active if add is present and attackable near the encounter, regardless of its combat flag
             if (unit->GetEntry() == addId)
-                return true;
+            {
+                addPresent = true;
+                return;
+            }
         }
-    }
-    return false;
+    });
+
+    return addPresent;
 }
 

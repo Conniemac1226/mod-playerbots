@@ -1,12 +1,9 @@
 #include "AuchenaiCryptsActions.h"
 #include "AuchenaiCryptsTriggers.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "Group.h"
 #include "Playerbots.h"
-#include "AttackersValue.h"
 #include "Value.h"
+#include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
 
 // Per-bot state map for preventing repeated movements during Focus Fire phase
 std::map<ObjectGuid, bool> g_shirrak_inSafePosition;
@@ -23,31 +20,8 @@ bool ShirrakFocusFireAvoidAction::Execute(Event event)
     if (g_shirrak_inSafePosition[botGuid])
         return true;
 
-    // PRIORITY 1: Check for Focus Fire creature near us (spawns 3 seconds before damage)
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 60.0f);
-
-    Unit* nearestFocusFire = nullptr;
-    float nearestDistance = 60.0f;
-    
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_FOCUS_FIRE)
-        {
-            float dist = bot->GetDistance(unit);
-            if (dist < nearestDistance)
-            {
-                nearestDistance = dist;
-                nearestFocusFire = unit;
-            }
-        }
-    }
+    Unit* nearestFocusFire = TbcDungeon::FindClosestNpcByEntry(botAI, bot, NPC_FOCUS_FIRE, 60.0f);
+    float nearestDistance = nearestFocusFire ? bot->GetDistance(nearestFocusFire) : 60.0f;
 
     // If Focus Fire exists and is near us, MOVE IMMEDIATELY
     if (nearestFocusFire && nearestDistance < 15.0f)  // Within danger zone
@@ -118,26 +92,9 @@ bool ShirrakFocusFireAvoidAction::isUseful()
     if (g_shirrak_inSafePosition[botGuid])
         return false;
 
-    // Check if Focus Fire exists near us
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 60.0f);
+    if (Unit* focus = TbcDungeon::FindClosestNpcByEntry(botAI, bot, NPC_FOCUS_FIRE, 60.0f))
+        return bot->GetDistance(focus) < 15.0f;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_FOCUS_FIRE)
-        {
-            // Focus Fire exists and we're within danger zone
-            float distance = bot->GetDistance(unit);
-            return distance < 15.0f;
-        }
-    }
-    
     return false;
 }
 
@@ -201,21 +158,8 @@ bool ShirrakReturnPositionAction::isUseful()
     if (!g_shirrak_inSafePosition[botGuid])
         return false;
 
-    // Only useful when no Focus Fire exists
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 60.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 60.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_FOCUS_FIRE)
-            return false;
-    }
+    if (TbcDungeon::FindClosestNpcByEntry(botAI, bot, NPC_FOCUS_FIRE, 60.0f))
+        return false;
     
     // Safe to return to combat position
     return true;

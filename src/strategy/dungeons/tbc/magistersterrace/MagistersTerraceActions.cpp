@@ -3,14 +3,12 @@
 #include "SpellInfo.h"
 #include "Unit.h"
 #include "Spell.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "ObjectAccessor.h"
 #include "AttackersValue.h"
 #include "Playerbots.h"
 #include "MoveSplineInit.h"
 #include "Group.h"
+#include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
 
 #include <algorithm>
 #include <cmath>
@@ -100,13 +98,7 @@ Unit* MagistersTerraceHelpers::SelectActiveFelCrystal(Player* bot, PlayerbotAI* 
 
     if (!activeCrystal)
     {
-        std::list<Unit*> targets;
-        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f);
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-        Cell::VisitObjects(bot, searcher, 80.0f);
-
-        for (Unit* unit : targets)
-            considerUnit(unit);
+        TbcDungeon::ForEachNearbyNpc(botAI, bot, 80.0f, considerUnit);
     }
 
     return activeCrystal;
@@ -814,56 +806,12 @@ bool AttackPureEnergyAction::Execute(Event event)
         }
     }
 
-    // Method 2: Direct creature search if no Pure Energy found in hostile list
     if (!pureEnergy)
     {
-        std::list<Unit*> targets;
-        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f); // Wide search
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-        Cell::VisitObjects(bot, searcher, 80.0f);
-
-        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+        if (Unit* candidate = TbcDungeon::FindClosestNpcByEntry(botAI, bot, NPC_PURE_ENERGY, 100.0f))
         {
-            Unit* unit = *i;
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            if (unit->GetEntry() == NPC_PURE_ENERGY)
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < closestDistance)
-                {
-                    pureEnergy = unit;
-                    closestDistance = distance;
-                }
-            }
-        }
-    }
-
-    // Method 3: Emergency fallback - find ANY Pure Energy if none found above
-    if (!pureEnergy)
-    {
-        std::list<Unit*> allTargets;
-        Acore::AnyUnitInObjectRangeCheck u_check_all(bot, 100.0f); // Maximum search range
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher_all(bot, allTargets, u_check_all);
-        Cell::VisitObjects(bot, searcher_all, 100.0f);
-
-        for (std::list<Unit*>::iterator i = allTargets.begin(); i != allTargets.end(); ++i)
-        {
-            Unit* unit = *i;
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            // Accept ANY Pure Energy as emergency target
-            if (unit->GetEntry() == NPC_PURE_ENERGY)
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < closestDistance)
-                {
-                    pureEnergy = unit;
-                    closestDistance = distance;
-                }
-            }
+            pureEnergy = candidate;
+            closestDistance = bot->GetDistance(candidate);
         }
     }
 
@@ -973,28 +921,19 @@ bool AttackPureEnergyAction::isUseful()
         }
     }
 
-    // Method 2: Direct creature search if not found in hostile list
     if (!pureEnergyFound)
     {
-        std::list<Unit*> targets;
-        Acore::AnyUnitInObjectRangeCheck u_check(bot, 80.0f);
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-        Cell::VisitObjects(bot, searcher, 80.0f);
-
-        for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+        TbcDungeon::ForEachNearbyNpc(botAI, bot, 80.0f, [&](Unit* unit)
         {
-            Unit* unit = *i;
-            if (!unit || !unit->IsAlive())
-                continue;
+            if (pureEnergyFound)
+                return;
 
-            if (unit->GetEntry() == NPC_PURE_ENERGY)
-            {
-                pureEnergyFound = true;
-                // Update last seen time for timeout system
-                g_pureEnergy_lastSeenTime[botGuid] = currentTime;
-                break;
-            }
-        }
+            if (unit->GetEntry() != NPC_PURE_ENERGY)
+                return;
+
+            pureEnergyFound = true;
+            g_pureEnergy_lastSeenTime[botGuid] = currentTime;
+        });
     }
 
     // CRITICAL FIX: DO NOT use aura detection - causes DPS freezing
@@ -1460,5 +1399,3 @@ bool DelrissaDispelHandlingAction::isUseful()
     Unit* boss = bot->FindNearestCreature(NPC_DELRISSA, 120.0f);
     return boss && boss->IsAlive() && boss->IsInCombat();
 }
-
-

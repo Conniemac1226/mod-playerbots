@@ -2,6 +2,7 @@
 #include "KarazhanActions.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
+#include "AiObjectContext.h"
 #include "Player.h"
 #include "Unit.h"
 #include "Creature.h"
@@ -13,6 +14,8 @@
 #include "Group.h"
 #include "GroupReference.h"
 #include <set>
+#include <unordered_set>
+#include "Value.h"
 #include "Log.h"
 
 
@@ -46,30 +49,100 @@ static bool IsCastingAnySpell(Unit* unit, std::initializer_list<uint32> spellIds
     return false;
 }
 
+namespace
+{
+    GuidVector FetchNearbyNpcGuids(PlayerbotAI* botAI, char const* cacheName)
+    {
+        if (!botAI)
+            return {};
+
+        if (AiObjectContext* context = botAI->GetAiObjectContext())
+        {
+            if (Value<GuidVector>* cache = context->GetValue<GuidVector>(cacheName))
+                return cache->Get();
+        }
+
+        return {};
+    }
+
+    template <typename Predicate>
+    void ForEachNearbyNpc(PlayerbotAI* botAI, Player* bot, float maxDistance, Predicate&& predicate)
+    {
+        if (!botAI || !bot)
+            return;
+
+        std::unordered_set<ObjectGuid> seen;
+
+        auto visitCache = [&](char const* cacheName)
+        {
+            GuidVector guids = FetchNearbyNpcGuids(botAI, cacheName);
+            for (ObjectGuid const& guid : guids)
+            {
+                if (!seen.insert(guid).second)
+                    continue;
+
+                Unit* unit = botAI->GetUnit(guid);
+                if (!unit || !unit->IsAlive())
+                    continue;
+
+                if (maxDistance > 0.0f && bot->GetDistance(unit) > maxDistance)
+                    continue;
+
+                predicate(unit);
+            }
+        };
+
+        visitCache("nearest hostile npcs");
+        visitCache("nearest friendly npcs");
+    }
+
+    Unit* FindClosestNpcByEntry(PlayerbotAI* botAI, Player* bot, uint32 entry, float maxDistance)
+    {
+        Unit* closest = nullptr;
+        float closestDist = maxDistance;
+
+        ForEachNearbyNpc(botAI, bot, maxDistance, [&](Unit* unit)
+        {
+            if (unit->GetEntry() != entry)
+                return;
+
+            float distance = bot->GetDistance(unit);
+            if (distance <= closestDist)
+            {
+                closest = unit;
+                closestDist = distance;
+            }
+        });
+
+        return closest;
+    }
+
+    template <typename Predicate>
+    bool AnyNearbyChessPiece(PlayerbotAI* botAI, Player* bot, Predicate&& predicate)
+    {
+        bool found = false;
+        ForEachNearbyNpc(botAI, bot, 120.0f, [&](Unit* unit)
+        {
+            if (found)
+                return;
+
+            if (Creature* c = unit->ToCreature())
+            {
+                if (predicate(c))
+                    found = true;
+            }
+        });
+        return found;
+    }
+}
+
 bool AttumenMountedTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // Check if the mounted version exists
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_ATTUMEN_MOUNTED)
-        {
-            return true;
-        }
-    }
-    return false;
+    return FindClosestNpcByEntry(botAI, bot, NPC_ATTUMEN_MOUNTED, 100.0f) != nullptr;
 }
 
 bool AttumenChargeDangerTrigger::IsActive()
@@ -78,28 +151,12 @@ bool AttumenChargeDangerTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if mounted Attumen exists and we're in the danger zone
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
+    Unit* mounted = FindClosestNpcByEntry(botAI, bot, NPC_ATTUMEN_MOUNTED, 100.0f);
+    if (!mounted)
+        return false;
 
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
-    {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_ATTUMEN_MOUNTED)
-        {
-            float distance = bot->GetDistance(unit);
-            // Charge targets players between 8-25 yards
-            if (distance > 8.0f && distance < 25.0f)
-                return true;
-        }
-    }
-    
-    return false;
+    float distance = bot->GetDistance(mounted);
+    return distance > 8.0f && distance < 25.0f;
 }
 
 bool AttumenShadowcleaveTrigger::IsActive()
@@ -108,28 +165,15 @@ bool AttumenShadowcleaveTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if we're in front of Attumen (either form)
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 100.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, 100.0f);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    auto inFrontOf = [&](uint32 entry) -> bool
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        Unit* unit = FindClosestNpcByEntry(botAI, bot, entry, 100.0f);
+        if (!unit)
+            return false;
+        return bot->GetDistance(unit) < 10.0f && !unit->HasInArc(M_PI / 2, bot);
+    };
 
-        // Check both unmounted and mounted versions
-        if (unit->GetEntry() == NPC_ATTUMEN_UNMOUNTED || unit->GetEntry() == NPC_ATTUMEN_MOUNTED)
-        {
-            // If we're close and in front, we're in danger of shadowcleave
-            if (bot->GetDistance(unit) < 10.0f && !unit->HasInArc(M_PI / 2, bot))
-                return true;
-        }
-    }
-    
-    return false;
+    return inFrontOf(NPC_ATTUMEN_UNMOUNTED) || inFrontOf(NPC_ATTUMEN_MOUNTED);
 }
 
 // Moroes triggers
@@ -144,7 +188,7 @@ bool MoroesAddsTrigger::IsActive()
         return false;
 
     // WotLK Pattern: Check if Moroes is in combat first (tank has engaged)
-    Unit* moroes = bot->FindNearestCreature(NPC_MOROES, 100.0f, true);
+    Unit* moroes = FindClosestNpcByEntry(botAI, bot, NPC_MOROES, 100.0f);
     if (!moroes || !moroes->IsAlive() || !moroes->IsInCombat())
         return false;
     
@@ -157,13 +201,23 @@ bool MoroesAddsTrigger::IsActive()
         NPC_LORD_ROBIN, NPC_LORD_CRISPIN, NPC_BARON_RAFE
     };
 
-    for (uint32 npcId : addIds)
+    bool addDetected = false;
+    ForEachNearbyNpc(botAI, bot, 100.0f, [&](Unit* unit)
     {
-        if (bot->FindNearestCreature(npcId, 100.0f, true))
-            return true;
-    }
-    
-    return false;
+        if (addDetected)
+            return;
+
+        for (uint32 npcId : addIds)
+        {
+            if (unit->GetEntry() == npcId)
+            {
+                addDetected = true;
+                return;
+            }
+        }
+    });
+
+    return addDetected;
 }
 
 bool MoroesGarroteTrigger::IsActive()
@@ -653,7 +707,7 @@ bool NightbaneSkeletonTrigger::IsActive()
 
 // Chess Event triggers
 // Forward declaration used by trigger function
-static bool IsChessEnvironmentActive(Player* bot);
+static bool IsChessEnvironmentActive(Player* bot, PlayerbotAI* botAI);
 bool ChessEventActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -665,13 +719,13 @@ bool ChessEventActiveTrigger::IsActive()
         return true;
 
     // Event detection via aura or environment
-    if (IsChessEnvironmentActive(bot))
+    if (IsChessEnvironmentActive(bot, botAI))
         return true;
 
     return false;
 }
 // Chess environment probe (mirror of logic used in actions)
-static bool IsChessEnvironmentActive(Player* bot)
+static bool IsChessEnvironmentActive(Player* bot, PlayerbotAI* botAI)
 {
     if (!bot)
         return false;
@@ -690,21 +744,16 @@ static bool IsChessEnvironmentActive(Player* bot)
         }
     }
 
-    // Any piece currently controlled nearby
-    std::list<Unit*> units;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, 120.0f);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, units, u_check);
-    Cell::VisitObjects(bot, searcher, 120.0f);
-    for (Unit* u : units)
+    if (botAI && AnyNearbyChessPiece(botAI, bot, [](Creature* piece)
     {
-        Creature* c = u ? u->ToCreature() : nullptr;
-        if (!c)
-            continue;
-        uint32 e = c->GetEntry();
-        bool isHumanPiece = (e == NPC_HUMAN_FOOTMAN || e == NPC_HUMAN_CONJURER || e == NPC_HUMAN_CLERIC || e == NPC_HUMAN_CHARGER || e == NPC_CHESS_KING_LLANE);
-        bool isOrcPiece   = (e == NPC_ORC_GRUNT || e == NPC_ORC_WARLOCK || e == NPC_ORC_NECROLYTE || e == NPC_ORC_WOLF || e == NPC_WARCHIEF_BLACKHAND);
-        if ((isHumanPiece || isOrcPiece) && c->GetCharmerGUID())
-            return true;
+        uint32 entry = piece->GetEntry();
+        bool isHumanPiece = entry == NPC_HUMAN_FOOTMAN || entry == NPC_HUMAN_CONJURER || entry == NPC_HUMAN_CLERIC || entry == NPC_HUMAN_CHARGER || entry == NPC_CHESS_KING_LLANE;
+        bool isOrcPiece = entry == NPC_ORC_GRUNT || entry == NPC_ORC_WARLOCK || entry == NPC_ORC_NECROLYTE || entry == NPC_ORC_WOLF || entry == NPC_WARCHIEF_BLACKHAND;
+        return (isHumanPiece || isOrcPiece) && !piece->GetCharmerGUID().IsEmpty();
+    }))
+    {
+        return true;
     }
+
     return false;
 }

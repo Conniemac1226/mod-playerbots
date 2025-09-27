@@ -1,10 +1,8 @@
 #include "SethekkHallsTriggers.h"
 #include "SethekkHallsActions.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "Playerbots.h"
 #include "AttackersValue.h"
+#include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
 
 bool CharmingTotemSpawnedTrigger::IsActive()
 {
@@ -32,26 +30,20 @@ bool TimeLostControllerCastingTotemTrigger::IsActive()
     if (!bot)
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_MEDIUM);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_MEDIUM);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    bool castingTotem = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_MEDIUM, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
+        if (castingTotem)
+            return;
 
-        if (unit->GetEntry() == NPC_TIME_LOST_CONTROLLER && unit->IsInCombat())
+        if (unit->GetEntry() == NPC_TIME_LOST_CONTROLLER && unit->IsInCombat() &&
+            unit->HasUnitState(UNIT_STATE_CASTING) && unit->FindCurrentSpellBySpellId(SPELL_SUMMON_TOTEM))
         {
-            if (unit->HasUnitState(UNIT_STATE_CASTING) && unit->FindCurrentSpellBySpellId(SPELL_SUMMON_TOTEM))
-            {
-                return true;
-            }
+            castingTotem = true;
         }
-    }
-    return false;
+    });
+
+    return castingTotem;
 }
 
 bool IkissBlinkCastTrigger::IsActive()
@@ -159,22 +151,14 @@ bool SethekkSpiritNearbyTrigger::IsActive()
     if (!bot)
         return false;
 
-    std::list<Unit*> targets;
-    Acore::AnyUnitInObjectRangeCheck u_check(bot, SEARCH_RANGE_SMALL);
-    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
-    Cell::VisitObjects(bot, searcher, SEARCH_RANGE_SMALL);
-
-    for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
+    bool spiritNearby = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_SMALL, [&](Unit* unit)
     {
-        Unit* unit = *i;
-        if (!unit || !unit->IsAlive())
-            continue;
-
         if (unit->GetEntry() == 18703)
-            return true;
-    }
-    
-    return false;
+            spiritNearby = true;
+    });
+
+    return spiritNearby;
 }
 
 bool BroodOfAnzuNearbyTrigger::IsActive()
@@ -193,4 +177,3 @@ bool BroodOfAnzuNearbyTrigger::IsActive()
     }
     return false;
 }
-
