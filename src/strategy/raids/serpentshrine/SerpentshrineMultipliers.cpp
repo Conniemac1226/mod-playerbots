@@ -73,16 +73,18 @@ float HydrossAddsMultiplier::GetValue(Action* action)
         }
     }
 
+    bool const isKillAddsAction = action && action->getName() == "hydross kill adds";
+
     if (addCount >= 4)
     {
-        return 0.7f;
+        return isKillAddsAction ? 1.4f : 1.0f;
     }
     else if (addCount >= 2)
     {
-        return 0.85f;
+        return isKillAddsAction ? 1.2f : 1.0f;
     }
 
-    return 1.0f;
+    return isKillAddsAction ? 1.05f : 1.0f;
 }
 
 float HydrossTankMultiplier::GetValue(Action* action)

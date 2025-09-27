@@ -5,6 +5,7 @@
 #include "Playerbots.h"
 #include "ScriptedCreature.h"
 #include "GameObject.h"
+#include "Group.h"
 #include "Spell.h"
 #include "UseItemAction.h"
 #include "AiObjectContext.h"
@@ -75,6 +76,11 @@ namespace
     constexpr char const* HYDROSS_MARK_STACKS = "hydross mark stacks";
     constexpr char const* HYDROSS_TRANSITION_NEEDED = "hydross transition needed";
     constexpr char const* HYDROSS_ACTIVE_ADD = "hydross active add";
+    constexpr std::array<uint32, 2> s_hydrossAddEntries = {
+        NPC_PURE_SPAWN_OF_HYDROSS,
+        NPC_TAINTED_SPAWN_OF_HYDROSS
+    };
+    constexpr uint8 HYDROSS_SKULL_ICON_INDEX = 7;
 
     constexpr char const* LURKER_LAST_SPOUT_TIME = "lurker last spout time";
     constexpr char const* LURKER_IN_WATER = "lurker in water";
@@ -115,6 +121,51 @@ namespace
         if (std::fabs(disperseValue->Get() - desired) > 0.1f)
         {
             disperseValue->Set(desired);
+        }
+    }
+
+    Unit* SelectHydrossAdd(PlayerbotAI* botAI, Player* bot, GuidVector const& candidates, float& currentBestDistance)
+    {
+        if (!botAI || !bot)
+            return nullptr;
+
+        Unit* best = nullptr;
+
+        for (ObjectGuid const& guid : candidates)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            bool isHydrossAdd = std::any_of(s_hydrossAddEntries.begin(), s_hydrossAddEntries.end(),
+                                             [unit](uint32 entry) { return unit->GetEntry() == entry; });
+            if (!isHydrossAdd)
+                continue;
+
+            float distance = bot->GetDistance(unit);
+            if (distance < currentBestDistance)
+            {
+                currentBestDistance = distance;
+                best = unit;
+            }
+        }
+
+        return best;
+    }
+
+    void UpdateHydrossAddMarker(PlayerbotAI* botAI, Player* bot, Unit* target)
+    {
+        if (!botAI || !bot || !target)
+            return;
+
+        if (Group* group = bot->GetGroup())
+        {
+            ObjectGuid currentIcon = group->GetTargetIcon(HYDROSS_SKULL_ICON_INDEX);
+            Unit* currentUnit = botAI->GetUnit(currentIcon);
+            if (currentUnit && currentUnit->IsAlive() && currentUnit == target)
+                return;
+
+            group->SetTargetIcon(HYDROSS_SKULL_ICON_INDEX, bot->GetGUID(), target->GetGUID());
         }
     }
 }
@@ -425,58 +476,30 @@ bool HydrossKillAddsAction::Execute(Event event)
         }
     }
 
-    Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
-    if (!npcsValue)
-    {
-        return false;
-    }
-    GuidVector npcs = npcsValue->Get();
-    
-    Unit* pureSpawn = nullptr;
-    Unit* taintedSpawn = nullptr;
-    float minPureDistance = 100.0f;
-    float minTaintedDistance = 100.0f;
-
-    for (ObjectGuid const& npcGuid : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npcGuid);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        float distance = bot->GetDistance(unit);
-        
-        if (unit->GetEntry() == NPC_PURE_SPAWN_OF_HYDROSS && distance < minPureDistance)
-        {
-            pureSpawn = unit;
-            minPureDistance = distance;
-        }
-        else if (unit->GetEntry() == NPC_TAINTED_SPAWN_OF_HYDROSS && distance < minTaintedDistance)
-        {
-            taintedSpawn = unit;
-            minTaintedDistance = distance;
-        }
-    }
-
     Unit* target = activeTarget;
-    if (pureSpawn && taintedSpawn)
+    float bestDistance = target ? bot->GetDistance(target) : 200.0f;
+
+    if (!target)
     {
-        if (!target)
+        if (Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs"))
         {
-            target = (minPureDistance < minTaintedDistance) ? pureSpawn : taintedSpawn;
+            target = SelectHydrossAdd(botAI, bot, npcsValue->Get(), bestDistance);
         }
     }
-    else if (pureSpawn)
+
+    if (!target)
     {
-        if (!target)
+        if (Value<GuidVector>* noLosValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets no los"))
         {
-            target = pureSpawn;
+            target = SelectHydrossAdd(botAI, bot, noLosValue->Get(), bestDistance);
         }
     }
-    else if (taintedSpawn)
+
+    if (!target)
     {
-        if (!target)
+        if (Value<GuidVector>* possibleValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets"))
         {
-            target = taintedSpawn;
+            target = SelectHydrossAdd(botAI, bot, possibleValue->Get(), bestDistance);
         }
     }
 
@@ -512,11 +535,21 @@ bool HydrossKillAddsAction::Execute(Event event)
         {
             botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
         }
+
         if (activeAddValue && activeAddValue->Get() != target->GetGUID())
         {
             activeAddValue->Set(target->GetGUID());
         }
-        return Attack(target);
+
+        UpdateHydrossAddMarker(botAI, bot, target);
+
+        if (Attack(target))
+        {
+            botAI->SetNextCheckDelay(150);
+            return true;
+        }
+
+        return false;
     }
 
     if (activeAddValue && !activeGuid.IsEmpty())
@@ -1176,6 +1209,16 @@ bool LeotherasShadowAction::Execute(Event event)
         return false;
     }
 
+    // Only ranged DPS should peel off for the shadow. Tanks, melee and healers
+    // stay on the primary boss so they continue performing their core roles.
+    bool const isRangedDps = PlayerbotAI::IsRangedDps(bot);
+    if (!isRangedDps)
+    {
+        if (focusValue && !focusValue->Get().IsEmpty())
+            focusValue->Set(ObjectGuid::Empty);
+        return false;
+    }
+
     Unit* shadow = nullptr;
     if (focusValue && !focusValue->Get().IsEmpty())
     {
@@ -1216,16 +1259,13 @@ bool LeotherasShadowAction::Execute(Event event)
             focusValue->Set(shadow->GetGUID());
     }
 
-    if (shadow && !botAI->IsMelee(bot))
+    if (shadow)
     {
         if (AI_VALUE(Unit*, "current target") != shadow)
             botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(shadow);
 
         return Attack(shadow);
     }
-
-    if (!shadow && focusValue && !focusValue->Get().IsEmpty())
-        focusValue->Set(ObjectGuid::Empty);
 
     return false;
 }
@@ -1252,10 +1292,12 @@ bool LeotherasPositionAction::Execute(Event event)
     Unit* anchor = boss;
     bool anchorIsShadow = false;
 
-    if (boss->GetHealthPct() <= 15.0f)
+    bool const isRangedDps = PlayerbotAI::IsRangedDps(bot);
+
+    if (boss->GetHealthPct() <= 15.0f && isRangedDps)
     {
         Value<ObjectGuid>* focusValue = botAI->GetAiObjectContext()->GetValue<ObjectGuid>(LEOTHERAS_SHADOW_TARGET);
-        if (!botAI->IsMelee(bot) && focusValue && !focusValue->Get().IsEmpty())
+        if (focusValue && !focusValue->Get().IsEmpty())
         {
             Unit* focusShadow = botAI->GetUnit(focusValue->Get());
             if (focusShadow && focusShadow->IsAlive())
@@ -1265,7 +1307,7 @@ bool LeotherasPositionAction::Execute(Event event)
             }
         }
 
-        if (!anchorIsShadow && !botAI->IsMelee(bot))
+        if (!anchorIsShadow)
         {
             Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
             if (npcsValue)

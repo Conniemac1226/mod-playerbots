@@ -520,6 +520,11 @@ bool LeotherasShadowTrigger::IsActive()
         return false;
     }
 
+    if (!PlayerbotAI::IsRangedDps(bot))
+    {
+        return false;
+    }
+
     // Shadow spawns at 15% health
     if (boss->GetHealthPct() <= 15.0f)
     {
