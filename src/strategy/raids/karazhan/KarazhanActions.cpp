@@ -8,9 +8,6 @@
 #include "Unit.h"
 #include "Creature.h"
 #include "SharedDefines.h"
-#include "CellImpl.h"
-#include "GridNotifiers.h"
-#include "GridNotifiersImpl.h"
 #include "Spell.h"
 #include "SpellInfo.h"
 #include "MotionMaster.h"
@@ -20,8 +17,11 @@
 #include "Position.h"
 #include "Value.h"
 #include <algorithm>
-#include <ctime>
+#include <array>
 #include <cmath>
+#include <ctime>
+#include <limits>
+#include <list>
 #include <map>
 #include <tuple>
 #include <unordered_set>
@@ -148,6 +148,142 @@ namespace
             }
         });
         return found;
+    }
+}
+
+namespace
+{
+    struct ChessTargetPriority
+    {
+        uint32 entry;
+        uint8 priority;
+    };
+
+    inline bool IsHumanChessPiece(uint32 entry)
+    {
+        switch (entry)
+        {
+            case NPC_HUMAN_FOOTMAN:
+            case NPC_HUMAN_CHARGER:
+            case NPC_HUMAN_CONJURER:
+            case NPC_HUMAN_CLERIC:
+            case NPC_CHESS_KING_LLANE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    inline std::array<ChessTargetPriority, 5> const& EnemyPriorityList(uint32 pieceEntry)
+    {
+        static constexpr std::array<ChessTargetPriority, 5> humanVsOrc = {
+            ChessTargetPriority{NPC_ORC_NECROLYTE, 95},
+            ChessTargetPriority{NPC_ORC_WARLOCK,    90},
+            ChessTargetPriority{NPC_ORC_WOLF,       75},
+            ChessTargetPriority{NPC_ORC_GRUNT,      60},
+            ChessTargetPriority{NPC_WARCHIEF_BLACKHAND, 85}
+        };
+
+        static constexpr std::array<ChessTargetPriority, 5> orcVsHuman = {
+            ChessTargetPriority{NPC_HUMAN_CLERIC,   95},
+            ChessTargetPriority{NPC_HUMAN_CONJURER, 90},
+            ChessTargetPriority{NPC_HUMAN_CHARGER,  75},
+            ChessTargetPriority{NPC_HUMAN_FOOTMAN,  60},
+            ChessTargetPriority{NPC_CHESS_KING_LLANE, 85}
+        };
+
+        if (IsHumanChessPiece(pieceEntry))
+            return humanVsOrc;
+        return orcVsHuman;
+    }
+
+    inline std::array<ChessTargetPriority, 5> const& AllyPriorityList(uint32 pieceEntry)
+    {
+        static constexpr std::array<ChessTargetPriority, 5> humanAllies = {
+            ChessTargetPriority{NPC_HUMAN_CHARGER,  90},
+            ChessTargetPriority{NPC_HUMAN_CONJURER, 85},
+            ChessTargetPriority{NPC_HUMAN_CLERIC,   80},
+            ChessTargetPriority{NPC_HUMAN_FOOTMAN,  70},
+            ChessTargetPriority{NPC_CHESS_KING_LLANE, 95}
+        };
+
+        static constexpr std::array<ChessTargetPriority, 5> orcAllies = {
+            ChessTargetPriority{NPC_ORC_WOLF,       90},
+            ChessTargetPriority{NPC_ORC_WARLOCK,    85},
+            ChessTargetPriority{NPC_ORC_NECROLYTE,  80},
+            ChessTargetPriority{NPC_ORC_GRUNT,      70},
+            ChessTargetPriority{NPC_WARCHIEF_BLACKHAND, 95}
+        };
+
+        if (IsHumanChessPiece(pieceEntry))
+            return humanAllies;
+        return orcAllies;
+    }
+
+    Creature* SelectChessEnemy(Creature* piece, float maxRange)
+    {
+        if (!piece)
+            return nullptr;
+
+        auto const& priorities = EnemyPriorityList(piece->GetEntry());
+        uint32 enemyKingEntry = IsHumanChessPiece(piece->GetEntry()) ? NPC_WARCHIEF_BLACKHAND : NPC_CHESS_KING_LLANE;
+
+        if (Creature* king = piece->FindNearestCreature(enemyKingEntry, maxRange, true))
+        {
+            if (king->IsAlive() && king->GetHealthPct() < 40.0f)
+                return king;
+        }
+
+        Creature* best = nullptr;
+        float bestScore = -std::numeric_limits<float>::max();
+
+        for (ChessTargetPriority const& target : priorities)
+        {
+            Creature* enemy = piece->FindNearestCreature(target.entry, maxRange, true);
+            if (!enemy || !enemy->IsAlive())
+                continue;
+
+            float distance = piece->GetDistance(enemy);
+            float score = static_cast<float>(target.priority) - distance;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = enemy;
+            }
+        }
+
+        return best;
+    }
+
+    Creature* SelectChessAllyForHeal(Creature* piece, float maxRange, uint32 minMissingHealth)
+    {
+        if (!piece)
+            return nullptr;
+
+        auto const& allies = AllyPriorityList(piece->GetEntry());
+        Creature* best = nullptr;
+        float bestScore = -std::numeric_limits<float>::max();
+
+        for (ChessTargetPriority const& proto : allies)
+        {
+            Creature* ally = piece->FindNearestCreature(proto.entry, maxRange, true);
+            if (!ally || !ally->IsAlive() || ally == piece)
+                continue;
+
+            uint32 missing = ally->GetMaxHealth() - ally->GetHealth();
+            if (missing < minMissingHealth)
+                continue;
+
+            float distance = piece->GetDistance(ally);
+            float score = static_cast<float>(proto.priority) + (missing / 1000.0f) - distance;
+            if (score > bestScore)
+            {
+                bestScore = score;
+                best = ally;
+            }
+        }
+
+        return best;
     }
 }
 
@@ -2437,95 +2573,75 @@ bool ChessEventMoveAction::Execute(Event event)
         }
     }
         
-    // Identify controlled piece type
-    Unit* controller = vehicle ? vehicle : static_cast<Unit*>(controlledPiece);
-    uint32 pieceEntry = controller->GetEntry();
+    Creature* pieceCreature = nullptr;
+    if (vehicle)
+        pieceCreature = vehicle->ToCreature();
+    if (!pieceCreature)
+        pieceCreature = controlledPiece;
+    if (!pieceCreature)
+        return false;
+
+    uint32 pieceEntry = pieceCreature->GetEntry();
     bool isRanged = (pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_ORC_WARLOCK ||
                      pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_ORC_NECROLYTE);
     bool isKing = (pieceEntry == NPC_CHESS_KING_LLANE || pieceEntry == NPC_WARCHIEF_BLACKHAND);
     
-    // Find best target based on piece type and strategy
-    Unit* target = nullptr;
-    std::vector<uint32> enemyPieceIds;
-    
-    // Determine enemy pieces based on our actual side (by entry membership)
-    auto isHumanPiece = [&](uint32 e) {
-        return e == NPC_HUMAN_FOOTMAN || e == NPC_HUMAN_CONJURER || e == NPC_HUMAN_CLERIC || e == NPC_HUMAN_CHARGER || e == NPC_CHESS_KING_LLANE;
-    };
-    if (isHumanPiece(pieceEntry))
-        enemyPieceIds = {NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE, NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
-    else
-        enemyPieceIds = {NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC, NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
-    
-    // Find nearest enemy piece as target
-    float closestDistance = 100.0f;
-    ForEachNearbyNpc(botAI, 90.0f, [&](Unit* unit)
-    {
-        if (!unit->IsAlive())
-            return;
-
-        uint32 entry = unit->GetEntry();
-        if (std::find(enemyPieceIds.begin(), enemyPieceIds.end(), entry) == enemyPieceIds.end())
-            return;
-
-        float distance = controller->GetDistance(unit);
-        if (distance < closestDistance)
-        {
-            target = unit;
-            closestDistance = distance;
-        }
-    });
-    
+    Creature* target = SelectChessEnemy(pieceCreature, 60.0f);
     if (!target)
-    {
         return false;
-    }
     
     // Movement strategy using chess triggers (cast SPELL_MOVE_GENERIC on best trigger)
     float desiredDistance = isRanged ? 18.0f : (isKing ? 10.0f : 6.0f);
-    float currentDistance = controller->GetDistance(target);
-    // If abilities have not fired for a while, allow repositioning even if nominal distance is okay
+    float currentDistance = pieceCreature->GetDistance(target);
     uint32 now = getMSTime();
-    uint32 lastAbility = g_chess_lastAbilityTime[controller->GetGUID()];
+    uint32 lastAbility = g_chess_lastAbilityTime[pieceCreature->GetGUID()];
     bool stale = (lastAbility && now - lastAbility > 3500);
-    if ((fabs(currentDistance - desiredDistance) > 4.0f || stale) && controlledPiece)
+
+    if (fabs(currentDistance - desiredDistance) > 3.5f || stale)
     {
-        // Safety: respect movement cooldown and throttle (do not block on generic flags)
-        if (controlledPiece->HasAura(KZ_SPELL_MOVE_COOLDOWN))
+        if (pieceCreature->HasAura(KZ_SPELL_MOVE_COOLDOWN))
             return false;
-        uint32& last = g_chess_lastMoveTime[controlledPiece->GetGUID()];
-        if (last && now - last < 1200) // modest throttle
+
+        uint32& last = g_chess_lastMoveTime[pieceCreature->GetGUID()];
+        if (last && now - last < 900)
             return false;
-        std::list<Unit*> nearby;
-        Acore::AnyUnitInObjectRangeCheck u_check(controlledPiece, 45.0f);
-        Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(controlledPiece, nearby, u_check);
-        Cell::VisitObjects(controlledPiece, searcher, 45.0f);
+
+        std::list<Creature*> triggers;
+        pieceCreature->GetCreatureListWithEntryInGrid(triggers, KZ_NPC_CHESS_MOVE_TRIGGER, 25.0f);
 
         Creature* bestTrigger = nullptr;
-        float bestScore = 1e9f;
-        for (Unit* u : nearby)
+        float bestScore = std::numeric_limits<float>::max();
+        for (Creature* trig : triggers)
         {
-            Creature* trig = u ? u->ToCreature() : nullptr;
-            if (!trig || trig->GetEntry() != KZ_NPC_CHESS_MOVE_TRIGGER)
-                continue; // NPC_CHESS_MOVE_TRIGGER
-            float dPiece = controlledPiece->GetDistance(trig);
+            if (!trig)
+                continue;
+
+            float dPiece = pieceCreature->GetDistance(trig);
             if (dPiece > 25.0f)
                 continue;
+
             float dEnemy = trig->GetDistance(target);
-            float score = dEnemy + dPiece * 0.25f;
+            float score = dEnemy + dPiece * 0.3f;
             if (score < bestScore)
             {
                 bestScore = score;
                 bestTrigger = trig;
             }
         }
+
+        if (!bestTrigger)
+            bestTrigger = pieceCreature->FindNearestCreature(KZ_NPC_CHESS_MOVE_TRIGGER, 25.0f, true);
+
         if (bestTrigger)
         {
-            controlledPiece->CastSpell(bestTrigger, KZ_SPELL_MOVE_GENERIC, false);
-            g_chess_lastMoveTime[controlledPiece->GetGUID()] = now;
+            pieceCreature->CastSpell(bestTrigger, KZ_SPELL_MOVE_GENERIC, false);
+            g_chess_lastMoveTime[pieceCreature->GetGUID()] = now;
             return true;
         }
     }
+
+    pieceCreature->SetFacingTo(pieceCreature->GetAngle(target));
+
     return false;
 }
 
@@ -2577,53 +2693,27 @@ bool ChessEventAbilityAction::Execute(Event event)
 
     uint32 pieceEntry = piece->GetEntry();
 
-    auto findEnemy = [&](float range) -> Creature*
+    auto selectEnemyInRange = [&](float range) -> Creature*
     {
-        std::vector<uint32> enemyIds;
-        if (pieceEntry == NPC_HUMAN_FOOTMAN || pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_HUMAN_CHARGER || pieceEntry == NPC_CHESS_KING_LLANE)
-            enemyIds = {NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE, NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
-        else
-            enemyIds = {NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC, NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
-
-        Creature* best = nullptr; float bestD = 1e9f;
-        for (uint32 id : enemyIds)
-        {
-            Creature* c = piece->FindNearestCreature(id, range, true);
-            if (c && c->IsAlive())
-            {
-                float d = piece->GetDistance(c);
-                if (d < bestD) { bestD = d; best = c; }
-            }
-        }
-        return best;
+        Creature* enemy = SelectChessEnemy(piece, range);
+        if (enemy && piece->GetDistance(enemy) <= range)
+            return enemy;
+        return nullptr;
     };
 
-    auto findAllyLow = [&](float range, uint32 hpDiff) -> Creature*
+    auto selectAllyForHeal = [&](float range, uint32 minMissing) -> Creature*
     {
-        std::vector<uint32> allyIds;
-        if (pieceEntry == NPC_HUMAN_FOOTMAN || pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_HUMAN_CHARGER || pieceEntry == NPC_CHESS_KING_LLANE)
-            allyIds = {NPC_HUMAN_FOOTMAN, NPC_HUMAN_CONJURER, NPC_HUMAN_CLERIC, NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
-        else
-            allyIds = {NPC_ORC_GRUNT, NPC_ORC_WARLOCK, NPC_ORC_NECROLYTE, NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
-
-        Creature* best = nullptr; uint32 bestDelta = 0;
-        for (uint32 id : allyIds)
-        {
-            Creature* c = piece->FindNearestCreature(id, range, true);
-            if (c && c->IsAlive())
-            {
-                uint32 delta = c->GetMaxHealth() - c->GetHealth();
-                if (delta > hpDiff && delta > bestDelta) { bestDelta = delta; best = c; }
-            }
-        }
-        return best;
+        Creature* ally = SelectChessAllyForHeal(piece, range, minMissing);
+        if (ally && piece->GetDistance(ally) <= range)
+            return ally;
+        return nullptr;
     };
 
     switch (pieceEntry)
     {
         case NPC_HUMAN_FOOTMAN: // Pawn A
         {
-            if (Creature* e = findEnemy(12.0f))
+            if (Creature* e = selectEnemyInRange(12.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37406, false); // Heroic Blow
@@ -2636,7 +2726,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         }
         case NPC_HUMAN_CHARGER: // Knight A
         {
-            if (Creature* e = findEnemy(10.0f))
+            if (Creature* e = selectEnemyInRange(10.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(piece, 37498, true); // Stomp
@@ -2648,7 +2738,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         }
         case NPC_HUMAN_CONJURER: // Queen A
         {
-            if (Creature* e = findEnemy(25.0f))
+            if (Creature* e = selectEnemyInRange(25.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37462, false); // Elemental Blast
@@ -2660,13 +2750,13 @@ bool ChessEventAbilityAction::Execute(Event event)
         }
         case NPC_HUMAN_CLERIC: // Bishop A
         {
-            if (Creature* ally = findAllyLow(25.0f, 5000))
+            if (Creature* ally = selectAllyForHeal(25.0f, 5000))
             {
                 piece->CastSpell(ally, 37455, false); // Healing
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
                 return true;
             }
-            if (Creature* e = findEnemy(20.0f))
+            if (Creature* e = selectEnemyInRange(20.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37459, false); // Holy Lance
@@ -2678,7 +2768,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         case NPC_CHESS_KING_LLANE: // King A
         {
             piece->CastSpell(piece, 37471, true); // Heroism
-            if (Creature* e = findEnemy(10.0f))
+            if (Creature* e = selectEnemyInRange(10.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(piece, 37474, true); // Sweep
@@ -2689,7 +2779,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         }
         case NPC_ORC_GRUNT: // Pawn H
         {
-            if (Creature* e = findEnemy(12.0f))
+            if (Creature* e = selectEnemyInRange(12.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37413, false); // Vicious Strike
@@ -2702,7 +2792,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         }
         case NPC_ORC_WOLF: // Knight H
         {
-            if (Creature* e = findEnemy(10.0f))
+            if (Creature* e = selectEnemyInRange(10.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(piece, 37454, true); // Bite
@@ -2713,7 +2803,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         }
         case NPC_ORC_WARLOCK: // Queen H
         {
-            if (Creature* e = findEnemy(25.0f))
+            if (Creature* e = selectEnemyInRange(25.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37463, false); // Fireball
@@ -2725,13 +2815,13 @@ bool ChessEventAbilityAction::Execute(Event event)
         }
         case NPC_ORC_NECROLYTE: // Bishop H
         {
-            if (Creature* ally = findAllyLow(25.0f, 5000))
+            if (Creature* ally = selectAllyForHeal(25.0f, 5000))
             {
                 piece->CastSpell(ally, 37456, false); // Shadow Mend
                 g_chess_lastAbilityTime[piece->GetGUID()] = now;
                 return true;
             }
-            if (Creature* e = findEnemy(20.0f))
+            if (Creature* e = selectEnemyInRange(20.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(e, 37461, false); // Shadow Spear
@@ -2743,7 +2833,7 @@ bool ChessEventAbilityAction::Execute(Event event)
         case NPC_WARCHIEF_BLACKHAND: // King H
         {
             piece->CastSpell(piece, 37472, true); // Bloodlust
-            if (Creature* e = findEnemy(10.0f))
+            if (Creature* e = selectEnemyInRange(10.0f))
             {
                 piece->SetFacingTo(piece->GetAngle(e));
                 piece->CastSpell(piece, 37476, true); // Cleave
