@@ -25,4 +25,11 @@ public:
     float GetValue(Action* action) override;
 };
 
+class LeotherasThreatHoldMultiplier : public Multiplier
+{
+public:
+    LeotherasThreatHoldMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "leotheras threat hold") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

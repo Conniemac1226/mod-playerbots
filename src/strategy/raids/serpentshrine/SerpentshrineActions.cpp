@@ -4,12 +4,120 @@
 #include "PlayerbotAIConfig.h"
 #include "Playerbots.h"
 #include "ScriptedCreature.h"
+#include "GameObject.h"
+#include "Spell.h"
+#include "UseItemAction.h"
 #include "AiObjectContext.h"
 #include "Value.h"
 
-std::map<ObjectGuid, uint32> g_hydross_lastMoveTime;
-std::map<ObjectGuid, uint8> g_hydross_markStacks;
-std::map<ObjectGuid, bool> g_hydross_transitionNeeded;
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <limits>
+
+namespace
+{
+    constexpr float LURKER_PLATFORM_Z = -19.18f;
+
+    inline float GetPersonalOffset(Player* bot, float step)
+    {
+        if (!bot)
+            return 0.0f;
+
+        int32 bucket = static_cast<int32>(bot->GetGUID().GetCounter() % 8);
+        bucket -= 4;
+        return static_cast<float>(bucket) * step;
+    }
+
+    bool IsCastingSpell(Unit* caster, uint32 spellId)
+    {
+        if (!caster)
+            return false;
+
+        for (uint32 i = CURRENT_MELEE_SPELL; i <= CURRENT_CHANNELED_SPELL; ++i)
+        {
+            CurrentSpellTypes type = static_cast<CurrentSpellTypes>(i);
+            if (Spell* spell = caster->GetCurrentSpell(type))
+            {
+                if (spell->m_spellInfo && spell->m_spellInfo->Id == spellId)
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Manual spread contributions per mechanic so we can honour the shared disperse-distance system.
+    constexpr std::array<char const*, 6> s_serpentshrineSpreadKeys = {
+        "hydross water tomb spread distance",
+        "hydross vile sludge spread distance",
+        "lurker geyser spread distance",
+        "leotheras chaos blast spread distance",
+        "karathress sear nova spread distance",
+        "vashj static charge spread distance"
+    };
+
+    constexpr std::array<uint32, 4> s_vashjShieldGenerators = {
+        185051,
+        185052,
+        185053,
+        185054
+    };
+
+    const std::array<Position, 4> s_vashjShieldGeneratorPositions = {
+        Position(7.81f, -945.244f, 44.0f, 5.99871f),
+        Position(52.048f, -901.236f, 44.0f, 3.02393f),
+        Position(7.417f, -901.109f, 44.0f, 2.29077f),
+        Position(52.448f, -944.825f, 44.0f, 3.48714f)
+    };
+
+    constexpr char const* HYDROSS_LAST_MOVE_TIME = "hydross last move time";
+    constexpr char const* HYDROSS_MARK_STACKS = "hydross mark stacks";
+    constexpr char const* HYDROSS_TRANSITION_NEEDED = "hydross transition needed";
+    constexpr char const* HYDROSS_ACTIVE_ADD = "hydross active add";
+
+    constexpr char const* LURKER_LAST_SPOUT_TIME = "lurker last spout time";
+    constexpr char const* LURKER_IN_WATER = "lurker in water";
+    constexpr char const* LURKER_SPOUT_BASE_ANGLE = "lurker spout base angle";
+
+    constexpr char const* LEOTHERAS_LAST_WHIRLWIND_TIME = "leotheras last whirlwind time";
+    constexpr char const* LEOTHERAS_HAS_DEMON = "leotheras has demon";
+    constexpr char const* LEOTHERAS_WHIRLWIND_HOLD_UNTIL = "leotheras whirlwind hold until";
+    constexpr char const* LEOTHERAS_SHADOW_TARGET = "leotheras shadow target";
+
+    constexpr char const* MOROGRIM_LAST_GRAVE_TIME = "morogrim last grave time";
+
+    class TaintedCoreUseAction : public UseItemAction
+    {
+    public:
+        explicit TaintedCoreUseAction(PlayerbotAI* botAI) : UseItemAction(botAI, "tainted core", true) {}
+        using UseItemAction::UseItemOnGameObject;
+    };
+
+    void UpdateSerpentshrineDisperseDistance(PlayerbotAI* botAI)
+    {
+        if (!botAI)
+            return;
+
+        float desired = 0.0f;
+        for (char const* key : s_serpentshrineSpreadKeys)
+        {
+            if (Value<float>* contribution = botAI->GetAiObjectContext()->GetValue<float>(key))
+            {
+                desired = std::max(desired, contribution->Get());
+            }
+        }
+
+        Value<float>* disperseValue = botAI->GetAiObjectContext()->GetValue<float>("disperse distance");
+        if (!disperseValue)
+            return;
+
+        if (std::fabs(disperseValue->Get() - desired) > 0.1f)
+        {
+            disperseValue->Set(desired);
+        }
+    }
+}
 
 bool HydrossAvoidMarkOfHydrossAction::Execute(Event event)
 {
@@ -32,17 +140,18 @@ bool HydrossAvoidMarkOfHydrossAction::Execute(Event event)
     else if (bot->HasAura(SPELL_MARK_OF_HYDROSS5)) stacks = 5;
     else if (bot->HasAura(SPELL_MARK_OF_HYDROSS6)) stacks = 6;
 
-    ObjectGuid botGuid = bot->GetGUID();
-    if (botGuid.IsEmpty())
+    Value<uint8>* markValue = botAI->GetAiObjectContext()->GetValue<uint8>(HYDROSS_MARK_STACKS);
+    if (markValue)
     {
-        return false;
+        markValue->Set(stacks);
     }
-    
-    g_hydross_markStacks[botGuid] = stacks;
 
     if (botAI->IsTank(bot) && stacks >= 4)
     {
-        g_hydross_transitionNeeded[bot->GetGUID()] = true;
+        if (Value<bool>* transitionNeeded = botAI->GetAiObjectContext()->GetValue<bool>(HYDROSS_TRANSITION_NEEDED))
+        {
+            transitionNeeded->Set(true);
+        }
         return false;
     }
 
@@ -57,7 +166,7 @@ bool HydrossAvoidMarkOfHydrossAction::Execute(Event event)
             movePos.m_positionY += sin(angle) * 10.0f;
             
             return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                         false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
         }
     }
 
@@ -80,11 +189,17 @@ bool HydrossAvoidMarkOfCorruptionAction::Execute(Event event)
     else if (bot->HasAura(SPELL_MARK_OF_CORRUPTION5)) stacks = 5;
     else if (bot->HasAura(SPELL_MARK_OF_CORRUPTION6)) stacks = 6;
 
-    g_hydross_markStacks[bot->GetGUID()] = stacks;
+    if (Value<uint8>* markValue = botAI->GetAiObjectContext()->GetValue<uint8>(HYDROSS_MARK_STACKS))
+    {
+        markValue->Set(stacks);
+    }
 
     if (botAI->IsTank(bot) && stacks >= 4)
     {
-        g_hydross_transitionNeeded[bot->GetGUID()] = true;
+        if (Value<bool>* transitionNeeded = botAI->GetAiObjectContext()->GetValue<bool>(HYDROSS_TRANSITION_NEEDED))
+        {
+            transitionNeeded->Set(true);
+        }
         return false;
     }
 
@@ -99,7 +214,7 @@ bool HydrossAvoidMarkOfCorruptionAction::Execute(Event event)
             movePos.m_positionY += sin(angle) * 10.0f;
             
             return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                         false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
         }
     }
 
@@ -113,49 +228,82 @@ bool HydrossWaterTombSpreadAction::Execute(Event event)
         return false;
     }
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "hydross the unstable");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    Value<float>* spreadValue = botAI->GetAiObjectContext()->GetValue<float>("hydross water tomb spread distance");
+    if (!spreadValue)
     {
         return false;
     }
 
+    Unit* boss = AI_VALUE2(Unit*, "find target", "hydross the unstable");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    {
+        if (spreadValue->Get() > 0.0f)
+        {
+            spreadValue->Set(0.0f);
+            UpdateSerpentshrineDisperseDistance(botAI);
+        }
+        return false;
+    }
+
+    bool shouldSpread = false;
+
     // React immediately to cast or pre-cast
-    if (boss->FindCurrentSpellBySpellId(SPELL_WATER_TOMB) || 
+    if (boss->FindCurrentSpellBySpellId(SPELL_WATER_TOMB) ||
         (!boss->HasAura(SPELL_HYDROSS_CORRUPTION) && boss->HasUnitState(UNIT_STATE_CASTING)))
     {
         Value<GuidVector>* membersValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("group members");
-        if (!membersValue)
+        if (membersValue)
         {
-            return false;
-        }
-        GuidVector members = membersValue->Get();
-        Unit* closestAlly = nullptr;
-        float minDistance = 100.0f;
-        
-        for (ObjectGuid const& member : members)
-        {
-            Unit* player = botAI->GetUnit(member);
-            if (player && player != bot && player->IsAlive())
+            GuidVector members = membersValue->Get();
+            for (ObjectGuid const& member : members)
             {
-                float distance = bot->GetDistance(player);
-                if (distance < minDistance)
+                Unit* player = botAI->GetUnit(member);
+                if (player && player != bot && player->IsAlive() && bot->GetDistance(player) < 8.0f)
                 {
-                    closestAlly = player;
-                    minDistance = distance;
+                    shouldSpread = true;
+                    break;
                 }
             }
         }
-        
-        if (closestAlly && minDistance < 8.0f)
+    }
+
+    float desiredDistance = botAI->IsMelee(bot) ? 9.0f : 18.0f;
+    if (shouldSpread)
+    {
+        if (spreadValue->Get() < desiredDistance)
         {
-            Position movePos = bot->GetPosition();
-            float angle = bot->GetAngle(closestAlly) + M_PI;
-            movePos.m_positionX += cos(angle) * 12.0f; // Move further for safety
-            movePos.m_positionY += sin(angle) * 12.0f;
-            
-            return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            spreadValue->Set(desiredDistance);
+            UpdateSerpentshrineDisperseDistance(botAI);
         }
+
+        Position movePos = boss->GetPosition();
+        float angle = Position::NormalizeOrientation(boss->GetOrientation() + M_PI + GetPersonalOffset(bot, 0.1f));
+        movePos.m_positionX += cos(angle) * desiredDistance;
+        movePos.m_positionY += sin(angle) * desiredDistance;
+        float targetZ = movePos.m_positionZ;
+        bot->UpdateAllowedPositionZ(movePos.m_positionX, movePos.m_positionY, targetZ);
+        movePos.m_positionZ = targetZ;
+
+        float distanceToMove = bot->GetDistance(movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ);
+        if (distanceToMove < 1.5f)
+        {
+            return false;
+        }
+
+        if (MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
+                   false, false, false, false, MovementPriority::MOVEMENT_NORMAL))
+        {
+            botAI->SetNextCheckDelay(250);
+            return true;
+        }
+
+        return false;
+    }
+
+    if (spreadValue->Get() > 0.0f)
+    {
+        spreadValue->Set(0.0f);
+        UpdateSerpentshrineDisperseDistance(botAI);
     }
 
     return false;
@@ -163,41 +311,82 @@ bool HydrossWaterTombSpreadAction::Execute(Event event)
 
 bool HydrossVileSludgeSpreadAction::Execute(Event event)
 {
-    Unit* boss = AI_VALUE2(Unit*, "find target", "hydross the unstable");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    Value<float>* spreadValue = botAI->GetAiObjectContext()->GetValue<float>("hydross vile sludge spread distance");
+    if (!spreadValue)
     {
         return false;
     }
 
+    Unit* boss = AI_VALUE2(Unit*, "find target", "hydross the unstable");
+    bool bossActive = boss && boss->IsAlive() && boss->IsInCombat();
+    bool hasSludgeAura = bot->HasAura(SPELL_VILE_SLUDGE);
+
+    if (!bossActive && !hasSludgeAura)
+    {
+        if (spreadValue->Get() > 0.0f)
+        {
+            spreadValue->Set(0.0f);
+            UpdateSerpentshrineDisperseDistance(botAI);
+        }
+        return false;
+    }
+
+    bool shouldSpread = hasSludgeAura;
+
     // React to cast or pre-cast in poison phase
-    if (boss->HasAura(SPELL_HYDROSS_CORRUPTION))
+    if (bossActive && boss->HasAura(SPELL_HYDROSS_CORRUPTION))
     {
         float distance = bot->GetDistance(boss);
-        bool shouldMove = false;
-        float moveDistance = 10.0f;
         
         // Immediate reaction to Vile Sludge cast
         if (boss->FindCurrentSpellBySpellId(SPELL_VILE_SLUDGE))
         {
-            shouldMove = distance < 20.0f;
-            moveDistance = 15.0f; // Move further when actually casting
+            shouldSpread = shouldSpread || distance < 20.0f;
         }
         // Pre-emptive movement when boss is casting in poison form
         else if (boss->HasUnitState(UNIT_STATE_CASTING))
         {
-            shouldMove = distance < 12.0f;
+            shouldSpread = shouldSpread || distance < 12.0f;
         }
-        
-        if (shouldMove)
+    }
+
+    float desiredDistance = botAI->IsMelee(bot) ? 9.0f : 18.0f;
+    if (shouldSpread)
+    {
+        if (spreadValue->Get() < desiredDistance)
         {
-            Position movePos = bot->GetPosition();
-            float angle = bot->GetAngle(boss) + M_PI;
-            movePos.m_positionX += cos(angle) * moveDistance;
-            movePos.m_positionY += sin(angle) * moveDistance;
-            
-            return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            spreadValue->Set(desiredDistance);
+            UpdateSerpentshrineDisperseDistance(botAI);
         }
+
+        Position movePos = boss->GetPosition();
+        float angle = Position::NormalizeOrientation(boss->GetOrientation() + M_PI + GetPersonalOffset(bot, 0.1f));
+        movePos.m_positionX += cos(angle) * desiredDistance;
+        movePos.m_positionY += sin(angle) * desiredDistance;
+        float targetZ = movePos.m_positionZ;
+        bot->UpdateAllowedPositionZ(movePos.m_positionX, movePos.m_positionY, targetZ);
+        movePos.m_positionZ = targetZ;
+
+        float distanceToMove = bot->GetDistance(movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ);
+        if (distanceToMove < 1.5f)
+        {
+            return false;
+        }
+
+        if (MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
+                   false, false, false, false, MovementPriority::MOVEMENT_NORMAL))
+        {
+            botAI->SetNextCheckDelay(250);
+            return true;
+        }
+
+        return false;
+    }
+
+    if (spreadValue->Get() > 0.0f)
+    {
+        spreadValue->Set(0.0f);
+        UpdateSerpentshrineDisperseDistance(botAI);
     }
 
     return false;
@@ -208,6 +397,32 @@ bool HydrossKillAddsAction::Execute(Event event)
     if (!bot || !botAI)
     {
         return false;
+    }
+
+    Value<ObjectGuid>* activeAddValue = botAI->GetAiObjectContext()->GetValue<ObjectGuid>(HYDROSS_ACTIVE_ADD);
+    ObjectGuid activeGuid = ObjectGuid::Empty;
+    Unit* activeTarget = nullptr;
+    if (activeAddValue)
+    {
+        activeGuid = activeAddValue->Get();
+        if (!activeGuid.IsEmpty())
+        {
+            if (Unit* unit = botAI->GetUnit(activeGuid))
+            {
+                if (unit->IsAlive())
+                {
+                    activeTarget = unit;
+                }
+                else
+                {
+                    activeAddValue->Set(ObjectGuid::Empty);
+                }
+            }
+            else
+            {
+                activeAddValue->Set(ObjectGuid::Empty);
+            }
+        }
     }
 
     Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
@@ -242,27 +457,71 @@ bool HydrossKillAddsAction::Execute(Event event)
         }
     }
 
-    Unit* target = nullptr;
+    Unit* target = activeTarget;
     if (pureSpawn && taintedSpawn)
     {
-        target = (minPureDistance < minTaintedDistance) ? pureSpawn : taintedSpawn;
+        if (!target)
+        {
+            target = (minPureDistance < minTaintedDistance) ? pureSpawn : taintedSpawn;
+        }
     }
     else if (pureSpawn)
     {
-        target = pureSpawn;
+        if (!target)
+        {
+            target = pureSpawn;
+        }
     }
     else if (taintedSpawn)
     {
-        target = taintedSpawn;
+        if (!target)
+        {
+            target = taintedSpawn;
+        }
     }
 
     if (target)
     {
+        float distanceToTarget = bot->GetDistance(target);
+        bool hasLineOfSight = bot->IsWithinLOSInMap(target);
+
+        if (!hasLineOfSight || (botAI->IsMelee(bot) && distanceToTarget > 5.0f))
+        {
+            Position movePos = target->GetPosition();
+            if (!botAI->IsMelee(bot))
+            {
+                float angle = target->GetAngle(bot);
+                float desiredRange = 18.0f;
+                movePos.m_positionX += std::cos(angle) * desiredRange;
+                movePos.m_positionY += std::sin(angle) * desiredRange;
+            }
+
+            float adjustedZ = movePos.m_positionZ;
+            bot->UpdateAllowedPositionZ(movePos.m_positionX, movePos.m_positionY, adjustedZ);
+            movePos.m_positionZ = adjustedZ;
+
+            if (MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
+                       false, false, false, false, MovementPriority::MOVEMENT_NORMAL))
+            {
+                botAI->SetNextCheckDelay(200);
+                return true;
+            }
+        }
+
         if (AI_VALUE(Unit*, "current target") != target)
         {
             botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
         }
+        if (activeAddValue && activeAddValue->Get() != target->GetGUID())
+        {
+            activeAddValue->Set(target->GetGUID());
+        }
         return Attack(target);
+    }
+
+    if (activeAddValue && !activeGuid.IsEmpty())
+    {
+        activeAddValue->Set(ObjectGuid::Empty);
     }
 
     return false;
@@ -305,7 +564,7 @@ bool HydrossPositionTankAction::Execute(Event event)
     if (distance > 5.0f)
     {
         return MoveTo(bot->GetMapId(), desiredX, desiredY, desiredZ,
-                     false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                     false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
     }
     
     return false;
@@ -324,8 +583,8 @@ bool HydrossTransitionControlAction::Execute(Event event)
         return false;
     }
 
-    ObjectGuid botGuid = bot->GetGUID();
-    if (!g_hydross_transitionNeeded[botGuid])
+    Value<bool>* transitionNeededValue = botAI->GetAiObjectContext()->GetValue<bool>(HYDROSS_TRANSITION_NEEDED);
+    if (!transitionNeededValue || !transitionNeededValue->Get())
     {
         return false;
     }
@@ -347,22 +606,30 @@ bool HydrossTransitionControlAction::Execute(Event event)
         targetZ = 42.0f;
     }
     
-    uint32 currentTime = getMSTime();
-    if (currentTime - g_hydross_lastMoveTime[botGuid] > 10000)
-    {
-        g_hydross_transitionNeeded[botGuid] = false;
-        g_hydross_markStacks[botGuid] = 0;
-    }
-    
-    g_hydross_lastMoveTime[botGuid] = currentTime;
-    
-    return MoveTo(bot->GetMapId(), targetX, targetY, targetZ,
-                 false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-}
+    Value<uint32>* lastMoveValue = botAI->GetAiObjectContext()->GetValue<uint32>(HYDROSS_LAST_MOVE_TIME);
+    Value<uint8>* markStacksValue = botAI->GetAiObjectContext()->GetValue<uint8>(HYDROSS_MARK_STACKS);
 
-// The Lurker Below Actions
-std::map<ObjectGuid, uint32> g_lurker_lastSpoutTime;
-std::map<ObjectGuid, bool> g_lurker_inWater;
+    uint32 currentTime = getMSTime();
+    uint32 lastMoveTime = lastMoveValue ? lastMoveValue->Get() : 0;
+    if (lastMoveValue && lastMoveTime != 0 && currentTime - lastMoveTime > 10000)
+    {
+        transitionNeededValue->Set(false);
+        if (markStacksValue)
+        {
+            markStacksValue->Set(0);
+        }
+        lastMoveValue->Set(currentTime);
+        return false;
+    }
+
+    if (lastMoveValue)
+    {
+        lastMoveValue->Set(currentTime);
+    }
+
+    return MoveTo(bot->GetMapId(), targetX, targetY, targetZ,
+                 false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+}
 
 bool LurkerSpoutAction::Execute(Event event)
 {
@@ -377,45 +644,87 @@ bool LurkerSpoutAction::Execute(Event event)
         return false;
     }
 
+    Value<uint32>* lastSpoutValue = botAI->GetAiObjectContext()->GetValue<uint32>(LURKER_LAST_SPOUT_TIME);
+    Value<bool>* inWaterValue = botAI->GetAiObjectContext()->GetValue<bool>(LURKER_IN_WATER);
+    Value<float>* baseAngleValue = botAI->GetAiObjectContext()->GetValue<float>(LURKER_SPOUT_BASE_ANGLE);
+
     // Check if boss is casting or has spout visual
-    if (boss->HasAura(SPELL_LURKER_SPOUT_VISUAL) || 
+    if (boss->HasAura(SPELL_LURKER_SPOUT_VISUAL) ||
         boss->FindCurrentSpellBySpellId(SPELL_LURKER_SPOUT_PERIODIC_1) ||
         boss->FindCurrentSpellBySpellId(SPELL_LURKER_SPOUT_PERIODIC_2))
     {
-        ObjectGuid botGuid = bot->GetGUID();
         uint32 currentTime = getMSTime();
-        
-        // Jump into water to avoid spout if not already in water
-        if (!bot->IsInWater())
+
+        float platformZ = LURKER_PLATFORM_Z;
+        float radius = botAI->IsMelee(bot) ? 9.0f : 24.0f;
+
+        bool moveClockwise = (bot->GetGUID().GetCounter() % 2) == 0;
+        float direction = moveClockwise ? 1.0f : -1.0f;
+
+        float baseAngle = baseAngleValue ? baseAngleValue->Get() : 0.0f;
+        uint32 spoutStart = lastSpoutValue ? lastSpoutValue->Get() : 0;
+        bool newSpout = spoutStart == 0 || currentTime < spoutStart;
+        if (newSpout)
         {
-            g_lurker_lastSpoutTime[botGuid] = currentTime;
-            
-            // Find nearest water position (jump off platform)
-            Position jumpPos = bot->GetPosition();
-            float angle = bot->GetAngle(boss);
-            
-            // Jump away from boss into water
-            jumpPos.m_positionX += cos(angle + M_PI) * 15.0f;
-            jumpPos.m_positionY += sin(angle + M_PI) * 15.0f;
-            jumpPos.m_positionZ -= 5.0f; // Jump down into water
-            
-            return MoveTo(bot->GetMapId(), jumpPos.m_positionX, jumpPos.m_positionY, jumpPos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            spoutStart = currentTime;
+            float behindAngle = Position::NormalizeOrientation(boss->GetOrientation() + M_PI);
+            baseAngle = Position::NormalizeOrientation(behindAngle + GetPersonalOffset(bot, 0.12f));
+            if (baseAngleValue)
+                baseAngleValue->Set(baseAngle);
+            if (lastSpoutValue)
+                lastSpoutValue->Set(spoutStart);
         }
-        g_lurker_inWater[botGuid] = true;
+        else if (baseAngle == 0.0f && baseAngleValue)
+        {
+            float behindAngle = Position::NormalizeOrientation(boss->GetOrientation() + M_PI);
+            baseAngle = Position::NormalizeOrientation(behindAngle + GetPersonalOffset(bot, 0.12f));
+            baseAngleValue->Set(baseAngle);
+        }
+
+        float elapsed = (spoutStart > 0) ? static_cast<float>(currentTime - spoutStart) / 1000.0f : 0.0f;
+        float angularSpeed = botAI->IsMelee(bot) ? 3.6f : 4.8f; // radians per second
+        float targetAngle = baseAngle + direction * angularSpeed * elapsed;
+
+        Position targetPos = boss->GetPosition();
+        targetPos.m_positionX += cos(targetAngle) * radius;
+        targetPos.m_positionY += sin(targetAngle) * radius;
+        targetPos.m_positionZ = platformZ;
+
+        float adjustedZ = targetPos.m_positionZ;
+        bot->UpdateAllowedPositionZ(targetPos.m_positionX, targetPos.m_positionY, adjustedZ);
+        targetPos.m_positionZ = adjustedZ;
+
+        if (inWaterValue)
+        {
+            inWaterValue->Set(true);
+        }
+
+        bot->GetMotionMaster()->Clear(false);
+        return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY, targetPos.m_positionZ,
+                     false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     }
-    else if (g_lurker_inWater[bot->GetGUID()])
+    else if (inWaterValue && inWaterValue->Get())
     {
         // Spout ended, get back on platform
-        g_lurker_inWater[bot->GetGUID()] = false;
-        
-        // Move back to platform
-        float platformZ = -19.18f; // Platform height from boss script
-        Position returnPos = bot->GetPosition();
-        returnPos.m_positionZ = platformZ;
-        
-        return MoveTo(bot->GetMapId(), returnPos.m_positionX, returnPos.m_positionY, returnPos.m_positionZ,
-                     false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        inWaterValue->Set(false);
+        if (lastSpoutValue)
+            lastSpoutValue->Set(0);
+        if (baseAngleValue)
+            baseAngleValue->Set(0.0f);
+
+        float platformZ = LURKER_PLATFORM_Z;
+        float radius = botAI->IsMelee(bot) ? 9.0f : 24.0f;
+        Position targetPos = boss ? boss->GetPosition() : bot->GetPosition();
+        float angle = boss ? Position::NormalizeOrientation(boss->GetOrientation() + M_PI) : bot->GetOrientation();
+        angle += GetPersonalOffset(bot, 0.12f);
+        targetPos.m_positionX += cos(angle) * radius;
+        targetPos.m_positionY += sin(angle) * radius;
+        float adjustedZ = platformZ;
+        bot->UpdateAllowedPositionZ(targetPos.m_positionX, targetPos.m_positionY, adjustedZ);
+        targetPos.m_positionZ = adjustedZ;
+
+        return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY, targetPos.m_positionZ,
+                     false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     }
 
     return false;
@@ -452,7 +761,7 @@ bool LurkerWhirlAvoidAction::Execute(Event event)
             movePos.m_positionY += sin(angle) * 10.0f;
             
             return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                         false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
         }
     }
 
@@ -466,41 +775,40 @@ bool LurkerGeyserSpreadAction::Execute(Event event)
         return false;
     }
 
+    Value<float>* spreadValue = botAI->GetAiObjectContext()->GetValue<float>("lurker geyser spread distance");
+    if (!spreadValue)
+    {
+        return false;
+    }
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "the lurker below");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
+        if (spreadValue->Get() > 0.0f)
+        {
+            spreadValue->Set(0.0f);
+            UpdateSerpentshrineDisperseDistance(botAI);
+        }
         return false;
     }
 
     // Check if boss is casting geyser
     if (boss->FindCurrentSpellBySpellId(SPELL_LURKER_GEYSER))
     {
-        // Spread out from other players to minimize geyser damage
-        Value<GuidVector>* membersValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("group members");
-        if (!membersValue)
+        constexpr float desiredDistance = 12.0f;
+        if (spreadValue->Get() < desiredDistance)
         {
-            return false;
+            spreadValue->Set(desiredDistance);
+            UpdateSerpentshrineDisperseDistance(botAI);
         }
-        GuidVector members = membersValue->Get();
-        
-        for (ObjectGuid const& member : members)
-        {
-            Unit* player = botAI->GetUnit(member);
-            if (player && player != bot && player->IsAlive())
-            {
-                float distance = bot->GetDistance(player);
-                if (distance < 10.0f) // Geyser has knockback, maintain distance
-                {
-                    Position movePos = bot->GetPosition();
-                    float angle = bot->GetAngle(player) + M_PI;
-                    movePos.m_positionX += cos(angle) * 8.0f;
-                    movePos.m_positionY += sin(angle) * 8.0f;
-                    
-                    return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                                 false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
-                }
-            }
-        }
+        botAI->SetNextCheckDelay(250);
+        return true;
+    }
+
+    if (spreadValue->Get() > 0.0f)
+    {
+        spreadValue->Set(0.0f);
+        UpdateSerpentshrineDisperseDistance(botAI);
     }
 
     return false;
@@ -525,6 +833,7 @@ bool LurkerKillAddsAction::Execute(Event event)
         return false;
     }
 
+
     Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
     if (!npcsValue)
     {
@@ -541,6 +850,9 @@ bool LurkerKillAddsAction::Execute(Event event)
     {
         Unit* unit = botAI->GetUnit(npcGuid);
         if (!unit || !unit->IsAlive())
+            continue;
+
+        if (unit->GetEntry() == NPC_COILFANG_FRENZY)
             continue;
 
         float distance = bot->GetDistance(unit);
@@ -585,34 +897,50 @@ bool LurkerPositionAction::Execute(Event event)
         return false;
     }
 
+    float platformZ = LURKER_PLATFORM_Z;
+    if (bot->IsInWater() || bot->GetPositionZ() < platformZ - 0.5f)
+    {
+        float recoverRadius = botAI->IsMelee(bot) ? 6.5f : 20.0f;
+        float angle = Position::NormalizeOrientation(boss->GetOrientation() + M_PI + GetPersonalOffset(bot, 0.12f));
+        Position recoverPos = boss->GetPosition();
+        recoverPos.m_positionX += cos(angle) * recoverRadius;
+        recoverPos.m_positionY += sin(angle) * recoverRadius;
+        float targetZ = platformZ;
+        bot->UpdateAllowedPositionZ(recoverPos.m_positionX, recoverPos.m_positionY, targetZ);
+        recoverPos.m_positionZ = targetZ;
+
+        return MoveTo(bot->GetMapId(), recoverPos.m_positionX, recoverPos.m_positionY, recoverPos.m_positionZ,
+                     false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+    }
+
     // Don't reposition during spout or when submerged
     if (boss->HasAura(SPELL_LURKER_SPOUT_VISUAL) || boss->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE))
     {
         return false;
     }
 
-    float desiredDistance = botAI->IsMelee(bot) ? 5.0f : 25.0f;
+    float desiredDistance = botAI->IsMelee(bot) ? 5.5f : 22.0f;
     float currentDistance = bot->GetDistance(boss);
-    
+
     // Position properly based on role
     if (fabs(currentDistance - desiredDistance) > 3.0f)
     {
         Position movePos = boss->GetPosition();
-        float angle = boss->GetAngle(bot);
+        float angle = Position::NormalizeOrientation(boss->GetOrientation() + M_PI + GetPersonalOffset(bot, 0.12f));
         movePos.m_positionX += cos(angle) * desiredDistance;
         movePos.m_positionY += sin(angle) * desiredDistance;
-        movePos.m_positionZ = -19.18f; // Platform height
-        
+        float targetZ = platformZ;
+        bot->UpdateAllowedPositionZ(movePos.m_positionX, movePos.m_positionY, targetZ);
+        movePos.m_positionZ = targetZ;
+
         return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                     false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                     false, false, false, false, MovementPriority::MOVEMENT_FORCED);
     }
 
     return false;
 }
 
 // Leotheras the Blind Actions
-std::map<ObjectGuid, uint32> g_leotheras_lastWhirlwindTime;
-std::map<ObjectGuid, bool> g_leotheras_hasDemon;
 
 bool LeotherasWhirlwindAction::Execute(Event event)
 {
@@ -627,25 +955,45 @@ bool LeotherasWhirlwindAction::Execute(Event event)
         return false;
     }
 
-    // Check if boss is casting or has whirlwind
-    if (boss->FindCurrentSpellBySpellId(SPELL_LEOTHERAS_WHIRLWIND) || boss->HasAura(SPELL_LEOTHERAS_WHIRLWIND))
+    Value<uint32>* lastWhirlwindValue = botAI->GetAiObjectContext()->GetValue<uint32>(LEOTHERAS_LAST_WHIRLWIND_TIME);
+    Value<uint32>* holdUntilValue = botAI->GetAiObjectContext()->GetValue<uint32>(LEOTHERAS_WHIRLWIND_HOLD_UNTIL);
+
+    bool bossIsWhirling = boss->FindCurrentSpellBySpellId(SPELL_LEOTHERAS_WHIRLWIND) || boss->HasAura(SPELL_LEOTHERAS_WHIRLWIND);
+    if (bossIsWhirling)
     {
-        ObjectGuid botGuid = bot->GetGUID();
         uint32 currentTime = getMSTime();
-        
-        // Move away from whirlwind
-        float distance = bot->GetDistance(boss);
-        if (distance < 15.0f) // Whirlwind range + safety margin
+
+        if (holdUntilValue && !botAI->IsTank(bot))
         {
-            g_leotheras_lastWhirlwindTime[botGuid] = currentTime;
-            
+            holdUntilValue->Set(currentTime + 3000);
+        }
+
+        float distance = bot->GetDistance(boss);
+        if (distance < 15.0f)
+        {
+            if (lastWhirlwindValue)
+            {
+                lastWhirlwindValue->Set(currentTime);
+            }
+
             Position movePos = bot->GetPosition();
             float angle = bot->GetAngle(boss) + M_PI;
             movePos.m_positionX += cos(angle) * 20.0f;
             movePos.m_positionY += sin(angle) * 20.0f;
-            
+
             return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                         false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+        }
+
+        return false;
+    }
+
+    if (lastWhirlwindValue && lastWhirlwindValue->Get() != 0)
+    {
+        lastWhirlwindValue->Set(0);
+        if (holdUntilValue && !botAI->IsTank(bot))
+        {
+            holdUntilValue->Set(getMSTime() + 3000);
         }
     }
 
@@ -665,36 +1013,79 @@ bool LeotherasChaosBlastAction::Execute(Event event)
         return false;
     }
 
-    // Check if boss is in demon form and casting chaos blast
-    if (boss->HasAura(SPELL_LEOTHERAS_METAMORPHOSIS) && 
-        (boss->FindCurrentSpellBySpellId(SPELL_LEOTHERAS_CHAOS_BLAST) || boss->HasUnitState(UNIT_STATE_CASTING)))
+    Value<float>* spreadValue = botAI->GetAiObjectContext()->GetValue<float>("leotheras chaos blast spread distance");
+    if (!spreadValue)
     {
-        // Spread out to minimize chain damage
+        return false;
+    }
+
+    bool shouldSpread = false;
+
+    bool bossCastingChaosBlast = boss->HasAura(SPELL_LEOTHERAS_METAMORPHOSIS) && IsCastingSpell(boss, SPELL_LEOTHERAS_CHAOS_BLAST);
+
+    if (bot->HasAura(SPELL_LEOTHERAS_CHAOS_BLAST))
+    {
+        shouldSpread = true;
+    }
+    else if (bossCastingChaosBlast)
+    {
         Value<GuidVector>* membersValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("group members");
-        if (!membersValue)
+        if (membersValue)
         {
-            return false;
-        }
-        GuidVector members = membersValue->Get();
-        
-        for (ObjectGuid const& member : members)
-        {
-            Unit* player = botAI->GetUnit(member);
-            if (player && player != bot && player->IsAlive())
+            GuidVector members = membersValue->Get();
+            for (ObjectGuid const& member : members)
             {
-                float distance = bot->GetDistance(player);
-                if (distance < 8.0f) // Chaos blast chain range
+                Unit* player = botAI->GetUnit(member);
+                if (player && player != bot && player->IsAlive())
                 {
-                    Position movePos = bot->GetPosition();
-                    float angle = bot->GetAngle(player) + M_PI;
-                    movePos.m_positionX += cos(angle) * 10.0f;
-                    movePos.m_positionY += sin(angle) * 10.0f;
-                    
-                    return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                                 false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                    float distance = bot->GetDistance(player);
+                    if (distance < 12.0f)
+                    {
+                        shouldSpread = true;
+                        break;
+                    }
                 }
             }
         }
+    }
+
+    float desiredDistance = botAI->IsMelee(bot) ? 9.0f : 18.0f;
+    if (shouldSpread)
+    {
+        if (spreadValue->Get() < desiredDistance)
+        {
+            spreadValue->Set(desiredDistance);
+            UpdateSerpentshrineDisperseDistance(botAI);
+        }
+
+        Position movePos = boss->GetPosition();
+        float angle = Position::NormalizeOrientation(boss->GetOrientation() + M_PI + GetPersonalOffset(bot, 0.1f));
+        movePos.m_positionX += cos(angle) * desiredDistance;
+        movePos.m_positionY += sin(angle) * desiredDistance;
+        float targetZ = movePos.m_positionZ;
+        bot->UpdateAllowedPositionZ(movePos.m_positionX, movePos.m_positionY, targetZ);
+        movePos.m_positionZ = targetZ;
+
+        float distanceToMove = bot->GetDistance(movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ);
+        if (distanceToMove < 1.5f)
+        {
+            return false;
+        }
+
+        if (MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
+                   false, false, false, false, MovementPriority::MOVEMENT_NORMAL))
+        {
+            botAI->SetNextCheckDelay(250);
+            return true;
+        }
+
+        return false;
+    }
+
+    if (spreadValue->Get() > 0.0f)
+    {
+        spreadValue->Set(0.0f);
+        UpdateSerpentshrineDisperseDistance(botAI);
     }
 
     return false;
@@ -715,6 +1106,7 @@ bool LeotherasInnerDemonAction::Execute(Event event)
     }
     GuidVector npcs = npcsValue->Get();
     
+    Value<bool>* hasDemonValue = botAI->GetAiObjectContext()->GetValue<bool>(LEOTHERAS_HAS_DEMON);
     Unit* myDemon = nullptr;
     float minDistance = 100.0f;
 
@@ -735,7 +1127,10 @@ bool LeotherasInnerDemonAction::Execute(Event event)
                 {
                     myDemon = unit;
                     minDistance = distance;
-                    g_leotheras_hasDemon[bot->GetGUID()] = true;
+                    if (hasDemonValue)
+                    {
+                        hasDemonValue->Set(true);
+                    }
                 }
             }
         }
@@ -750,10 +1145,10 @@ bool LeotherasInnerDemonAction::Execute(Event event)
         }
         return Attack(myDemon);
     }
-    else if (g_leotheras_hasDemon[bot->GetGUID()])
+    else if (hasDemonValue && hasDemonValue->Get())
     {
         // Demon was killed, clear flag
-        g_leotheras_hasDemon[bot->GetGUID()] = false;
+        hasDemonValue->Set(false);
     }
 
     return false;
@@ -772,19 +1167,34 @@ bool LeotherasShadowAction::Execute(Event event)
         return false;
     }
 
-    // At 15% health, shadow spawns
-    if (boss->GetHealthPct() <= 15.0f)
+    Value<ObjectGuid>* focusValue = botAI->GetAiObjectContext()->GetValue<ObjectGuid>(LEOTHERAS_SHADOW_TARGET);
+
+    if (boss->GetHealthPct() > 15.0f)
+    {
+        if (focusValue && !focusValue->Get().IsEmpty())
+            focusValue->Set(ObjectGuid::Empty);
+        return false;
+    }
+
+    Unit* shadow = nullptr;
+    if (focusValue && !focusValue->Get().IsEmpty())
+    {
+        shadow = botAI->GetUnit(focusValue->Get());
+        if (shadow && !shadow->IsAlive())
+        {
+            shadow = nullptr;
+            focusValue->Set(ObjectGuid::Empty);
+        }
+    }
+
+    if (!shadow)
     {
         Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
         if (!npcsValue)
-        {
             return false;
-        }
-        GuidVector npcs = npcsValue->Get();
-        
-        Unit* shadow = nullptr;
-        float minDistance = 100.0f;
 
+        GuidVector npcs = npcsValue->Get();
+        float minDistance = 100.0f;
         for (ObjectGuid const& npcGuid : npcs)
         {
             Unit* unit = botAI->GetUnit(npcGuid);
@@ -802,16 +1212,20 @@ bool LeotherasShadowAction::Execute(Event event)
             }
         }
 
-        // Ranged should focus shadow, melee on boss
-        if (shadow && !botAI->IsMelee(bot))
-        {
-            if (AI_VALUE(Unit*, "current target") != shadow)
-            {
-                botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(shadow);
-            }
-            return Attack(shadow);
-        }
+        if (shadow && focusValue)
+            focusValue->Set(shadow->GetGUID());
     }
+
+    if (shadow && !botAI->IsMelee(bot))
+    {
+        if (AI_VALUE(Unit*, "current target") != shadow)
+            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(shadow);
+
+        return Attack(shadow);
+    }
+
+    if (!shadow && focusValue && !focusValue->Get().IsEmpty())
+        focusValue->Set(ObjectGuid::Empty);
 
     return false;
 }
@@ -829,39 +1243,92 @@ bool LeotherasPositionAction::Execute(Event event)
         return false;
     }
 
-    // Don't reposition during whirlwind
-    if (boss->HasAura(SPELL_LEOTHERAS_WHIRLWIND))
+    // Don't reposition during whirlwind or while actively spreading
+    if (boss->HasAura(SPELL_LEOTHERAS_WHIRLWIND) || AI_VALUE(float, "leotheras chaos blast spread distance") > 0.0f)
     {
         return false;
     }
 
-    // Different positioning for demon form
-    float desiredDistance;
-    if (boss->HasAura(SPELL_LEOTHERAS_METAMORPHOSIS))
+    Unit* anchor = boss;
+    bool anchorIsShadow = false;
+
+    if (boss->GetHealthPct() <= 15.0f)
     {
-        // Demon form - stay at range for chaos blast
-        desiredDistance = botAI->IsRanged(bot) ? 30.0f : 35.0f;
+        Value<ObjectGuid>* focusValue = botAI->GetAiObjectContext()->GetValue<ObjectGuid>(LEOTHERAS_SHADOW_TARGET);
+        if (!botAI->IsMelee(bot) && focusValue && !focusValue->Get().IsEmpty())
+        {
+            Unit* focusShadow = botAI->GetUnit(focusValue->Get());
+            if (focusShadow && focusShadow->IsAlive())
+            {
+                anchor = focusShadow;
+                anchorIsShadow = true;
+            }
+        }
+
+        if (!anchorIsShadow && !botAI->IsMelee(bot))
+        {
+            Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
+            if (npcsValue)
+            {
+                Unit* closestShadow = nullptr;
+                float minDistance = 100.0f;
+                for (ObjectGuid const& guid : npcsValue->Get())
+                {
+                    Unit* npc = botAI->GetUnit(guid);
+                    if (!npc || !npc->IsAlive() || npc->GetEntry() != NPC_SHADOW_OF_LEOTHERAS)
+                        continue;
+
+                    float distance = bot->GetDistance(npc);
+                    if (distance < minDistance)
+                    {
+                        closestShadow = npc;
+                        minDistance = distance;
+                    }
+                }
+
+                if (closestShadow)
+                {
+                    anchor = closestShadow;
+                    anchorIsShadow = true;
+                    if (focusValue)
+                    {
+                        focusValue->Set(anchor->GetGUID());
+                    }
+                }
+            }
+        }
+    }
+
+    float desiredDistance;
+    if (anchorIsShadow)
+    {
+        desiredDistance = botAI->IsRanged(bot) ? 22.0f : 5.0f;
+    }
+    else if (boss->HasAura(SPELL_LEOTHERAS_METAMORPHOSIS))
+    {
+        desiredDistance = botAI->IsMelee(bot) ? 6.0f : 22.0f;
     }
     else
     {
-        // Elf form - normal positioning
         desiredDistance = botAI->IsMelee(bot) ? 5.0f : 25.0f;
     }
 
-    float currentDistance = bot->GetDistance(boss);
-    
-    if (fabs(currentDistance - desiredDistance) > 3.0f)
+    Position movePos = anchor->GetPosition();
+    float angle = anchor->GetAngle(bot);
+    movePos.m_positionX += cos(angle) * desiredDistance;
+    movePos.m_positionY += sin(angle) * desiredDistance;
+    float targetZ = movePos.m_positionZ;
+    bot->UpdateAllowedPositionZ(movePos.m_positionX, movePos.m_positionY, targetZ);
+    movePos.m_positionZ = targetZ;
+
+    float travelDistance = bot->GetDistance(movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ);
+    if (travelDistance < 1.5f)
     {
-        Position movePos = boss->GetPosition();
-        float angle = boss->GetAngle(bot);
-        movePos.m_positionX += cos(angle) * desiredDistance;
-        movePos.m_positionY += sin(angle) * desiredDistance;
-        
-        return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                     false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return false;
     }
 
-    return false;
+    return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
+                  false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
 }
 
 // Fathom-Lord Karathress Actions
@@ -890,7 +1357,7 @@ bool KarathressCataclysmicBoltAction::Execute(Event event)
             movePos.m_positionY += sin(angle) * 10.0f;
             
             return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                         false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
         }
     }
 
@@ -907,24 +1374,40 @@ bool KarathressSearNovaAction::Execute(Event event)
     Unit* boss = AI_VALUE2(Unit*, "find target", "fathom-lord karathress");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
+        if (Value<float>* spreadValue = botAI->GetAiObjectContext()->GetValue<float>("karathress sear nova spread distance"))
+        {
+            if (spreadValue->Get() > 0.0f)
+            {
+                spreadValue->Set(0.0f);
+                UpdateSerpentshrineDisperseDistance(botAI);
+            }
+        }
         return false;
     }
+
+    Value<float>* spreadValue = botAI->GetAiObjectContext()->GetValue<float>("karathress sear nova spread distance");
 
     // Sear Nova is a melee AoE - spread out
     if (boss->FindCurrentSpellBySpellId(SPELL_KARATHRESS_SEAR_NOVA) || 
         (boss->HasUnitState(UNIT_STATE_CASTING) && bot->GetDistance(boss) < 10.0f))
     {
-        float distance = bot->GetDistance(boss);
-        if (distance < 10.0f)
+        if (spreadValue)
         {
-            Position movePos = bot->GetPosition();
-            float angle = bot->GetAngle(boss) + M_PI;
-            movePos.m_positionX += cos(angle) * 15.0f;
-            movePos.m_positionY += sin(angle) * 15.0f;
-            
-            return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            constexpr float desiredDistance = 15.0f;
+            if (spreadValue->Get() < desiredDistance)
+            {
+                spreadValue->Set(desiredDistance);
+                UpdateSerpentshrineDisperseDistance(botAI);
+            }
         }
+        botAI->SetNextCheckDelay(250);
+        return true;
+    }
+
+    if (spreadValue && spreadValue->Get() > 0.0f)
+    {
+        spreadValue->Set(0.0f);
+        UpdateSerpentshrineDisperseDistance(botAI);
     }
 
     return false;
@@ -1039,7 +1522,7 @@ bool KarathressTidalSurgeAction::Execute(Event event)
                     movePos.m_positionY += sin(angle) * 8.0f;
                     
                     return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                                 false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                                 false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
                 }
             }
         }
@@ -1124,7 +1607,6 @@ bool KarathressTotemsAction::Execute(Event event)
 }
 
 // Morogrim Tidewalker Actions
-std::map<ObjectGuid, uint32> g_morogrim_lastGraveTime;
 
 bool MorogrimTidalWaveAction::Execute(Event event)
 {
@@ -1164,7 +1646,7 @@ bool MorogrimTidalWaveAction::Execute(Event event)
                 movePos.m_positionY += sin(moveAngle) * 8.0f;
                 
                 return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                             false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                             false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
             }
         }
     }
@@ -1185,11 +1667,11 @@ bool MorogrimWateryGraveAction::Execute(Event event)
         bot->HasAura(SPELL_MOROGRIM_WATERY_GRAVE_3) || 
         bot->HasAura(SPELL_MOROGRIM_WATERY_GRAVE_4))
     {
-        ObjectGuid botGuid = bot->GetGUID();
         uint32 currentTime = getMSTime();
-        
-        // Track when we got grave'd for healing priority
-        g_morogrim_lastGraveTime[botGuid] = currentTime;
+        if (Value<uint32>* graveTimeValue = botAI->GetAiObjectContext()->GetValue<uint32>(MOROGRIM_LAST_GRAVE_TIME))
+        {
+            graveTimeValue->Set(currentTime);
+        }
         
         // Use healthstone if available and health is low
         if (bot->GetHealthPct() < 50.0f)
@@ -1257,7 +1739,7 @@ bool MorogrimMurlocsAction::Execute(Event event)
                 if (distance > 5.0f)
                 {
                     return MoveTo(bot->GetMapId(), stackPos.m_positionX, stackPos.m_positionY, stackPos.m_positionZ,
-                                 false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                                 false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
                 }
             }
         }
@@ -1321,7 +1803,7 @@ bool MorogrimGlobulesAction::Execute(Event event)
             movePos.m_positionY += sin(angle) * 10.0f;
             
             return MoveTo(bot->GetMapId(), movePos.m_positionX, movePos.m_positionY, movePos.m_positionZ,
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                         false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
         }
     }
 
@@ -1368,7 +1850,7 @@ bool MorogrimPositionAction::Execute(Event event)
     if (currentDistance > 5.0f)
     {
         return MoveTo(bot->GetMapId(), desiredPos.m_positionX, desiredPos.m_positionY, desiredPos.m_positionZ,
-                     false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+                     false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
     }
 
     return false;
@@ -1399,7 +1881,7 @@ bool VashjShockBlastAction::Execute(Event event)
         float z = boss->GetPositionZ();
         
         boss->UpdateAllowedPositionZ(x, y, z);
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
     }
 
     return false;
@@ -1412,36 +1894,40 @@ bool VashjStaticChargeAction::Execute(Event event)
         return false;
     }
 
-    // Static Charge requires spreading
+    Value<float>* spreadValue = botAI->GetAiObjectContext()->GetValue<float>("vashj static charge spread distance");
+    if (!spreadValue)
+    {
+        return false;
+    }
+
     if (bot->HasAura(SPELL_VASHJ_STATIC_CHARGE))
     {
         Value<GuidVector>* membersValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("group members");
-        if (!membersValue)
+        if (membersValue)
         {
-            return false;
-        }
-        GuidVector members = membersValue->Get();
-        
-        for (ObjectGuid const& member : members)
-        {
-            Unit* player = botAI->GetUnit(member);
-            if (player && player != bot && player->IsAlive())
+            GuidVector members = membersValue->Get();
+            for (ObjectGuid const& member : members)
             {
-                float distance = bot->GetDistance(player);
-                if (distance < 10.0f)
+                Unit* player = botAI->GetUnit(member);
+                if (player && player != bot && player->IsAlive() && bot->GetDistance(player) < 10.0f)
                 {
-                    // Move away from nearby players
-                    float angle = bot->GetAngle(player) + M_PI;
-                    float moveDistance = 15.0f;
-                    float x = bot->GetPositionX() + cos(angle) * moveDistance;
-                    float y = bot->GetPositionY() + sin(angle) * moveDistance;
-                    float z = bot->GetPositionZ();
-                    
-                    bot->UpdateAllowedPositionZ(x, y, z);
-                    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                    constexpr float desiredDistance = 15.0f;
+                    if (spreadValue->Get() < desiredDistance)
+                    {
+                        spreadValue->Set(desiredDistance);
+                        UpdateSerpentshrineDisperseDistance(botAI);
+                    }
+                    botAI->SetNextCheckDelay(250);
+                    return true;
                 }
             }
         }
+    }
+
+    if (spreadValue->Get() > 0.0f)
+    {
+        spreadValue->Set(0.0f);
+        UpdateSerpentshrineDisperseDistance(botAI);
     }
 
     return false;
@@ -1698,7 +2184,7 @@ bool VashjCoilfangStriderAction::Execute(Event event)
                 float z = bot->GetPositionZ();
                 
                 bot->UpdateAllowedPositionZ(x, y, z);
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
             }
             
             if (AI_VALUE(Unit*, "current target") != nearestStrider)
@@ -1776,7 +2262,7 @@ bool VashjSporebatAction::Execute(Event event)
                 float z = bot->GetPositionZ();
                 
                 bot->UpdateAllowedPositionZ(x, y, z);
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
             }
         }
     }
@@ -1819,7 +2305,7 @@ bool VashjPositionAction::Execute(Event event)
         float z = boss->GetPositionZ();
         
         boss->UpdateAllowedPositionZ(x, y, z);
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
     }
 
     return false;
@@ -1839,22 +2325,79 @@ bool VashjTaintedCoreAction::Execute(Event event)
     }
 
     // Phase 2 - check if bot has tainted core item
-    if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
+    if (!boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
     {
-        // Check if bot has tainted core in inventory
-        if (bot->HasItemCount(ITEM_TAINTED_CORE, 1))
+        return false;
+    }
+
+    Item* coreItem = bot->GetItemByEntry(ITEM_TAINTED_CORE);
+    if (!coreItem)
+    {
+        return false;
+    }
+
+    GameObject* nearestGenerator = nullptr;
+    float bestDistance = std::numeric_limits<float>::max();
+
+    for (uint32 entry : s_vashjShieldGenerators)
+    {
+        if (GameObject* go = bot->FindNearestGameObject(entry, 120.0f, true))
         {
-            // Move to shield generator position (simplified - would need actual generator positions)
-            // This is a placeholder - actual implementation would need generator GameObject positions
-            Position generatorPos(30.0f, -923.0f, 42.0f);
-            float distance = bot->GetDistance(generatorPos);
-            
-            if (distance > 5.0f)
+            if (!go->isSpawned())
+                continue;
+
+            float distance = bot->GetExactDist(go);
+            if (distance < bestDistance)
             {
-                return MoveTo(bot->GetMapId(), generatorPos.GetPositionX(), generatorPos.GetPositionY(), 
-                             generatorPos.GetPositionZ(), false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                bestDistance = distance;
+                nearestGenerator = go;
             }
         }
+    }
+
+    Position targetPos;
+    if (nearestGenerator)
+    {
+        targetPos = nearestGenerator->GetPosition();
+    }
+    else
+    {
+        // Fallback to static spawn coordinates if the GO lookup failed (e.g., out of range)
+        for (Position const& pos : s_vashjShieldGeneratorPositions)
+        {
+            float distance = bot->GetDistance(pos);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                targetPos = pos;
+            }
+        }
+
+        if (bestDistance == std::numeric_limits<float>::max())
+        {
+            return false;
+        }
+    }
+
+    if (bot->GetDistance(targetPos) > 3.0f)
+    {
+        float adjustedZ = targetPos.GetPositionZ();
+        bot->UpdateAllowedPositionZ(targetPos.GetPositionX(), targetPos.GetPositionY(), adjustedZ);
+        targetPos.m_positionZ = adjustedZ;
+        return MoveTo(bot->GetMapId(), targetPos.GetPositionX(), targetPos.GetPositionY(), targetPos.GetPositionZ(),
+                     false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    if (!nearestGenerator)
+    {
+        return false;
+    }
+
+    TaintedCoreUseAction useCore(botAI);
+    if (useCore.UseItemOnGameObject(coreItem, nearestGenerator->GetGUID()))
+    {
+        botAI->SetNextCheckDelay(500);
+        return true;
     }
 
     return false;

@@ -312,6 +312,25 @@ public:
         creators["last flee angle"] = &ValueContext::last_flee_angle;
         creators["last flee timestamp"] = &ValueContext::last_flee_timestamp;
         creators["recently flee info"] = &ValueContext::recently_flee_info;
+
+        creators["hydross last move time"] = &ValueContext::hydross_last_move_time;
+        creators["hydross mark stacks"] = &ValueContext::hydross_mark_stacks;
+        creators["hydross transition needed"] = &ValueContext::hydross_transition_needed;
+        creators["hydross water tomb spread distance"] = &ValueContext::hydross_water_tomb_spread_distance;
+        creators["hydross vile sludge spread distance"] = &ValueContext::hydross_vile_sludge_spread_distance;
+        creators["hydross active add"] = &ValueContext::hydross_active_add;
+        creators["lurker last spout time"] = &ValueContext::lurker_last_spout_time;
+        creators["lurker in water"] = &ValueContext::lurker_in_water;
+        creators["lurker spout base angle"] = &ValueContext::lurker_spout_base_angle;
+        creators["lurker geyser spread distance"] = &ValueContext::lurker_geyser_spread_distance;
+        creators["leotheras last whirlwind time"] = &ValueContext::leotheras_last_whirlwind_time;
+        creators["leotheras has demon"] = &ValueContext::leotheras_has_demon;
+        creators["leotheras chaos blast spread distance"] = &ValueContext::leotheras_chaos_blast_spread_distance;
+        creators["leotheras whirlwind hold until"] = &ValueContext::leotheras_whirlwind_hold_until;
+        creators["leotheras shadow target"] = &ValueContext::leotheras_shadow_target;
+        creators["karathress sear nova spread distance"] = &ValueContext::karathress_sear_nova_spread_distance;
+        creators["vashj static charge spread distance"] = &ValueContext::vashj_static_charge_spread_distance;
+        creators["morogrim last grave time"] = &ValueContext::morogrim_last_grave_time;
     }
 
 private:
@@ -555,6 +574,24 @@ private:
     static UntypedValue* last_flee_angle(PlayerbotAI* ai) { return new LastFleeAngleValue(ai); }
     static UntypedValue* last_flee_timestamp(PlayerbotAI* ai) { return new LastFleeTimestampValue(ai); }
     static UntypedValue* recently_flee_info(PlayerbotAI* ai) { return new RecentlyFleeInfo(ai); }
+    static UntypedValue* hydross_last_move_time(PlayerbotAI* ai) { return new ManualSetValue<uint32>(ai, 0, "hydross last move time"); }
+    static UntypedValue* hydross_mark_stacks(PlayerbotAI* ai) { return new ManualSetValue<uint8>(ai, 0, "hydross mark stacks"); }
+    static UntypedValue* hydross_transition_needed(PlayerbotAI* ai) { return new ManualSetValue<bool>(ai, false, "hydross transition needed"); }
+    static UntypedValue* hydross_water_tomb_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "hydross water tomb spread distance"); }
+    static UntypedValue* hydross_vile_sludge_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "hydross vile sludge spread distance"); }
+    static UntypedValue* hydross_active_add(PlayerbotAI* ai) { return new ManualSetValue<ObjectGuid>(ai, ObjectGuid::Empty, "hydross active add"); }
+    static UntypedValue* lurker_last_spout_time(PlayerbotAI* ai) { return new ManualSetValue<uint32>(ai, 0, "lurker last spout time"); }
+    static UntypedValue* lurker_in_water(PlayerbotAI* ai) { return new ManualSetValue<bool>(ai, false, "lurker in water"); }
+    static UntypedValue* lurker_spout_base_angle(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "lurker spout base angle"); }
+    static UntypedValue* lurker_geyser_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "lurker geyser spread distance"); }
+    static UntypedValue* leotheras_last_whirlwind_time(PlayerbotAI* ai) { return new ManualSetValue<uint32>(ai, 0, "leotheras last whirlwind time"); }
+    static UntypedValue* leotheras_has_demon(PlayerbotAI* ai) { return new ManualSetValue<bool>(ai, false, "leotheras has demon"); }
+    static UntypedValue* leotheras_chaos_blast_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "leotheras chaos blast spread distance"); }
+    static UntypedValue* leotheras_whirlwind_hold_until(PlayerbotAI* ai) { return new ManualSetValue<uint32>(ai, 0, "leotheras whirlwind hold until"); }
+    static UntypedValue* leotheras_shadow_target(PlayerbotAI* ai) { return new ManualSetValue<ObjectGuid>(ai, ObjectGuid::Empty, "leotheras shadow target"); }
+    static UntypedValue* karathress_sear_nova_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "karathress sear nova spread distance"); }
+    static UntypedValue* vashj_static_charge_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "vashj static charge spread distance"); }
+    static UntypedValue* morogrim_last_grave_time(PlayerbotAI* ai) { return new ManualSetValue<uint32>(ai, 0, "morogrim last grave time"); }
     // -------------------------------------------------------
     // Flag for cutom glyphs : true when /w bot glyph equip
     // -------------------------------------------------------

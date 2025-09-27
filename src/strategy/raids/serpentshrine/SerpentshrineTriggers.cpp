@@ -7,14 +7,16 @@
 #include "AiObjectContext.h"
 #include "Value.h"
 
-extern std::map<ObjectGuid, uint8> g_hydross_markStacks;
-extern std::map<ObjectGuid, bool> g_hydross_transitionNeeded;
-
 bool HydrossMarkOfHydrossTrigger::IsActive()
 {
     if (!bot || !botAI)
     {
         return false;
+    }
+
+    if (bot->HasAura(SPELL_VILE_SLUDGE))
+    {
+        return true;
     }
 
     Unit* boss = AI_VALUE2(Unit*, "find target", "hydross the unstable");
@@ -53,6 +55,11 @@ bool HydrossWaterTombTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
+    }
+
+    if (AI_VALUE(float, "hydross water tomb spread distance") > 0.0f)
+    {
+        return true;
     }
 
     // Check for cast or if boss is in water phase and about to cast
@@ -113,6 +120,11 @@ bool HydrossVileSludgeTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
+    }
+
+    if (AI_VALUE(float, "hydross vile sludge spread distance") > 0.0f)
+    {
+        return true;
     }
 
     if (boss->HasAura(SPELL_HYDROSS_CORRUPTION))
@@ -187,10 +199,10 @@ bool HydrossTransitionNeededTrigger::IsActive()
         return false;
     }
 
-    ObjectGuid botGuid = bot->GetGUID();
-    uint8 stacks = g_hydross_markStacks[botGuid];
-    
-    return stacks >= 4 && g_hydross_transitionNeeded[botGuid];
+    uint8 stacks = AI_VALUE(uint8, "hydross mark stacks");
+    bool transitionNeeded = AI_VALUE(bool, "hydross transition needed");
+
+    return stacks >= 4 && transitionNeeded;
 }
 
 bool HydrossTankPositionTrigger::IsActive()
@@ -239,6 +251,11 @@ bool LurkerSpoutTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
+    }
+
+    if (AI_VALUE(float, "lurker geyser spread distance") > 0.0f)
+    {
+        return true;
     }
 
     // Detect spout cast or visual
@@ -393,6 +410,12 @@ bool LeotherasWhirlwindTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
+    }
+
+    uint32 holdUntil = AI_VALUE(uint32, "leotheras whirlwind hold until");
+    if (holdUntil > getMSTime())
+    {
+        return true;
     }
 
     // Check for whirlwind cast
@@ -565,9 +588,14 @@ bool KarathressCataclysmicBoltTrigger::IsActive()
     }
 
     Unit* boss = AI_VALUE2(Unit*, "find target", "fathom-lord karathress");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+   if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+   {
+       return false;
+   }
+
+    if (AI_VALUE(float, "karathress sear nova spread distance") > 0.0f)
     {
-        return false;
+        return true;
     }
 
     // Cataclysmic Bolt targets mana users
@@ -929,6 +957,11 @@ bool VashjStaticChargeTrigger::IsActive()
     if (!bot || !botAI)
     {
         return false;
+    }
+
+    if (AI_VALUE(float, "vashj static charge spread distance") > 0.0f)
+    {
+        return true;
     }
 
     // Check if bot has Static Charge and needs to spread

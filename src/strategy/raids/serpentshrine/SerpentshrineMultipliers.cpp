@@ -106,3 +106,24 @@ float HydrossTankMultiplier::GetValue(Action* action)
 
     return 1.0f;
 }
+
+float LeotherasThreatHoldMultiplier::GetValue(Action* action)
+{
+    if (!bot || !botAI)
+    {
+        return 1.0f;
+    }
+
+    if (botAI->IsTank(bot))
+    {
+        return 1.0f;
+    }
+
+    uint32 holdUntil = AI_VALUE(uint32, "leotheras whirlwind hold until");
+    if (holdUntil > getMSTime())
+    {
+        return 0.0f;
+    }
+
+    return 1.0f;
+}

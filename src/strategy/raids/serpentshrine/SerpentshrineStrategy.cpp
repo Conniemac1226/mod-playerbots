@@ -195,4 +195,5 @@ void SerpentshrineStrategy::InitMultipliers(std::vector<Multiplier*>& multiplier
     multipliers.push_back(new HydrossResistanceMultiplier(botAI));
     multipliers.push_back(new HydrossAddsMultiplier(botAI));
     multipliers.push_back(new HydrossTankMultiplier(botAI));
+    multipliers.push_back(new LeotherasThreatHoldMultiplier(botAI));
 }

@@ -502,95 +502,161 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     ObjectGuid guid = bot->GetGUID();
     uint32 now = getMSTime();
     uint32& lastMove = g_sepethrea_lastKiteMove[guid];
-    if (lastMove && now - lastMove < 400) // throttle pathing
+    if (lastMove && now - lastMove < 400)
         return false;
 
-    // Base angle from flame -> bot, then rotate +/- 60 degrees with per-bot phase
     float baseAngle = atan2f(bot->GetPositionY() - center.GetPositionY(), bot->GetPositionX() - center.GetPositionX());
     float phase = g_sepethrea_kitePhase.count(guid) ? g_sepethrea_kitePhase[guid] : float((guid.GetCounter() % 6) - 3) * 0.12f;
     g_sepethrea_kitePhase[guid] = phase;
     int& dir = g_sepethrea_kiteDir[guid];
-    if (dir == 0) dir = (guid.GetCounter() % 2 == 0) ? 1 : -1;
+    if (dir == 0)
+        dir = (guid.GetCounter() % 2 == 0) ? 1 : -1;
 
-    // Evaluate candidate waypoints (tangential arc)
+    const bool isHealer = botAI->IsHeal(bot);
+    const float desiredRadius = isHealer ? 24.0f : 20.0f;
+    const float minRadius = isHealer ? 16.0f : 14.0f;
+    const float radiusStep = 2.5f;
+
     float bestScore = -1.0f;
     Position bestPos;
-    const bool isHealer = botAI->IsHeal(bot);
-    const float radius = isHealer ? 24.0f : 20.0f;
-    // Try biased to current direction first to prevent zig-zag at walls
-    for (int step = 0; step <= 4; ++step)
+
+    auto scoreCandidate = [&](const Position& candidate) -> float
     {
-        int i = dir * (step == 0 ? 1 : step); // 1,2,3,4 in current dir
-        float ang = baseAngle + phase + i * 0.35f; // spread candidates along arc
-        Position p;
-        p.m_positionX = center.GetPositionX() + cosf(ang) * radius;
-        p.m_positionY = center.GetPositionY() + sinf(ang) * radius;
-        p.m_positionZ = bot->GetPositionZ();
-        p = ConstrainToRoom(p, botAI);
-
-        if (!IsPositionSafe(p, botAI) || !IsPathClear(bot->GetPosition(), p, botAI) ||
-            !IsPathSafeFromFlames(bot->GetPosition(), p, botAI, 10.0f))
-            continue;
-
-        // Score by distance from all flames and away from boss frontal (for breath)
-        float minFlameDist = 9999.0f;
-        const GuidVector npcs2 = AI_VALUE(GuidVector, "nearest hostile npcs");
-        for (auto& npc2 : npcs2)
+        float minFlameDist = 1000.0f;
+        const GuidVector flameGuids = AI_VALUE(GuidVector, "nearest hostile npcs");
+        for (auto const& flameGuid : flameGuids)
         {
-            Unit* u = botAI->GetUnit(npc2);
-            if (u && u->IsAlive() && u->GetEntry() == NPC_RAGING_FLAMES)
+            Unit* flame = botAI->GetUnit(flameGuid);
+            if (flame && flame->IsAlive() && flame->GetEntry() == NPC_RAGING_FLAMES)
             {
-                float d = p.GetExactDist2d(u);
-                if (d < minFlameDist) minFlameDist = d;
+                float d = candidate.GetExactDist2d(flame);
+                if (d < minFlameDist)
+                    minFlameDist = d;
             }
         }
-        if (minFlameDist < (isHealer ? 14.0f : 10.0f)) // too close to any flame
-            continue;
 
-        // Healers prefer staying within 35y of the nearest tank to keep healing range
+        if (minFlameDist < (isHealer ? 14.0f : 10.0f))
+            return -1.0f;
+
         float rangePenalty = 0.0f;
         if (isHealer)
         {
-            Unit* bestTank = nullptr; float bestTankD = 1e9f;
+            float closestTank = 1e9f;
             const GuidVector members = AI_VALUE(GuidVector, "group members");
-            for (auto& m : members)
+            for (auto const& memberGuid : members)
             {
-                Player* pl = botAI->GetPlayer(m);
-                if (pl && pl->IsAlive() && botAI->IsTank(pl))
+                Player* member = botAI->GetPlayer(memberGuid);
+                if (member && member->IsAlive() && botAI->IsTank(member))
                 {
-                    float d = p.GetExactDist2d(pl);
-                    if (d < bestTankD) { bestTankD = d; bestTank = pl; }
+                    float d = candidate.GetExactDist2d(member);
+                    if (d < closestTank)
+                        closestTank = d;
                 }
             }
-            if (bestTank)
-            {
-                if (bestTankD > 35.0f) rangePenalty = (bestTankD - 35.0f) * 0.5f; // penalize being too far to heal
-            }
+            if (closestTank < 1e9f && closestTank > 35.0f)
+                rangePenalty = (closestTank - 35.0f) * 0.5f;
         }
 
-        float score = minFlameDist - fabsf(i) * 1.5f - rangePenalty; // prefer further from flames, keep healer in range
-        if (score > bestScore)
+        return minFlameDist - rangePenalty;
+    };
+
+    auto evaluateDirection = [&](int stepDir)
+    {
+        for (int step = 1; step <= 4; ++step)
         {
-            bestScore = score;
-            bestPos = p;
+            float ang = baseAngle + phase + stepDir * step * 0.35f;
+            for (float r = desiredRadius; r >= minRadius; r -= radiusStep)
+            {
+                Position raw;
+                raw.m_positionX = center.GetPositionX() + cosf(ang) * r;
+                raw.m_positionY = center.GetPositionY() + sinf(ang) * r;
+                raw.m_positionZ = bot->GetPositionZ();
+
+                Position constrained = ConstrainToRoom(raw, botAI);
+                float clampDelta = fabsf(raw.m_positionX - constrained.m_positionX) + fabsf(raw.m_positionY - constrained.m_positionY);
+                if (clampDelta > 1.2f)
+                    continue;
+
+                if (!IsPositionSafe(constrained, botAI))
+                    continue;
+                if (!IsPathClear(bot->GetPosition(), constrained, botAI))
+                    continue;
+                if (!IsPathSafeFromFlames(bot->GetPosition(), constrained, botAI, 10.0f))
+                    continue;
+
+                float score = scoreCandidate(constrained);
+                if (score <= 0.0f)
+                    continue;
+
+                score -= (desiredRadius - r) * 0.6f;
+                score -= step * 0.8f;
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    bestPos = constrained;
+                }
+            }
         }
-    }
+    };
+
+    evaluateDirection(dir);
+    if (bestScore <= 0.0f)
+        evaluateDirection(-dir);
 
     if (bestScore > 0.0f)
     {
         lastMove = now;
+        g_sepethrea_blockedTries[guid] = 0;
         return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY, bestPos.m_positionZ,
                       false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
     }
 
-    // Fallback: if blocked repeatedly, flip direction
     uint32& blocked = g_sepethrea_blockedTries[guid];
     blocked++;
-    if (blocked > 3) { dir = -dir; blocked = 0; }
+    if (blocked > 3)
+    {
+        dir = -dir;
+        blocked = 0;
+    }
 
-    // Fallback: flee directly if no good tangent found
+    const float halfPi = 1.5707963f;
+    float fallbackAngle = bot->GetAngle(targetingFlame) + (dir > 0 ? halfPi : -halfPi);
+    for (float r = desiredRadius; r >= minRadius; r -= radiusStep)
+    {
+        Position raw;
+        raw.m_positionX = center.GetPositionX() + cosf(fallbackAngle) * r;
+        raw.m_positionY = center.GetPositionY() + sinf(fallbackAngle) * r;
+        raw.m_positionZ = bot->GetPositionZ();
+        Position constrained = ConstrainToRoom(raw, botAI);
+
+        float clampDelta = fabsf(raw.m_positionX - constrained.m_positionX) + fabsf(raw.m_positionY - constrained.m_positionY);
+        if (clampDelta > 1.2f)
+            continue;
+
+        if (IsPositionSafe(constrained, botAI) &&
+            IsPathClear(bot->GetPosition(), constrained, botAI) &&
+            IsPathSafeFromFlames(bot->GetPosition(), constrained, botAI, 8.0f))
+        {
+            lastMove = now;
+            blocked = 0;
+            return MoveTo(bot->GetMapId(), constrained.m_positionX, constrained.m_positionY, constrained.m_positionZ,
+                          false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        }
+    }
+
+    Position away;
+    float awayAngle = bot->GetAngle(targetingFlame) + M_PI;
+    float awayDist = isHealer ? 22.0f : 18.0f;
+    away.m_positionX = bot->GetPositionX() + cosf(awayAngle) * awayDist;
+    away.m_positionY = bot->GetPositionY() + sinf(awayAngle) * awayDist;
+    away.m_positionZ = bot->GetPositionZ();
+    Position safeAway = ConstrainToRoom(away, botAI);
+
     lastMove = now;
-    return FleePosition(targetingFlame->GetPosition(), 20.0f, 1000U);
+    blocked = 0;
+    return MoveTo(bot->GetMapId(), safeAway.m_positionX, safeAway.m_positionY, safeAway.m_positionZ,
+                  false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
 }
 
 bool SepethreaRagingFlamesAction::isUseful()
