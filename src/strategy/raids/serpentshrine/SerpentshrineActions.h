@@ -254,12 +254,6 @@ public:
     bool Execute(Event event) override;
 };
 
-class KarathressCycloneFallAction : public MovementAction
-{
-public:
-    KarathressCycloneFallAction(PlayerbotAI* botAI) : MovementAction(botAI, "karathress cyclone fall") {}
-    bool Execute(Event event) override;
-};
 
 class KarathressTidalSurgeAction : public MovementAction
 {
@@ -295,6 +289,17 @@ class MorogrimMurlocsAction : public AttackAction
 public:
     MorogrimMurlocsAction(PlayerbotAI* botAI) : AttackAction(botAI, "morogrim murlocs") {}
     bool Execute(Event event) override;
+};
+
+class MorogrimOfftankMurlocsAction : public AttackAction
+{
+public:
+    MorogrimOfftankMurlocsAction(PlayerbotAI* botAI) : AttackAction(botAI, "morogrim offtank murlocs") {}
+    bool Execute(Event event) override;
+
+private:
+    bool HandleOfftankAddManagement(Unit* boss);
+    bool IsValidMurlocAdd(Unit* unit);
 };
 
 class MorogrimGlobulesAction : public MovementAction

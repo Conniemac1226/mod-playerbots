@@ -1808,24 +1808,6 @@ bool KarathressSpreadAction::Execute(Event event)
     return true;
 }
 
-bool KarathressCycloneFallAction::Execute(Event event)
-{
-    if (!bot || !botAI)
-    {
-        return false;
-    }
-
-    // Force natural falling by clearing motion and updating position to ground
-    bot->GetMotionMaster()->Clear();
-
-    float currentZ = bot->GetPositionZ();
-    float groundZ = bot->GetMapWaterOrGroundLevel(bot->GetPositionX(), bot->GetPositionY(), currentZ);
-
-    // Immediately teleport to ground to simulate natural fall completion
-    bot->NearTeleportTo(bot->GetPositionX(), bot->GetPositionY(), groundZ, bot->GetOrientation());
-
-    return true;
-}
 
 bool KarathressTotemsAction::Execute(Event event)
 {
@@ -1834,16 +1816,6 @@ bool KarathressTotemsAction::Execute(Event event)
         return false;
     }
 
-    // UNIVERSAL DEBUG: Prove this action can execute in Serpentshrine
-    static std::map<ObjectGuid, uint32> g_universalDebugTime;
-    uint32 currentTime = getMSTime();
-
-    if (bot->GetMapId() == 548 && g_universalDebugTime[bot->GetGUID()] + 5000 < currentTime)
-    {
-        g_universalDebugTime[bot->GetGUID()] = currentTime;
-        LOG_INFO("playerbots", "UNIVERSAL_DEBUG: {} | Totems action executing in Serpentshrine - strategy IS working",
-            bot->GetName().c_str());
-    }
 
     if (botAI->IsHeal(bot))
     {
@@ -2114,6 +2086,103 @@ bool MorogrimMurlocsAction::Execute(Event event)
     }
 
     return false;
+}
+
+bool MorogrimOfftankMurlocsAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    // WotLK Pattern: Only for assist tanks (off-tanks)
+    if (!botAI->IsAssistTank(bot))
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "morogrim tidewalker");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Use WotLK proven off-tank add management pattern
+    return HandleOfftankAddManagement(boss);
+}
+
+bool MorogrimOfftankMurlocsAction::HandleOfftankAddManagement(Unit* boss)
+{
+    Unit* mainTank = AI_VALUE(Unit*, "main tank");
+    if (!mainTank)
+        return false;
+
+    // Look for priority adds that need to be collected
+    Unit* targetAdd = nullptr;
+    float closestDist = FLT_MAX;
+    bool foundPriorityAdd = false;
+
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+
+    // Priority 1: Adds attacking non-tanks (players/healers/DPS)
+    for (auto i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = botAI->GetUnit(*i);
+        if (!IsValidMurlocAdd(unit))
+            continue;
+
+        Unit* victim = unit->GetVictim();
+        if (victim && victim->GetTypeId() == TYPEID_PLAYER)
+        {
+            Player* targetPlayer = victim->ToPlayer();
+            PlayerbotAI* targetBotAI = GET_PLAYERBOT_AI(targetPlayer);
+
+            // High priority: Add attacking non-tank
+            if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
+            {
+                float dist = bot->GetDistance(unit);
+                if (dist < closestDist)
+                {
+                    targetAdd = unit;
+                    closestDist = dist;
+                    foundPriorityAdd = true;
+                }
+            }
+        }
+    }
+
+    // Priority 2: Adds not attacking main tank (if no priority adds found)
+    if (!foundPriorityAdd)
+    {
+        for (auto i = targets.begin(); i != targets.end(); ++i)
+        {
+            Unit* unit = botAI->GetUnit(*i);
+            if (!IsValidMurlocAdd(unit))
+                continue;
+
+            Unit* victim = unit->GetVictim();
+            if (!victim || victim != mainTank)
+            {
+                float dist = bot->GetDistance(unit);
+                if (dist < closestDist)
+                {
+                    targetAdd = unit;
+                    closestDist = dist;
+                }
+            }
+        }
+    }
+
+    // Attack the highest priority add found
+    if (targetAdd)
+    {
+        return Attack(targetAdd);
+    }
+
+    return false;
+}
+
+bool MorogrimOfftankMurlocsAction::IsValidMurlocAdd(Unit* unit)
+{
+    if (!unit || !unit->IsAlive())
+        return false;
+
+    // Check for Tidewalker Lurker murlocs
+    return unit->GetEntry() == NPC_TIDEWALKER_LURKER;
 }
 
 bool MorogrimGlobulesAction::Execute(Event event)

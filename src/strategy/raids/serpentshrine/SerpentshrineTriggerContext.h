@@ -37,7 +37,6 @@ public:
         creators["karathress sear nova"] = &SerpentshrineTriggerContext::karathress_sear_nova;
         creators["karathress advisors"] = &SerpentshrineTriggerContext::karathress_advisors;
         creators["karathress cyclone"] = &SerpentshrineTriggerContext::karathress_cyclone;
-        creators["karathress cyclone ended"] = &SerpentshrineTriggerContext::karathress_cyclone_ended;
         creators["karathress spread"] = &SerpentshrineTriggerContext::karathress_spread;
         creators["karathress tidal surge"] = &SerpentshrineTriggerContext::karathress_tidal_surge;
         creators["karathress totems"] = &SerpentshrineTriggerContext::karathress_totems;
@@ -46,6 +45,7 @@ public:
         creators["morogrim tidal wave"] = &SerpentshrineTriggerContext::morogrim_tidal_wave;
         creators["morogrim watery grave"] = &SerpentshrineTriggerContext::morogrim_watery_grave;
         creators["morogrim murlocs"] = &SerpentshrineTriggerContext::morogrim_murlocs;
+        creators["morogrim offtank murlocs"] = &SerpentshrineTriggerContext::morogrim_offtank_murlocs;
         creators["morogrim globules"] = &SerpentshrineTriggerContext::morogrim_globules;
         creators["morogrim position"] = &SerpentshrineTriggerContext::morogrim_position;
         
@@ -90,7 +90,6 @@ private:
     static Trigger* karathress_sear_nova(PlayerbotAI* botAI) { return new KarathressSearNovaTrigger(botAI); }
     static Trigger* karathress_advisors(PlayerbotAI* botAI) { return new KarathressAdvisorsTrigger(botAI); }
     static Trigger* karathress_cyclone(PlayerbotAI* botAI) { return new KarathressCycloneTrigger(botAI); }
-    static Trigger* karathress_cyclone_ended(PlayerbotAI* botAI) { return new KarathressCycloneEndedTrigger(botAI); }
     static Trigger* karathress_spread(PlayerbotAI* botAI) { return new KarathressSpreadTrigger(botAI); }
     static Trigger* karathress_tidal_surge(PlayerbotAI* botAI) { return new KarathressTidalSurgeTrigger(botAI); }
     static Trigger* karathress_totems(PlayerbotAI* botAI) { return new KarathressTotemsTrigger(botAI); }
@@ -99,6 +98,7 @@ private:
     static Trigger* morogrim_tidal_wave(PlayerbotAI* botAI) { return new MorogrimTidalWaveTrigger(botAI); }
     static Trigger* morogrim_watery_grave(PlayerbotAI* botAI) { return new MorogrimWateryGraveTrigger(botAI); }
     static Trigger* morogrim_murlocs(PlayerbotAI* botAI) { return new MorogrimMurlocsTrigger(botAI); }
+    static Trigger* morogrim_offtank_murlocs(PlayerbotAI* botAI) { return new MorogrimOfftankMurlocsTrigger(botAI); }
     static Trigger* morogrim_globules(PlayerbotAI* botAI) { return new MorogrimGlobulesTrigger(botAI); }
     static Trigger* morogrim_position(PlayerbotAI* botAI) { return new MorogrimPositionTrigger(botAI); }
     

@@ -757,26 +757,6 @@ bool KarathressSpreadTrigger::IsActive()
     return AI_VALUE(float, "disperse distance") != 12.0f;
 }
 
-bool KarathressCycloneEndedTrigger::IsActive()
-{
-    if (!bot || !botAI)
-    {
-        return false;
-    }
-
-    // Naxxramas Pattern: Check if cyclone aura was removed
-    bool check = bot->HasAura(38517); // Karathress Cyclone spell
-    bool ret = false;
-
-    if (prev_check && !check)
-    {
-        // Cyclone just ended - bot needs to fall naturally
-        ret = true;
-    }
-
-    prev_check = check;
-    return ret;
-}
 
 bool KarathressTidalSurgeTrigger::IsActive()
 {
@@ -827,16 +807,6 @@ bool KarathressTotemsTrigger::IsActive()
         return false;
     }
 
-    // UNIVERSAL DEBUG: Prove triggers are being evaluated in Serpentshrine
-    static std::map<ObjectGuid, uint32> g_triggerDebugTime;
-    uint32 currentTime = getMSTime();
-
-    if (bot->GetMapId() == 548 && g_triggerDebugTime[bot->GetGUID()] + 8000 < currentTime)
-    {
-        g_triggerDebugTime[bot->GetGUID()] = currentTime;
-        LOG_INFO("playerbots", "UNIVERSAL_DEBUG: {} | Totems trigger being evaluated - triggers ARE working",
-            bot->GetName().c_str());
-    }
 
     if (!IsKarathressEncounterActive(botAI, bot))
     {
@@ -981,6 +951,53 @@ bool MorogrimMurlocsTrigger::IsActive()
             float distance = bot->GetDistance(unit);
             if (distance < 40.0f)
             {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool MorogrimOfftankMurlocsTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // WotLK Pattern: Only for assist tanks (off-tanks)
+    if (!botAI->IsAssistTank(bot))
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "morogrim tidewalker");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Check if there are murloc adds present that need to be tanked
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = botAI->GetUnit(*i);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_TIDEWALKER_LURKER)
+        {
+            // WotLK Pattern: Check if add is attacking a non-tank or not attacking main tank
+            Unit* victim = unit->GetVictim();
+            if (victim && victim->GetTypeId() == TYPEID_PLAYER)
+            {
+                Player* targetPlayer = victim->ToPlayer();
+                PlayerbotAI* targetBotAI = GET_PLAYERBOT_AI(targetPlayer);
+
+                // Priority: Add attacking non-tank
+                if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
+                    return true;
+
+                // Secondary: Add not attacking main tank
+                Unit* mainTank = AI_VALUE(Unit*, "main tank");
+                if (mainTank && victim != mainTank)
+                    return true;
+            }
+            else if (!victim)
+            {
+                // Add with no target needs to be collected
                 return true;
             }
         }

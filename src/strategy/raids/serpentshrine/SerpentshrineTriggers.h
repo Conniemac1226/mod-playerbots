@@ -169,14 +169,6 @@ public:
     bool IsActive() override;
 };
 
-class KarathressCycloneEndedTrigger : public Trigger
-{
-private:
-    bool prev_check;
-public:
-    KarathressCycloneEndedTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karathress cyclone ended", 1) { this->prev_check = false; }
-    bool IsActive() override;
-};
 
 class KarathressTidalSurgeTrigger : public Trigger
 {
@@ -211,6 +203,13 @@ class MorogrimMurlocsTrigger : public Trigger
 {
 public:
     MorogrimMurlocsTrigger(PlayerbotAI* botAI) : Trigger(botAI, "morogrim murlocs") {}
+    bool IsActive() override;
+};
+
+class MorogrimOfftankMurlocsTrigger : public Trigger
+{
+public:
+    MorogrimOfftankMurlocsTrigger(PlayerbotAI* botAI) : Trigger(botAI, "morogrim offtank murlocs") {}
     bool IsActive() override;
 };
 

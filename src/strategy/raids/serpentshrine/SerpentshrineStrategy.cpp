@@ -101,10 +101,6 @@ void SerpentshrineStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "karathress cyclone",
         NextAction::array(0, new NextAction("karathress cyclone", ACTION_EMERGENCY + 4), nullptr)));
 
-    // Force natural falling when cyclone ends
-    triggers.push_back(new TriggerNode(
-        "karathress cyclone ended",
-        NextAction::array(0, new NextAction("karathress cyclone fall", ACTION_EMERGENCY + 5), nullptr)));
 
     // Continuous spread for ranged DPS to prevent cyclone clustering
     triggers.push_back(new TriggerNode(
@@ -142,6 +138,11 @@ void SerpentshrineStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "morogrim watery grave",
         NextAction::array(0, new NextAction("morogrim watery grave", ACTION_EMERGENCY + 2), nullptr)));
     
+    // Off-tank murloc add management - highest priority for assist tanks
+    triggers.push_back(new TriggerNode(
+        "morogrim offtank murlocs",
+        NextAction::array(0, new NextAction("morogrim offtank murlocs", ACTION_EMERGENCY + 4), nullptr)));
+
     // Murlocs are highest priority - must die fast
     triggers.push_back(new TriggerNode(
         "morogrim murlocs",

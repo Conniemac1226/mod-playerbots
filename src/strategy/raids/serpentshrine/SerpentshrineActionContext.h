@@ -37,7 +37,6 @@ public:
         creators["karathress sear nova"] = &SerpentshrineActionContext::karathress_sear_nova;
         creators["karathress advisors"] = &SerpentshrineActionContext::karathress_advisors;
         creators["karathress cyclone"] = &SerpentshrineActionContext::karathress_cyclone;
-        creators["karathress cyclone fall"] = &SerpentshrineActionContext::karathress_cyclone_fall;
         creators["karathress spread"] = &SerpentshrineActionContext::karathress_spread;
         creators["karathress tidal surge"] = &SerpentshrineActionContext::karathress_tidal_surge;
         creators["karathress totems"] = &SerpentshrineActionContext::karathress_totems;
@@ -46,6 +45,7 @@ public:
         creators["morogrim tidal wave"] = &SerpentshrineActionContext::morogrim_tidal_wave;
         creators["morogrim watery grave"] = &SerpentshrineActionContext::morogrim_watery_grave;
         creators["morogrim murlocs"] = &SerpentshrineActionContext::morogrim_murlocs;
+        creators["morogrim offtank murlocs"] = &SerpentshrineActionContext::morogrim_offtank_murlocs;
         creators["morogrim globules"] = &SerpentshrineActionContext::morogrim_globules;
         creators["morogrim position"] = &SerpentshrineActionContext::morogrim_position;
         
@@ -90,7 +90,6 @@ private:
     static Action* karathress_sear_nova(PlayerbotAI* botAI) { return new KarathressSearNovaAction(botAI); }
     static Action* karathress_advisors(PlayerbotAI* botAI) { return new KarathressAdvisorsAction(botAI); }
     static Action* karathress_cyclone(PlayerbotAI* botAI) { return new KarathressCycloneAction(botAI); }
-    static Action* karathress_cyclone_fall(PlayerbotAI* botAI) { return new KarathressCycloneFallAction(botAI); }
     static Action* karathress_spread(PlayerbotAI* botAI) { return new KarathressSpreadAction(botAI); }
     static Action* karathress_tidal_surge(PlayerbotAI* botAI) { return new KarathressTidalSurgeAction(botAI); }
     static Action* karathress_totems(PlayerbotAI* botAI) { return new KarathressTotemsAction(botAI); }
@@ -99,6 +98,7 @@ private:
     static Action* morogrim_tidal_wave(PlayerbotAI* botAI) { return new MorogrimTidalWaveAction(botAI); }
     static Action* morogrim_watery_grave(PlayerbotAI* botAI) { return new MorogrimWateryGraveAction(botAI); }
     static Action* morogrim_murlocs(PlayerbotAI* botAI) { return new MorogrimMurlocsAction(botAI); }
+    static Action* morogrim_offtank_murlocs(PlayerbotAI* botAI) { return new MorogrimOfftankMurlocsAction(botAI); }
     static Action* morogrim_globules(PlayerbotAI* botAI) { return new MorogrimGlobulesAction(botAI); }
     static Action* morogrim_position(PlayerbotAI* botAI) { return new MorogrimPositionAction(botAI); }
     
