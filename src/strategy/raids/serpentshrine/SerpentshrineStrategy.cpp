@@ -1,8 +1,10 @@
 #include "SerpentshrineStrategy.h"
 #include "SerpentshrineMultipliers.h"
+#include "Log.h"
 
 void SerpentshrineStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    // Strategy is loading correctly
     // Tank transition is highest priority - prevents wipes from too many stacks
     triggers.push_back(new TriggerNode(
         "hydross transition needed",
@@ -94,7 +96,21 @@ void SerpentshrineStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "karathress advisors",
         NextAction::array(0, new NextAction("karathress advisors", ACTION_EMERGENCY + 3), nullptr)));
-    
+
+    triggers.push_back(new TriggerNode(
+        "karathress cyclone",
+        NextAction::array(0, new NextAction("karathress cyclone", ACTION_EMERGENCY + 4), nullptr)));
+
+    // Force natural falling when cyclone ends
+    triggers.push_back(new TriggerNode(
+        "karathress cyclone ended",
+        NextAction::array(0, new NextAction("karathress cyclone fall", ACTION_EMERGENCY + 5), nullptr)));
+
+    // Continuous spread for ranged DPS to prevent cyclone clustering
+    triggers.push_back(new TriggerNode(
+        "karathress spread",
+        NextAction::array(0, new NextAction("karathress spread", ACTION_NORMAL + 5), nullptr)));
+
     // Totems are high priority
     triggers.push_back(new TriggerNode(
         "karathress totems",
@@ -196,4 +212,5 @@ void SerpentshrineStrategy::InitMultipliers(std::vector<Multiplier*>& multiplier
     multipliers.push_back(new HydrossAddsMultiplier(botAI));
     multipliers.push_back(new HydrossTankMultiplier(botAI));
     multipliers.push_back(new LeotherasThreatHoldMultiplier(botAI));
+    multipliers.push_back(new SerpentshrinePriorityMultiplier(botAI));
 }

@@ -7,6 +7,55 @@
 #include "AiObjectContext.h"
 #include "Value.h"
 
+namespace
+{
+    bool IsKarathressEncounterActive(PlayerbotAI* botAI, Player* bot)
+    {
+        if (!botAI || !bot)
+        {
+            return false;
+        }
+
+        AiObjectContext* context = botAI->GetAiObjectContext();
+        if (!context)
+        {
+            return false;
+        }
+
+        Unit* boss = context->GetValue<Unit*>("find target", "fathom-lord karathress")->Get();
+        if (boss && boss->IsAlive() && boss->IsInCombat())
+        {
+            return true;
+        }
+
+        Value<GuidVector>* npcsValue = context->GetValue<GuidVector>("nearest hostile npcs");
+        if (!npcsValue)
+        {
+            return false;
+        }
+
+        for (ObjectGuid const& guid : npcsValue->Get())
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (!unit || !unit->IsAlive() || !unit->IsInCombat())
+            {
+                continue;
+            }
+
+            uint32 entry = unit->GetEntry();
+            if (entry == NPC_FATHOM_LORD_KARATHRESS ||
+                entry == NPC_FATHOM_GUARD_TIDALVESS ||
+                entry == NPC_FATHOM_GUARD_SHARKKIS ||
+                entry == NPC_FATHOM_GUARD_CARIBDIS)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 bool HydrossMarkOfHydrossTrigger::IsActive()
 {
     if (!bot || !botAI)
@@ -642,6 +691,11 @@ bool KarathressAdvisorsTrigger::IsActive()
         return false;
     }
 
+    if (!IsKarathressEncounterActive(botAI, bot))
+    {
+        return false;
+    }
+
     Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
     if (!npcsValue)
     {
@@ -667,9 +721,71 @@ bool KarathressAdvisorsTrigger::IsActive()
     return false;
 }
 
+bool KarathressCycloneTrigger::IsActive()
+{
+    if (!bot || !botAI)
+    {
+        return false;
+    }
+
+    // Simple aura check - if bot has cyclone aura, activate wait state
+    return bot->HasAura(38517); // Karathress Cyclone spell
+}
+
+bool KarathressSpreadTrigger::IsActive()
+{
+    if (!bot || !botAI)
+    {
+        return false;
+    }
+
+    // WotLK Pattern: Continuous spread while Karathress encounter is active
+    // Only ranged DPS need to spread to avoid cyclones
+    if (botAI->IsHeal(bot) || botAI->IsTank(bot))
+    {
+        return false;
+    }
+
+    // Check if Karathress encounter is active
+    Unit* karathress = bot->FindNearestCreature(NPC_FATHOM_LORD_KARATHRESS, 150.0f, true);
+    if (!karathress || !karathress->IsInCombat())
+    {
+        return false;
+    }
+
+    // WotLK Pattern: Check if disperse distance is not set to prevent cyclone clustering
+    return AI_VALUE(float, "disperse distance") != 12.0f;
+}
+
+bool KarathressCycloneEndedTrigger::IsActive()
+{
+    if (!bot || !botAI)
+    {
+        return false;
+    }
+
+    // Naxxramas Pattern: Check if cyclone aura was removed
+    bool check = bot->HasAura(38517); // Karathress Cyclone spell
+    bool ret = false;
+
+    if (prev_check && !check)
+    {
+        // Cyclone just ended - bot needs to fall naturally
+        ret = true;
+    }
+
+    prev_check = check;
+    return ret;
+}
+
 bool KarathressTidalSurgeTrigger::IsActive()
 {
     if (!bot || !botAI)
+    {
+        return false;
+    }
+
+    if (!IsKarathressEncounterActive(botAI, bot))
     {
         return false;
     }
@@ -711,29 +827,56 @@ bool KarathressTotemsTrigger::IsActive()
         return false;
     }
 
-    Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
-    if (!npcsValue)
+    // UNIVERSAL DEBUG: Prove triggers are being evaluated in Serpentshrine
+    static std::map<ObjectGuid, uint32> g_triggerDebugTime;
+    uint32 currentTime = getMSTime();
+
+    if (bot->GetMapId() == 548 && g_triggerDebugTime[bot->GetGUID()] + 8000 < currentTime)
+    {
+        g_triggerDebugTime[bot->GetGUID()] = currentTime;
+        LOG_INFO("playerbots", "UNIVERSAL_DEBUG: {} | Totems trigger being evaluated - triggers ARE working",
+            bot->GetName().c_str());
+    }
+
+    if (!IsKarathressEncounterActive(botAI, bot))
     {
         return false;
     }
-    GuidVector npcs = npcsValue->Get();
-    
-    for (ObjectGuid const& npcGuid : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npcGuid);
-        if (!unit || !unit->IsAlive())
-            continue;
 
-        // Check for totems that need to be killed
-        if (unit->GetEntry() == NPC_SPITFIRE_TOTEM ||
-            unit->GetEntry() == NPC_GREATER_EARTHBIND_TOTEM)
+    auto const hasPriorityTotem = [&](GuidVector const& candidates)
+    {
+        for (ObjectGuid const& npcGuid : candidates)
         {
-            float distance = bot->GetDistance(unit);
-            if (distance < 30.0f)
+            Unit* unit = botAI->GetUnit(npcGuid);
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            switch (unit->GetEntry())
             {
-                return true;
+                case NPC_SPITFIRE_TOTEM:
+                case NPC_GREATER_EARTHBIND_TOTEM:
+                case NPC_GREATER_POISON_CLEANSING_TOTEM:
+                    if (bot->IsWithinDistInMap(unit, 60.0f))
+                        return true;
+                    break;
+                default:
+                    break;
             }
         }
+
+        return false;
+    };
+
+    if (Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets"))
+    {
+        if (hasPriorityTotem(npcsValue->Get()))
+            return true;
+    }
+
+    if (Value<GuidVector>* npcsNoLosValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets no los"))
+    {
+        if (hasPriorityTotem(npcsNoLosValue->Get()))
+            return true;
     }
 
     return false;

@@ -36,6 +36,9 @@ public:
         creators["karathress cataclysmic bolt"] = &SerpentshrineActionContext::karathress_cataclysmic_bolt;
         creators["karathress sear nova"] = &SerpentshrineActionContext::karathress_sear_nova;
         creators["karathress advisors"] = &SerpentshrineActionContext::karathress_advisors;
+        creators["karathress cyclone"] = &SerpentshrineActionContext::karathress_cyclone;
+        creators["karathress cyclone fall"] = &SerpentshrineActionContext::karathress_cyclone_fall;
+        creators["karathress spread"] = &SerpentshrineActionContext::karathress_spread;
         creators["karathress tidal surge"] = &SerpentshrineActionContext::karathress_tidal_surge;
         creators["karathress totems"] = &SerpentshrineActionContext::karathress_totems;
         
@@ -86,6 +89,9 @@ private:
     static Action* karathress_cataclysmic_bolt(PlayerbotAI* botAI) { return new KarathressCataclysmicBoltAction(botAI); }
     static Action* karathress_sear_nova(PlayerbotAI* botAI) { return new KarathressSearNovaAction(botAI); }
     static Action* karathress_advisors(PlayerbotAI* botAI) { return new KarathressAdvisorsAction(botAI); }
+    static Action* karathress_cyclone(PlayerbotAI* botAI) { return new KarathressCycloneAction(botAI); }
+    static Action* karathress_cyclone_fall(PlayerbotAI* botAI) { return new KarathressCycloneFallAction(botAI); }
+    static Action* karathress_spread(PlayerbotAI* botAI) { return new KarathressSpreadAction(botAI); }
     static Action* karathress_tidal_surge(PlayerbotAI* botAI) { return new KarathressTidalSurgeAction(botAI); }
     static Action* karathress_totems(PlayerbotAI* botAI) { return new KarathressTotemsAction(botAI); }
     

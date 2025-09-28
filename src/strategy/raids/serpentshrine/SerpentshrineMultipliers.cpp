@@ -5,6 +5,7 @@
 #include "AiObject.h"
 #include "AiObjectContext.h"
 #include "Value.h"
+#include "ChooseTargetActions.h"
 
 float HydrossResistanceMultiplier::GetValue(Action* action)
 {
@@ -123,6 +124,74 @@ float LeotherasThreatHoldMultiplier::GetValue(Action* action)
 
     uint32 holdUntil = AI_VALUE(uint32, "leotheras whirlwind hold until");
     if (holdUntil > getMSTime())
+    {
+        return 0.0f;
+    }
+
+    return 1.0f;
+}
+
+float SerpentshrinePriorityMultiplier::GetValue(Action* action)
+{
+    if (!bot || !botAI || !action)
+    {
+        return 1.0f;
+    }
+
+    bool isAssist = dynamic_cast<DpsAssistAction*>(action) != nullptr ||
+                    dynamic_cast<TankAssistAction*>(action) != nullptr;
+    if (!isAssist)
+    {
+        return 1.0f;
+    }
+
+    bool blockAll = false;
+    bool blockRangedOnly = false;
+
+    if (Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs"))
+    {
+        GuidVector const npcs = npcsValue->Get();
+        for (ObjectGuid const& guid : npcs)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (!unit || !unit->IsAlive() || !unit->IsInCombat())
+                continue;
+
+            switch (unit->GetEntry())
+            {
+                case NPC_CYCLONE_KARATHRESS:
+                case NPC_FATHOM_GUARD_SHARKKIS:
+                case NPC_FATHOM_GUARD_TIDALVESS:
+                case NPC_FATHOM_GUARD_CARIBDIS:
+                case NPC_SPITFIRE_TOTEM:
+                case NPC_GREATER_EARTHBIND_TOTEM:
+                case NPC_GREATER_POISON_CLEANSING_TOTEM:
+                case NPC_COILFANG_STRIDER:
+                case NPC_COILFANG_ELITE:
+                case NPC_ENCHANTED_ELEMENTAL:
+                case NPC_TIDEWALKER_LURKER:
+                case NPC_WATER_GLOBULE:
+                    blockAll = true;
+                    break;
+                case NPC_SHADOW_OF_LEOTHERAS:
+                case NPC_TAINTED_ELEMENTAL:
+                    blockRangedOnly = true;
+                    break;
+                default:
+                    break;
+            }
+
+            if (blockAll)
+                break;
+        }
+    }
+
+    if (blockAll)
+    {
+        return 0.0f;
+    }
+
+    if (blockRangedOnly && PlayerbotAI::IsRanged(bot))
     {
         return 0.0f;
     }

@@ -148,6 +148,36 @@ public:
     bool IsActive() override;
 };
 
+class KarathressCycloneTrigger : public Trigger
+{
+public:
+    KarathressCycloneTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karathress cyclone") {}
+    bool IsActive() override;
+};
+
+class KarathressSpreadTrigger : public Trigger
+{
+public:
+    KarathressSpreadTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karathress spread") {}
+    bool IsActive() override;
+};
+
+class KarathressClearSpreadTrigger : public Trigger
+{
+public:
+    KarathressClearSpreadTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karathress clear spread") {}
+    bool IsActive() override;
+};
+
+class KarathressCycloneEndedTrigger : public Trigger
+{
+private:
+    bool prev_check;
+public:
+    KarathressCycloneEndedTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karathress cyclone ended", 1) { this->prev_check = false; }
+    bool IsActive() override;
+};
+
 class KarathressTidalSurgeTrigger : public Trigger
 {
 public:

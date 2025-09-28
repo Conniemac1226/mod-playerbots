@@ -32,4 +32,11 @@ public:
     float GetValue(Action* action) override;
 };
 
+class SerpentshrinePriorityMultiplier : public Multiplier
+{
+public:
+    SerpentshrinePriorityMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "serpentshrine priority") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

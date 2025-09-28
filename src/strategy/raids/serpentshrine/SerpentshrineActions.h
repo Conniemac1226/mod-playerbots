@@ -60,6 +60,7 @@ constexpr uint32 const NPC_FATHOM_LORD_KARATHRESS = 21214;
 constexpr uint32 const NPC_FATHOM_GUARD_SHARKKIS = 21966;
 constexpr uint32 const NPC_FATHOM_GUARD_TIDALVESS = 21965;
 constexpr uint32 const NPC_FATHOM_GUARD_CARIBDIS = 21964;
+constexpr uint32 const NPC_CYCLONE_KARATHRESS = 22104;
 constexpr uint32 const NPC_SPITFIRE_TOTEM = 22091;
 constexpr uint32 const NPC_GREATER_EARTHBIND_TOTEM = 22486;
 constexpr uint32 const NPC_GREATER_POISON_CLEANSING_TOTEM = 22487;
@@ -67,6 +68,7 @@ constexpr uint32 const NPC_GREATER_POISON_CLEANSING_TOTEM = 22487;
 const uint32 SPELL_KARATHRESS_CATACLYSMIC_BOLT = 38441;
 const uint32 SPELL_KARATHRESS_SEAR_NOVA = 38445;
 const uint32 SPELL_KARATHRESS_TIDAL_SURGE = 38358;
+const uint32 SPELL_KARATHRESS_SUMMON_CYCLONE = 38337;
 
 // Morogrim Tidewalker
 constexpr uint32 const NPC_MOROGRIM_TIDEWALKER = 21213;
@@ -235,6 +237,27 @@ class KarathressAdvisorsAction : public AttackAction
 {
 public:
     KarathressAdvisorsAction(PlayerbotAI* botAI) : AttackAction(botAI, "karathress advisors") {}
+    bool Execute(Event event) override;
+};
+
+class KarathressCycloneAction : public MovementAction
+{
+public:
+    KarathressCycloneAction(PlayerbotAI* botAI) : MovementAction(botAI, "karathress cyclone") {}
+    bool Execute(Event event) override;
+};
+
+class KarathressSpreadAction : public Action
+{
+public:
+    KarathressSpreadAction(PlayerbotAI* botAI) : Action(botAI, "karathress spread") {}
+    bool Execute(Event event) override;
+};
+
+class KarathressCycloneFallAction : public MovementAction
+{
+public:
+    KarathressCycloneFallAction(PlayerbotAI* botAI) : MovementAction(botAI, "karathress cyclone fall") {}
     bool Execute(Event event) override;
 };
 

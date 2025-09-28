@@ -6,6 +6,11 @@
 #include "ScriptedCreature.h"
 #include "GameObject.h"
 #include "Group.h"
+#include "Map.h"
+#include "MotionMaster.h"
+#include "Unit.h"
+#include "SpellInfo.h"
+#include "SharedDefines.h"
 #include "Spell.h"
 #include "UseItemAction.h"
 #include "AiObjectContext.h"
@@ -15,6 +20,7 @@
 #include <array>
 #include <cmath>
 #include <limits>
+#include <vector>
 
 namespace
 {
@@ -49,12 +55,13 @@ namespace
     }
 
     // Manual spread contributions per mechanic so we can honour the shared disperse-distance system.
-    constexpr std::array<char const*, 6> s_serpentshrineSpreadKeys = {
+    constexpr std::array<char const*, 7> s_serpentshrineSpreadKeys = {
         "hydross water tomb spread distance",
         "hydross vile sludge spread distance",
         "lurker geyser spread distance",
         "leotheras chaos blast spread distance",
         "karathress sear nova spread distance",
+        "karathress cyclone spread distance",
         "vashj static charge spread distance"
     };
 
@@ -81,6 +88,10 @@ namespace
         NPC_TAINTED_SPAWN_OF_HYDROSS
     };
     constexpr uint8 HYDROSS_SKULL_ICON_INDEX = 7;
+    constexpr char const* LEOTHERAS_SHADOW_TARGET = "leotheras shadow target";
+    constexpr char const* KARATHRESS_CYCLONE_TARGET = "karathress cyclone target";
+    constexpr char const* KARATHRESS_TOTEM_TARGET = "karathress totem target";
+    constexpr char const* KARATHRESS_CYCLONE_SPREAD_DISTANCE = "karathress cyclone spread distance";
 
     constexpr char const* LURKER_LAST_SPOUT_TIME = "lurker last spout time";
     constexpr char const* LURKER_IN_WATER = "lurker in water";
@@ -89,7 +100,6 @@ namespace
     constexpr char const* LEOTHERAS_LAST_WHIRLWIND_TIME = "leotheras last whirlwind time";
     constexpr char const* LEOTHERAS_HAS_DEMON = "leotheras has demon";
     constexpr char const* LEOTHERAS_WHIRLWIND_HOLD_UNTIL = "leotheras whirlwind hold until";
-    constexpr char const* LEOTHERAS_SHADOW_TARGET = "leotheras shadow target";
 
     constexpr char const* MOROGRIM_LAST_GRAVE_TIME = "morogrim last grave time";
 
@@ -166,6 +176,160 @@ namespace
                 return;
 
             group->SetTargetIcon(HYDROSS_SKULL_ICON_INDEX, bot->GetGUID(), target->GetGUID());
+        }
+    }
+
+    Unit* SelectLeotherasShadow(PlayerbotAI* botAI, Player* bot, GuidVector const& candidates, float& currentBestDistance)
+    {
+        if (!botAI || !bot)
+            return nullptr;
+
+        Unit* best = nullptr;
+
+        for (ObjectGuid const& guid : candidates)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_SHADOW_OF_LEOTHERAS)
+                continue;
+
+            float distance = bot->GetDistance(unit);
+            if (distance < currentBestDistance)
+            {
+                currentBestDistance = distance;
+                best = unit;
+            }
+        }
+
+        return best;
+    }
+
+    Unit* ResolveLeotherasShadow(PlayerbotAI* botAI, Player* bot, Value<ObjectGuid>* focusValue)
+    {
+        if (!botAI || !bot)
+            return nullptr;
+
+        float bestDistance = std::numeric_limits<float>::max();
+        Unit* shadow = nullptr;
+
+        if (focusValue && !focusValue->Get().IsEmpty())
+        {
+            if (Unit* focusShadow = botAI->GetUnit(focusValue->Get()))
+            {
+                if (focusShadow->IsAlive())
+                {
+                    shadow = focusShadow;
+                    bestDistance = bot->GetDistance(focusShadow);
+                }
+                else
+                {
+                    focusValue->Set(ObjectGuid::Empty);
+                }
+            }
+            else
+            {
+                focusValue->Set(ObjectGuid::Empty);
+            }
+        }
+
+        auto consider = [&](GuidVector const& vec)
+        {
+            if (vec.empty())
+                return;
+
+            if (Unit* candidate = SelectLeotherasShadow(botAI, bot, vec, bestDistance))
+            {
+                shadow = candidate;
+            }
+        };
+
+        if (Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs"))
+        {
+            consider(npcsValue->Get());
+        }
+
+        if (!shadow)
+        {
+            if (Value<GuidVector>* noLosValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets no los"))
+            {
+                consider(noLosValue->Get());
+            }
+        }
+
+        if (!shadow)
+        {
+            if (Value<GuidVector>* possibleValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets"))
+            {
+                consider(possibleValue->Get());
+            }
+        }
+
+        if (shadow && focusValue)
+        {
+            focusValue->Set(shadow->GetGUID());
+        }
+
+        return shadow;
+    }
+
+    Unit* SelectKarathressCyclone(PlayerbotAI* botAI, Player* bot, GuidVector const& candidates, float& currentBestDistance)
+    {
+        if (!botAI || !bot)
+            return nullptr;
+
+        Unit* best = nullptr;
+
+        for (ObjectGuid const& guid : candidates)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_CYCLONE_KARATHRESS)
+                continue;
+
+            float distance = bot->GetDistance(unit);
+            if (distance < currentBestDistance)
+            {
+                currentBestDistance = distance;
+                best = unit;
+            }
+        }
+
+        return best;
+    }
+
+    void SetSerpentshrinePriority(PlayerbotAI* botAI, Unit* unit)
+    {
+        if (!botAI || !unit)
+            return;
+
+        if (Value<GuidVector>* prioritized = botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets"))
+        {
+            GuidVector current = prioritized->Get();
+            if (current.size() == 1 && current.front() == unit->GetGUID())
+                return;
+
+            GuidVector updated;
+            updated.push_back(unit->GetGUID());
+            prioritized->Set(updated);
+        }
+    }
+
+    void ClearSerpentshrinePriority(PlayerbotAI* botAI, ObjectGuid const& guid = ObjectGuid::Empty)
+    {
+        if (!botAI)
+            return;
+
+        if (Value<GuidVector>* prioritized = botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets"))
+        {
+            GuidVector current = prioritized->Get();
+            if (current.empty())
+                return;
+
+            if (!guid.IsEmpty())
+            {
+                if (current.size() != 1 || current.front() != guid)
+                    return;
+            }
+
+            prioritized->Set(GuidVector());
         }
     }
 }
@@ -905,16 +1069,26 @@ bool LurkerKillAddsAction::Execute(Event event)
 
     Unit* target = guardian ? guardian : ambusher;
 
-    if (target)
+    if (!target)
     {
-        if (AI_VALUE(Unit*, "current target") != target)
-        {
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
-        }
-        return Attack(target);
+        ClearSerpentshrinePriority(botAI);
+        return false;
     }
 
-    return false;
+    SetSerpentshrinePriority(botAI, target);
+
+    if (AI_VALUE(Unit*, "current target") != target)
+    {
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
+    }
+
+    bool attacked = Attack(target);
+    if (attacked)
+    {
+        botAI->SetNextCheckDelay(150);
+    }
+
+    return attacked;
 }
 
 bool LurkerPositionAction::Execute(Event event)
@@ -1206,68 +1380,39 @@ bool LeotherasShadowAction::Execute(Event event)
     {
         if (focusValue && !focusValue->Get().IsEmpty())
             focusValue->Set(ObjectGuid::Empty);
+        ClearSerpentshrinePriority(botAI);
         return false;
     }
 
-    // Only ranged DPS should peel off for the shadow. Tanks, melee and healers
-    // stay on the primary boss so they continue performing their core roles.
-    bool const isRangedDps = PlayerbotAI::IsRangedDps(bot);
-    if (!isRangedDps)
+    if (!PlayerbotAI::IsRangedDps(bot))
     {
         if (focusValue && !focusValue->Get().IsEmpty())
             focusValue->Set(ObjectGuid::Empty);
+        ClearSerpentshrinePriority(botAI);
         return false;
     }
 
-    Unit* shadow = nullptr;
-    if (focusValue && !focusValue->Get().IsEmpty())
-    {
-        shadow = botAI->GetUnit(focusValue->Get());
-        if (shadow && !shadow->IsAlive())
-        {
-            shadow = nullptr;
-            focusValue->Set(ObjectGuid::Empty);
-        }
-    }
-
+    Unit* shadow = ResolveLeotherasShadow(botAI, bot, focusValue);
     if (!shadow)
     {
-        Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
-        if (!npcsValue)
-            return false;
-
-        GuidVector npcs = npcsValue->Get();
-        float minDistance = 100.0f;
-        for (ObjectGuid const& npcGuid : npcs)
-        {
-            Unit* unit = botAI->GetUnit(npcGuid);
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            if (unit->GetEntry() == NPC_SHADOW_OF_LEOTHERAS)
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < minDistance)
-                {
-                    shadow = unit;
-                    minDistance = distance;
-                }
-            }
-        }
-
-        if (shadow && focusValue)
-            focusValue->Set(shadow->GetGUID());
+        ClearSerpentshrinePriority(botAI);
+        return false;
     }
 
-    if (shadow)
+    SetSerpentshrinePriority(botAI, shadow);
+
+    if (AI_VALUE(Unit*, "current target") != shadow)
     {
-        if (AI_VALUE(Unit*, "current target") != shadow)
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(shadow);
-
-        return Attack(shadow);
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(shadow);
     }
 
-    return false;
+    bool attacked = Attack(shadow);
+    if (attacked)
+    {
+        botAI->SetNextCheckDelay(150);
+    }
+
+    return attacked;
 }
 
 bool LeotherasPositionAction::Execute(Event event)
@@ -1462,6 +1607,68 @@ bool KarathressAdvisorsAction::Execute(Event event)
         return false;
     }
 
+    Unit* boss = AI_VALUE2(Unit*, "find target", "fathom-lord karathress");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    {
+        ClearSerpentshrinePriority(botAI);
+        return false;
+    }
+
+    auto const hasActiveTotem = [&]() -> bool
+    {
+        Value<ObjectGuid>* storedTotem = botAI->GetAiObjectContext()->GetValue<ObjectGuid>(KARATHRESS_TOTEM_TARGET);
+        if (storedTotem && !storedTotem->Get().IsEmpty())
+        {
+            if (Unit* tracked = botAI->GetUnit(storedTotem->Get()))
+            {
+                if (tracked->IsAlive())
+                {
+                    return true;
+                }
+            }
+        }
+
+        auto containsTotem = [&](char const* contextName) -> bool
+        {
+            Value<GuidVector>* vecValue = botAI->GetAiObjectContext()->GetValue<GuidVector>(contextName);
+            if (!vecValue)
+                return false;
+
+            for (ObjectGuid const& guid : vecValue->Get())
+            {
+                Unit* unit = botAI->GetUnit(guid);
+                if (!unit || !unit->IsAlive())
+                    continue;
+
+                switch (unit->GetEntry())
+                {
+                    case NPC_SPITFIRE_TOTEM:
+                    case NPC_GREATER_EARTHBIND_TOTEM:
+                    case NPC_GREATER_POISON_CLEANSING_TOTEM:
+                        return true;
+                    default:
+                        break;
+                }
+            }
+
+            return false;
+        };
+
+        if (containsTotem("possible targets"))
+            return true;
+        if (containsTotem("possible targets no los"))
+            return true;
+        if (containsTotem("nearest hostile npcs"))
+            return true;
+
+        return false;
+    };
+
+    if (hasActiveTotem())
+    {
+        return false;
+    }
+
     Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
     if (!npcsValue)
     {
@@ -1524,9 +1731,11 @@ bool KarathressAdvisorsAction::Execute(Event event)
         {
             botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
         }
+        SetSerpentshrinePriority(botAI, target);
         return Attack(target);
     }
 
+    ClearSerpentshrinePriority(botAI);
     return false;
 }
 
@@ -1573,6 +1782,51 @@ bool KarathressTidalSurgeAction::Execute(Event event)
     return false;
 }
 
+bool KarathressCycloneAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+    {
+        return false;
+    }
+
+    // WAIT STATE: Bot is cycloned, let the spell handle positioning
+    // Just return true to prevent other movement actions from interfering
+    return true; // ICC Pattern: return true for wait states
+}
+
+bool KarathressSpreadAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+    {
+        return false;
+    }
+
+    // WotLK Standard Pattern: Use disperse distance AI value system
+    // 12 yards provides good spread to prevent cyclone from hitting multiple ranged
+    SET_AI_VALUE(float, "disperse distance", 12.0f);
+
+    return true;
+}
+
+bool KarathressCycloneFallAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+    {
+        return false;
+    }
+
+    // Force natural falling by clearing motion and updating position to ground
+    bot->GetMotionMaster()->Clear();
+
+    float currentZ = bot->GetPositionZ();
+    float groundZ = bot->GetMapWaterOrGroundLevel(bot->GetPositionX(), bot->GetPositionY(), currentZ);
+
+    // Immediately teleport to ground to simulate natural fall completion
+    bot->NearTeleportTo(bot->GetPositionX(), bot->GetPositionY(), groundZ, bot->GetOrientation());
+
+    return true;
+}
+
 bool KarathressTotemsAction::Execute(Event event)
 {
     if (!bot || !botAI)
@@ -1580,71 +1834,141 @@ bool KarathressTotemsAction::Execute(Event event)
         return false;
     }
 
-    Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
-    if (!npcsValue)
+    // UNIVERSAL DEBUG: Prove this action can execute in Serpentshrine
+    static std::map<ObjectGuid, uint32> g_universalDebugTime;
+    uint32 currentTime = getMSTime();
+
+    if (bot->GetMapId() == 548 && g_universalDebugTime[bot->GetGUID()] + 5000 < currentTime)
+    {
+        g_universalDebugTime[bot->GetGUID()] = currentTime;
+        LOG_INFO("playerbots", "UNIVERSAL_DEBUG: {} | Totems action executing in Serpentshrine - strategy IS working",
+            bot->GetName().c_str());
+    }
+
+    if (botAI->IsHeal(bot))
     {
         return false;
     }
-    GuidVector npcs = npcsValue->Get();
-    
-    // Priority: Spitfire Totem > Earthbind Totem > Poison Cleansing Totem
-    Unit* spitfire = nullptr;
-    Unit* earthbind = nullptr;
-    Unit* cleansing = nullptr;
-    
-    float minSpitfireDistance = 100.0f;
-    float minEarthbindDistance = 100.0f;
-    float minCleansingDistance = 100.0f;
 
-    for (ObjectGuid const& npcGuid : npcs)
+    Unit* boss = AI_VALUE2(Unit*, "find target", "fathom-lord karathress");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
-        Unit* unit = botAI->GetUnit(npcGuid);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        float distance = bot->GetDistance(unit);
-        
-        if (unit->GetEntry() == NPC_SPITFIRE_TOTEM && distance < minSpitfireDistance)
+        if (Value<ObjectGuid>* stored = botAI->GetAiObjectContext()->GetValue<ObjectGuid>(KARATHRESS_TOTEM_TARGET))
         {
-            spitfire = unit;
-            minSpitfireDistance = distance;
+            if (!stored->Get().IsEmpty())
+            {
+                stored->Set(ObjectGuid::Empty);
+            }
         }
-        else if (unit->GetEntry() == NPC_GREATER_EARTHBIND_TOTEM && distance < minEarthbindDistance)
-        {
-            earthbind = unit;
-            minEarthbindDistance = distance;
-        }
-        else if (unit->GetEntry() == NPC_GREATER_POISON_CLEANSING_TOTEM && distance < minCleansingDistance)
-        {
-            cleansing = unit;
-            minCleansingDistance = distance;
-        }
+        return false;
     }
 
-    // Kill priority: Spitfire (damage) > Earthbind (slow) > Cleansing
+    Value<ObjectGuid>* storedTotemValue = botAI->GetAiObjectContext()->GetValue<ObjectGuid>(KARATHRESS_TOTEM_TARGET);
     Unit* target = nullptr;
-    if (spitfire && minSpitfireDistance < 30.0f)
-    {
-        target = spitfire;
-    }
-    else if (earthbind && minEarthbindDistance < 30.0f)
-    {
-        target = earthbind;
-    }
-    else if (cleansing && minCleansingDistance < 30.0f)
-    {
-        target = cleansing;
-    }
 
-    if (target)
+    if (storedTotemValue && !storedTotemValue->Get().IsEmpty())
     {
-        if (AI_VALUE(Unit*, "current target") != target)
+        target = botAI->GetUnit(storedTotemValue->Get());
+        if (!target || !target->IsAlive())
         {
-            botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
+            target = nullptr;
+            storedTotemValue->Set(ObjectGuid::Empty);
         }
-        return Attack(target);
     }
 
+    auto findPriorityTotem = [&](GuidVector const& candidates)
+    {
+        Unit* spitfire = nullptr;
+        Unit* earthbind = nullptr;
+        Unit* cleansing = nullptr;
+
+        for (ObjectGuid const& npcGuid : candidates)
+        {
+            Unit* unit = botAI->GetUnit(npcGuid);
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            switch (unit->GetEntry())
+            {
+                case NPC_SPITFIRE_TOTEM:
+                    spitfire = unit;
+                    break;
+                case NPC_GREATER_EARTHBIND_TOTEM:
+                    earthbind = unit;
+                    break;
+                case NPC_GREATER_POISON_CLEANSING_TOTEM:
+                    cleansing = unit;
+                    break;
+                default:
+                    break;
+            }
+
+            if (spitfire)
+                break;
+        }
+
+        if (spitfire)
+            return spitfire;
+        if (earthbind)
+            return earthbind;
+        if (cleansing)
+            return cleansing;
+
+        return static_cast<Unit*>(nullptr);
+    };
+
+    if (!target)
+    {
+        if (Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets"))
+        {
+            target = findPriorityTotem(npcsValue->Get());
+        }
+
+        if (!target)
+        {
+            if (Value<GuidVector>* npcsNoLosValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets no los"))
+            {
+                target = findPriorityTotem(npcsNoLosValue->Get());
+            }
+        }
+
+        if (target && storedTotemValue)
+        {
+            storedTotemValue->Set(target->GetGUID());
+        }
+    }
+
+    if (!target)
+    {
+        ClearSerpentshrinePriority(botAI);
+        return false;
+    }
+
+    if (AI_VALUE(Unit*, "current target") != target)
+    {
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(target);
+    }
+
+    SetSerpentshrinePriority(botAI, target);
+
+    bool hasLos = bot->IsWithinLOSInMap(target);
+    float requiredRange = PlayerbotAI::IsRanged(bot) ? 28.0f : 4.5f;
+    if (!hasLos || !bot->IsWithinDistInMap(target, requiredRange))
+    {
+        Position const& pos = target->GetPosition();
+        botAI->SetNextCheckDelay(150);
+        return MoveTo(target->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                      false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    bool attacked = Attack(target);
+    if (attacked)
+    {
+        botAI->SetNextCheckDelay(150);
+        return true;
+    }
+
+    botAI->SetNextCheckDelay(200);
     return false;
 }
 

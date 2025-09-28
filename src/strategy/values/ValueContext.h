@@ -328,7 +328,10 @@ public:
         creators["leotheras chaos blast spread distance"] = &ValueContext::leotheras_chaos_blast_spread_distance;
         creators["leotheras whirlwind hold until"] = &ValueContext::leotheras_whirlwind_hold_until;
         creators["leotheras shadow target"] = &ValueContext::leotheras_shadow_target;
+        creators["karathress cyclone target"] = &ValueContext::karathress_cyclone_target;
+        creators["karathress totem target"] = &ValueContext::karathress_totem_target;
         creators["karathress sear nova spread distance"] = &ValueContext::karathress_sear_nova_spread_distance;
+        creators["karathress cyclone spread distance"] = &ValueContext::karathress_cyclone_spread_distance;
         creators["vashj static charge spread distance"] = &ValueContext::vashj_static_charge_spread_distance;
         creators["morogrim last grave time"] = &ValueContext::morogrim_last_grave_time;
     }
@@ -589,7 +592,10 @@ private:
     static UntypedValue* leotheras_chaos_blast_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "leotheras chaos blast spread distance"); }
     static UntypedValue* leotheras_whirlwind_hold_until(PlayerbotAI* ai) { return new ManualSetValue<uint32>(ai, 0, "leotheras whirlwind hold until"); }
     static UntypedValue* leotheras_shadow_target(PlayerbotAI* ai) { return new ManualSetValue<ObjectGuid>(ai, ObjectGuid::Empty, "leotheras shadow target"); }
+    static UntypedValue* karathress_cyclone_target(PlayerbotAI* ai) { return new ManualSetValue<ObjectGuid>(ai, ObjectGuid::Empty, "karathress cyclone target"); }
+    static UntypedValue* karathress_totem_target(PlayerbotAI* ai) { return new ManualSetValue<ObjectGuid>(ai, ObjectGuid::Empty, "karathress totem target"); }
     static UntypedValue* karathress_sear_nova_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "karathress sear nova spread distance"); }
+    static UntypedValue* karathress_cyclone_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "karathress cyclone spread distance"); }
     static UntypedValue* vashj_static_charge_spread_distance(PlayerbotAI* ai) { return new ManualSetValue<float>(ai, 0.0f, "vashj static charge spread distance"); }
     static UntypedValue* morogrim_last_grave_time(PlayerbotAI* ai) { return new ManualSetValue<uint32>(ai, 0, "morogrim last grave time"); }
     // -------------------------------------------------------
