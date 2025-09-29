@@ -15,6 +15,10 @@ public:
         creators["alar flame patch"] = &TempestKeepTriggerContext::alar_flame_patch;
         creators["alar platform"] = &TempestKeepTriggerContext::alar_platform;
         creators["alar adds"] = &TempestKeepTriggerContext::alar_adds;
+        creators["alar flame buffet"] = &TempestKeepTriggerContext::alar_flame_buffet;
+        creators["alar ember blast"] = &TempestKeepTriggerContext::alar_ember_blast;
+        creators["alar melt armor"] = &TempestKeepTriggerContext::alar_melt_armor;
+        creators["alar charge"] = &TempestKeepTriggerContext::alar_charge;
         
         // Void Reaver triggers
         creators["void reaver pounding"] = &TempestKeepTriggerContext::void_reaver_pounding;
@@ -48,6 +52,10 @@ private:
     static Trigger* alar_flame_patch(PlayerbotAI* botAI) { return new AlarFlamePatchTrigger(botAI); }
     static Trigger* alar_platform(PlayerbotAI* botAI) { return new AlarPlatformTrigger(botAI); }
     static Trigger* alar_adds(PlayerbotAI* botAI) { return new AlarAddsTrigger(botAI); }
+    static Trigger* alar_flame_buffet(PlayerbotAI* botAI) { return new AlarFlameBuffetTrigger(botAI); }
+    static Trigger* alar_ember_blast(PlayerbotAI* botAI) { return new AlarEmberBlastTrigger(botAI); }
+    static Trigger* alar_melt_armor(PlayerbotAI* botAI) { return new AlarMeltArmorTrigger(botAI); }
+    static Trigger* alar_charge(PlayerbotAI* botAI) { return new AlarChargeTrigger(botAI); }
     
     // Void Reaver
     static Trigger* void_reaver_pounding(PlayerbotAI* botAI) { return new VoidReaverPoundingTrigger(botAI); }

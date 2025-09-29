@@ -111,6 +111,34 @@ public:
     bool IsActive() override;
 };
 
+class AlarFlameBuffetTrigger : public Trigger
+{
+public:
+    AlarFlameBuffetTrigger(PlayerbotAI* botAI) : Trigger(botAI, "alar flame buffet") {}
+    bool IsActive() override;
+};
+
+class AlarEmberBlastTrigger : public Trigger
+{
+public:
+    AlarEmberBlastTrigger(PlayerbotAI* botAI) : Trigger(botAI, "alar ember blast") {}
+    bool IsActive() override;
+};
+
+class AlarMeltArmorTrigger : public Trigger
+{
+public:
+    AlarMeltArmorTrigger(PlayerbotAI* botAI) : Trigger(botAI, "alar melt armor") {}
+    bool IsActive() override;
+};
+
+class AlarChargeTrigger : public Trigger
+{
+public:
+    AlarChargeTrigger(PlayerbotAI* botAI) : Trigger(botAI, "alar charge") {}
+    bool IsActive() override;
+};
+
 // Void Reaver triggers
 class VoidReaverPoundingTrigger : public Trigger
 {

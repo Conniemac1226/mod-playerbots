@@ -1064,3 +1064,119 @@ bool TelonicusRemoteToyAction::Execute(Event event)
 
     return false;
 }
+
+// New Al'ar actions for missing mechanics
+bool AlarFlameBuffetAction::Execute(Event event)
+{
+    // Tank swap or kiting behavior for Flame Buffet stacks
+    if (!botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss)
+        return false;
+
+    // Check stack count - if too high, kite or swap
+    if (Aura* buffetAura = bot->GetAura(SPELL_FLAME_BUFFET))
+    {
+        uint32 stacks = buffetAura->GetStackAmount();
+        
+        // At 5+ stacks, consider kiting to reset
+        if (stacks >= 5)
+        {
+            // Move away to let stacks drop
+            Position kitePos = TempestKeepMovementHelper::CalculateSafePosition(
+                boss->GetPosition(), bot->GetPosition(), 15.0f);
+            
+            return MoveTo(boss->GetMapId(), kitePos.GetPositionX(), 
+                         kitePos.GetPositionY(), kitePos.GetPositionZ(),
+                         false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+        }
+    }
+
+    // Continue normal tanking
+    return Attack(boss);
+}
+
+bool AlarEmberBlastAction::Execute(Event event)
+{
+    // Move away from Ember of Al'ar adds that are about to cast Ember Blast
+    if (Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs"))
+    {
+        GuidVector const npcs = npcsValue->Get();
+        for (ObjectGuid const& guid : npcs)
+        {
+            Unit* ember = botAI->GetUnit(guid);
+            if (ember && ember->IsAlive() && ember->GetEntry() == NPC_EMBER_OF_ALAR)
+            {
+                float distance = bot->GetDistance(ember);
+                if (distance < 12.0f) // Ember Blast has ~8 yard radius, move to 12y for safety
+                {
+                    // Calculate escape position away from ember
+                    Position escapePos = TempestKeepMovementHelper::CalculateSafePosition(
+                        ember->GetPosition(), bot->GetPosition(), 15.0f);
+                    
+                    return MoveTo(ember->GetMapId(), escapePos.GetPositionX(),
+                                 escapePos.GetPositionY(), escapePos.GetPositionZ(),
+                                 false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool AlarMeltArmorAction::Execute(Event event)
+{
+    // Tank behavior for Melt Armor in Phase 2
+    if (!botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss)
+        return false;
+
+    // Melt Armor reduces armor significantly - request armor buffs or support
+    if (bot->HasAura(SPELL_MELT_ARMOR))
+    {
+        // Use defensive cooldowns if available
+        if (Value<std::list<uint32>>* spellIdsValue =
+            botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "defensive"))
+        {
+            for (auto spellId : spellIdsValue->Get())
+            {
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
+            }
+        }
+    }
+
+    // Continue attacking boss
+    return Attack(boss);
+}
+
+bool AlarChargeAction::Execute(Event event)
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss)
+        return false;
+
+    // Move out of charge path
+    if (boss->HasInArc(M_PI_4, bot))
+    {
+        // Calculate perpendicular movement to avoid charge line
+        float bossOrientation = boss->GetAngle(bot);
+        float escapeAngle = bossOrientation + M_PI_2; // 90 degrees to the side
+        
+        float escapeX = bot->GetPositionX() + 10.0f * cos(escapeAngle);
+        float escapeY = bot->GetPositionY() + 10.0f * sin(escapeAngle);
+        float escapeZ = bot->GetPositionZ();
+        
+        return MoveTo(boss->GetMapId(), escapeX, escapeY, escapeZ,
+                     false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    return false;
+}

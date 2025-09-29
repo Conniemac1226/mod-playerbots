@@ -26,6 +26,23 @@ void TempestKeepStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "alar adds",
         NextAction::array(0, new NextAction("alar adds", ACTION_INTERRUPT + 2), nullptr)));
 
+    // New Al'ar mechanics for 10/10 implementation
+    triggers.push_back(new TriggerNode(
+        "alar flame buffet",
+        NextAction::array(0, new NextAction("alar flame buffet", ACTION_EMERGENCY + 2), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "alar ember blast",
+        NextAction::array(0, new NextAction("alar ember blast", ACTION_EMERGENCY + 3), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "alar melt armor",
+        NextAction::array(0, new NextAction("alar melt armor", ACTION_EMERGENCY + 1), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "alar charge",
+        NextAction::array(0, new NextAction("alar charge", ACTION_EMERGENCY + 4), nullptr)));
+
     // Void Reaver triggers
     triggers.push_back(new TriggerNode(
         "void reaver pounding",
@@ -107,6 +124,10 @@ void TempestKeepStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new AlarFlameQuillsMultiplier(botAI));
     multipliers.push_back(new AlarDiveBombMultiplier(botAI));
+    multipliers.push_back(new AlarFlameBuffetMultiplier(botAI));
+    multipliers.push_back(new AlarEmberBlastMultiplier(botAI));
+    multipliers.push_back(new AlarMeltArmorMultiplier(botAI));
+    multipliers.push_back(new AlarChargeMultiplier(botAI));
     multipliers.push_back(new VoidReaverPoundingMultiplier(botAI));
     multipliers.push_back(new VoidReaverPositionMultiplier(botAI));
     multipliers.push_back(new SolarianWrathMultiplier(botAI));

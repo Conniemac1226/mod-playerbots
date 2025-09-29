@@ -88,7 +88,15 @@ const uint32 SPELL_VASHJ_ENTANGLE = 38316;
 const uint32 SPELL_VASHJ_FORKED_LIGHTNING = 38145;
 const uint32 SPELL_VASHJ_MAGIC_BARRIER = 38112;
 const uint32 SPELL_VASHJ_TOXIC_SPORES = 38574;
+const uint32 SPELL_VASHJ_MULTI_SHOT = 38310;
+const uint32 SPELL_VASHJ_SHOOT = 37770;
+
+// Lady Vashj Phase 3 - Items and GameObjects
 const uint32 ITEM_TAINTED_CORE = 31088;
+const uint32 GO_SHIELD_GENERATOR1 = 185051;
+const uint32 GO_SHIELD_GENERATOR2 = 185052;
+const uint32 GO_SHIELD_GENERATOR3 = 185053;
+const uint32 GO_SHIELD_GENERATOR4 = 185054;
 
 const uint32 SPELL_MOROGRIM_TIDAL_WAVE = 37730;
 const uint32 SPELL_MOROGRIM_WATERY_GRAVE_1 = 38023;
@@ -384,6 +392,64 @@ class VashjTaintedCoreAction : public AttackAction
 {
 public:
     VashjTaintedCoreAction(PlayerbotAI* botAI) : AttackAction(botAI, "vashj tainted core") {}
+    bool Execute(Event event) override;
+};
+
+class VashjMainTankEliteAction : public AttackAction
+{
+public:
+    VashjMainTankEliteAction(PlayerbotAI* botAI) : AttackAction(botAI, "vashj main tank elite") {}
+    bool Execute(Event event) override;
+
+private:
+    bool HandleMainTankAddManagement(Unit* boss);
+};
+
+class VashjOfftankAddsAction : public AttackAction
+{
+public:
+    VashjOfftankAddsAction(PlayerbotAI* botAI) : AttackAction(botAI, "vashj offtank adds") {}
+    bool Execute(Event event) override;
+
+private:
+    bool HandleOfftankAddManagement(Unit* boss);
+};
+
+class VashjForkedLightningAction : public MovementAction
+{
+public:
+    VashjForkedLightningAction(PlayerbotAI* botAI) : MovementAction(botAI, "vashj forked lightning") {}
+    bool Execute(Event event) override;
+};
+
+class VashjElementalOverloadAction : public AttackAction
+{
+public:
+    VashjElementalOverloadAction(PlayerbotAI* botAI) : AttackAction(botAI, "vashj elemental overload") {}
+    bool Execute(Event event) override;
+};
+
+class VashjShieldGeneratorAction : public Action
+{
+public:
+    VashjShieldGeneratorAction(PlayerbotAI* botAI) : Action(botAI, "vashj shield generator") {}
+    bool Execute(Event event) override;
+
+private:
+    bool HandleShieldGeneratorCoordination();
+};
+
+class VashjMultiShotAvoidAction : public MovementAction
+{
+public:
+    VashjMultiShotAvoidAction(PlayerbotAI* botAI) : MovementAction(botAI, "vashj multi shot avoid") {}
+    bool Execute(Event event) override;
+};
+
+class VashjStriderFearAction : public MovementAction
+{
+public:
+    VashjStriderFearAction(PlayerbotAI* botAI) : MovementAction(botAI, "vashj strider fear") {}
     bool Execute(Event event) override;
 };
 

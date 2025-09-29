@@ -39,4 +39,18 @@ public:
     float GetValue(Action* action) override;
 };
 
+class MorogrimOfftankMultiplier : public Multiplier
+{
+public:
+    MorogrimOfftankMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "morogrim offtank") {}
+    float GetValue(Action* action) override;
+};
+
+class VashjAddsMultiplier : public Multiplier
+{
+public:
+    VashjAddsMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "vashj adds") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

@@ -52,4 +52,32 @@ public:
     float GetValue(Action* action) override;
 };
 
+class AlarFlameBuffetMultiplier : public Multiplier
+{
+public:
+    AlarFlameBuffetMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "alar flame buffet") {}
+    float GetValue(Action* action) override;
+};
+
+class AlarEmberBlastMultiplier : public Multiplier
+{
+public:
+    AlarEmberBlastMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "alar ember blast") {}
+    float GetValue(Action* action) override;
+};
+
+class AlarMeltArmorMultiplier : public Multiplier
+{
+public:
+    AlarMeltArmorMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "alar melt armor") {}
+    float GetValue(Action* action) override;
+};
+
+class AlarChargeMultiplier : public Multiplier
+{
+public:
+    AlarChargeMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "alar charge") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

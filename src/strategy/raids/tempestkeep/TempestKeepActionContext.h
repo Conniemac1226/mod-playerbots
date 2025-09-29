@@ -15,6 +15,10 @@ public:
         creators["alar flame patch"] = &TempestKeepActionContext::alar_flame_patch;
         creators["alar platform"] = &TempestKeepActionContext::alar_platform;
         creators["alar adds"] = &TempestKeepActionContext::alar_adds;
+        creators["alar flame buffet"] = &TempestKeepActionContext::alar_flame_buffet;
+        creators["alar ember blast"] = &TempestKeepActionContext::alar_ember_blast;
+        creators["alar melt armor"] = &TempestKeepActionContext::alar_melt_armor;
+        creators["alar charge"] = &TempestKeepActionContext::alar_charge;
         
         // Void Reaver actions
         creators["void reaver pounding"] = &TempestKeepActionContext::void_reaver_pounding;
@@ -48,6 +52,10 @@ private:
     static Action* alar_flame_patch(PlayerbotAI* botAI) { return new AlarFlamePatchAction(botAI); }
     static Action* alar_platform(PlayerbotAI* botAI) { return new AlarPlatformAction(botAI); }
     static Action* alar_adds(PlayerbotAI* botAI) { return new AlarAddsAction(botAI); }
+    static Action* alar_flame_buffet(PlayerbotAI* botAI) { return new AlarFlameBuffetAction(botAI); }
+    static Action* alar_ember_blast(PlayerbotAI* botAI) { return new AlarEmberBlastAction(botAI); }
+    static Action* alar_melt_armor(PlayerbotAI* botAI) { return new AlarMeltArmorAction(botAI); }
+    static Action* alar_charge(PlayerbotAI* botAI) { return new AlarChargeAction(botAI); }
     
     // Void Reaver
     static Action* void_reaver_pounding(PlayerbotAI* botAI) { return new VoidReaverPoundingAction(botAI); }

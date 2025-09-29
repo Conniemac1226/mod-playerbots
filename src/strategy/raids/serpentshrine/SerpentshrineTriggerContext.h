@@ -60,6 +60,13 @@ public:
         creators["vashj sporebat"] = &SerpentshrineTriggerContext::vashj_sporebat;
         creators["vashj position"] = &SerpentshrineTriggerContext::vashj_position;
         creators["vashj tainted core"] = &SerpentshrineTriggerContext::vashj_tainted_core;
+        creators["vashj main tank elite"] = &SerpentshrineTriggerContext::vashj_main_tank_elite;
+        creators["vashj offtank adds"] = &SerpentshrineTriggerContext::vashj_offtank_adds;
+        creators["vashj forked lightning"] = &SerpentshrineTriggerContext::vashj_forked_lightning;
+        creators["vashj elemental overload"] = &SerpentshrineTriggerContext::vashj_elemental_overload;
+        creators["vashj shield generator"] = &SerpentshrineTriggerContext::vashj_shield_generator;
+        creators["vashj multi shot avoid"] = &SerpentshrineTriggerContext::vashj_multi_shot_avoid;
+        creators["vashj strider fear"] = &SerpentshrineTriggerContext::vashj_strider_fear;
     }
 
 private:
@@ -113,6 +120,13 @@ private:
     static Trigger* vashj_sporebat(PlayerbotAI* botAI) { return new VashjSporebatTrigger(botAI); }
     static Trigger* vashj_position(PlayerbotAI* botAI) { return new VashjPositionTrigger(botAI); }
     static Trigger* vashj_tainted_core(PlayerbotAI* botAI) { return new VashjTaintedCoreTrigger(botAI); }
+    static Trigger* vashj_main_tank_elite(PlayerbotAI* botAI) { return new VashjMainTankEliteTrigger(botAI); }
+    static Trigger* vashj_offtank_adds(PlayerbotAI* botAI) { return new VashjOfftankAddsTrigger(botAI); }
+    static Trigger* vashj_forked_lightning(PlayerbotAI* botAI) { return new VashjForkedLightningTrigger(botAI); }
+    static Trigger* vashj_elemental_overload(PlayerbotAI* botAI) { return new VashjElementalOverloadTrigger(botAI); }
+    static Trigger* vashj_shield_generator(PlayerbotAI* botAI) { return new VashjShieldGeneratorTrigger(botAI); }
+    static Trigger* vashj_multi_shot_avoid(PlayerbotAI* botAI) { return new VashjMultiShotAvoidTrigger(botAI); }
+    static Trigger* vashj_strider_fear(PlayerbotAI* botAI) { return new VashjStriderFearTrigger(botAI); }
 };
 
 #endif

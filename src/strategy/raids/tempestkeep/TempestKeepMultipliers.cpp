@@ -122,9 +122,99 @@ float KaelthasGravityLapseMultiplier::GetValue(Action* action)
     {
         if (dynamic_cast<KaelthasGravityLapseAction*>(action))
             return 1.0f;
-            
+
         // Reduce normal movement actions
         return 0.3f;
+    }
+
+    return 1.0f;
+}
+
+float AlarFlameBuffetMultiplier::GetValue(Action* action)
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return 1.0f;
+
+    // Phase 1 only (boss on platforms)
+    if (boss->GetPositionZ() > 15.0f && bot->HasAura(SPELL_FLAME_BUFFET))
+    {
+        if (dynamic_cast<AlarFlameBuffetAction*>(action))
+            return 1.0f;
+
+        // For tanks with Flame Buffet stacks, reduce tank swap blocking actions
+        if (botAI->IsTank(bot))
+            return 0.6f;
+    }
+
+    return 1.0f;
+}
+
+float AlarEmberBlastMultiplier::GetValue(Action* action)
+{
+    // Check for nearby Ember of Al'ar adds that might explode
+    if (Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs"))
+    {
+        GuidVector const npcs = npcsValue->Get();
+        for (ObjectGuid const& guid : npcs)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (unit && unit->IsAlive() && unit->GetEntry() == NPC_EMBER_OF_ALAR)
+            {
+                if (unit->FindCurrentSpellBySpellId(SPELL_EMBER_BLAST) || bot->GetDistance(unit) < 10.0f)
+                {
+                    if (dynamic_cast<AlarEmberBlastAction*>(action))
+                        return 1.0f;
+
+                    // Reduce other actions when ember blast is imminent
+                    return 0.4f;
+                }
+            }
+        }
+    }
+
+    return 1.0f;
+}
+
+float AlarMeltArmorMultiplier::GetValue(Action* action)
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return 1.0f;
+
+    // Phase 2 only (boss on ground) and tank has Melt Armor
+    if (boss->GetPositionZ() < 10.0f && bot->HasAura(SPELL_MELT_ARMOR))
+    {
+        if (dynamic_cast<AlarMeltArmorAction*>(action))
+            return 1.0f;
+
+        // For tanks with Melt Armor, prioritize defensive actions
+        if (botAI->IsTank(bot))
+            return 0.7f;
+    }
+
+    return 1.0f;
+}
+
+float AlarChargeMultiplier::GetValue(Action* action)
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return 1.0f;
+
+    // Phase 2 only (boss on ground)
+    if (boss->GetPositionZ() < 10.0f)
+    {
+        // If boss is casting charge or facing us
+        if (boss->FindCurrentSpellBySpellId(SPELL_ALAR_CHARGE) ||
+            boss->HasInArc(M_PI_4, bot))
+        {
+            if (dynamic_cast<AlarChargeAction*>(action))
+                return 1.0f;
+
+            // Reduce actions that keep us in charge path
+            return 0.5f;
+        }
     }
 
     return 1.0f;

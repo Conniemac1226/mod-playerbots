@@ -2412,16 +2412,25 @@ bool VashjEnchantedElementalAction::Execute(Event event)
     // Phase 2 - Enchanted Elementals must die quickly
     if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
     {
+        // ICC Pattern: Anti-ping-pong - continue current target if attacking same add type
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+        if (currentTarget && currentTarget->IsAlive() && currentTarget->GetEntry() == NPC_ENCHANTED_ELEMENTAL)
+        {
+            LOG_INFO("playerbots", "VASHJ_ACTION_DEBUG: %s | EnchantedElementalAction SKIPPED - already attacking Enchanted Elemental %s",
+                bot->GetName().c_str(), currentTarget->GetGUID().ToString().c_str());
+            return false; // Continue attacking current Enchanted Elemental
+        }
+
         Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
         if (!npcsValue)
         {
             return false;
         }
         GuidVector npcs = npcsValue->Get();
-        
+
         Unit* nearestElemental = nullptr;
         float minDistance = 100.0f;
-        
+
         for (ObjectGuid const& npcGuid : npcs)
         {
             Unit* unit = botAI->GetUnit(npcGuid);
@@ -2438,14 +2447,17 @@ bool VashjEnchantedElementalAction::Execute(Event event)
                 }
             }
         }
-        
+
         if (nearestElemental)
         {
-            if (AI_VALUE(Unit*, "current target") != nearestElemental)
-            {
-                botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(nearestElemental);
-            }
+            LOG_INFO("playerbots", "VASHJ_ACTION_DEBUG: %s | EnchantedElementalAction EXECUTING - attacking Enchanted Elemental %s (distance: %.1f)",
+                bot->GetName().c_str(), nearestElemental->GetGUID().ToString().c_str(), minDistance);
             return Attack(nearestElemental);
+        }
+        else
+        {
+            LOG_INFO("playerbots", "VASHJ_ACTION_DEBUG: %s | EnchantedElementalAction FAILED - no Enchanted Elementals found",
+                bot->GetName().c_str());
         }
     }
 
@@ -2468,16 +2480,23 @@ bool VashjTaintedElementalAction::Execute(Event event)
     // Phase 2 - Tainted Elementals drop cores needed for shield generators
     if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
     {
+        // ICC Pattern: Anti-ping-pong - continue current target if attacking same add type
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+        if (currentTarget && currentTarget->IsAlive() && currentTarget->GetEntry() == NPC_TAINTED_ELEMENTAL)
+        {
+            return false; // Continue attacking current Tainted Elemental
+        }
+
         Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
         if (!npcsValue)
         {
             return false;
         }
         GuidVector npcs = npcsValue->Get();
-        
+
         Unit* nearestTainted = nullptr;
         float minDistance = 100.0f;
-        
+
         for (ObjectGuid const& npcGuid : npcs)
         {
             Unit* unit = botAI->GetUnit(npcGuid);
@@ -2494,13 +2513,9 @@ bool VashjTaintedElementalAction::Execute(Event event)
                 }
             }
         }
-        
+
         if (nearestTainted)
         {
-            if (AI_VALUE(Unit*, "current target") != nearestTainted)
-            {
-                botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(nearestTainted);
-            }
             return Attack(nearestTainted);
         }
     }
@@ -2524,16 +2539,23 @@ bool VashjCoilfangEliteAction::Execute(Event event)
     // Phase 2 - Coilfang Elites are high priority
     if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
     {
+        // ICC Pattern: Anti-ping-pong - continue current target if attacking same add type
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+        if (currentTarget && currentTarget->IsAlive() && currentTarget->GetEntry() == NPC_COILFANG_ELITE)
+        {
+            return false; // Continue attacking current Coilfang Elite
+        }
+
         Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
         if (!npcsValue)
         {
             return false;
         }
         GuidVector npcs = npcsValue->Get();
-        
+
         Unit* nearestElite = nullptr;
         float minDistance = 100.0f;
-        
+
         for (ObjectGuid const& npcGuid : npcs)
         {
             Unit* unit = botAI->GetUnit(npcGuid);
@@ -2550,13 +2572,9 @@ bool VashjCoilfangEliteAction::Execute(Event event)
                 }
             }
         }
-        
+
         if (nearestElite)
         {
-            if (AI_VALUE(Unit*, "current target") != nearestElite)
-            {
-                botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(nearestElite);
-            }
             return Attack(nearestElite);
         }
     }
@@ -2607,6 +2625,13 @@ bool VashjCoilfangStriderAction::Execute(Event event)
             }
         }
         
+        // ICC Pattern: Anti-ping-pong - continue current target if attacking same add type
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+        if (currentTarget && currentTarget->IsAlive() && currentTarget->GetEntry() == NPC_COILFANG_STRIDER)
+        {
+            return false; // Continue attacking current Coilfang Strider
+        }
+
         if (nearestStrider)
         {
             // Kite striders if possible
@@ -2617,15 +2642,11 @@ bool VashjCoilfangStriderAction::Execute(Event event)
                 float x = bot->GetPositionX() + cos(angle) * moveDistance;
                 float y = bot->GetPositionY() + sin(angle) * moveDistance;
                 float z = bot->GetPositionZ();
-                
+
                 bot->UpdateAllowedPositionZ(x, y, z);
                 return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
             }
-            
-            if (AI_VALUE(Unit*, "current target") != nearestStrider)
-            {
-                botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(nearestStrider);
-            }
+
             return Attack(nearestStrider);
         }
     }
@@ -2837,3 +2858,286 @@ bool VashjTaintedCoreAction::Execute(Event event)
 
     return false;
 }
+
+bool VashjMainTankEliteAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    // WotLK Pattern: Only for main tanks
+    if (!botAI->IsTank(bot) || botAI->IsAssistTank(bot))
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Phase 2 - main tank picks up Coilfang Elites
+    if (!boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
+        return false;
+
+    // Use WotLK proven main tank add management pattern
+    return HandleMainTankAddManagement(boss);
+}
+
+bool VashjMainTankEliteAction::HandleMainTankAddManagement(Unit* boss)
+{
+    // WotLK Pattern: Priority targeting for main tank Elite pickup
+    Unit* priorityElite = nullptr;
+    float highestPriority = 0.0f;
+
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = botAI->GetUnit(*i);
+        if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_COILFANG_ELITE)
+            continue;
+
+        float priority = 0.0f;
+        Unit* victim = unit->GetVictim();
+
+        if (!victim)
+        {
+            // Highest priority: Elite with no target
+            priority = 100.0f;
+            LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | Found Elite with no target (priority: %.1f, GUID: %s)",
+                bot->GetName().c_str(), priority, i->ToString().c_str());
+        }
+        else if (victim->GetTypeId() == TYPEID_PLAYER)
+        {
+            Player* targetPlayer = victim->ToPlayer();
+            PlayerbotAI* targetBotAI = GET_PLAYERBOT_AI(targetPlayer);
+
+            if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
+            {
+                // High priority: Elite attacking non-tank
+                priority = 80.0f;
+                LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | Found Elite attacking non-tank %s (priority: %.1f, GUID: %s)",
+                    bot->GetName().c_str(), targetPlayer->GetName().c_str(), priority, i->ToString().c_str());
+            }
+            else if (victim != bot)
+            {
+                // Medium priority: Elite attacking other tank
+                priority = 60.0f;
+                LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | Found Elite attacking other tank %s (priority: %.1f, GUID: %s)",
+                    bot->GetName().c_str(), targetPlayer->GetName().c_str(), priority, i->ToString().c_str());
+            }
+            // Low priority: Elite already attacking main tank (bot) = 0.0f
+        }
+
+        if (priority > highestPriority)
+        {
+            highestPriority = priority;
+            priorityElite = unit;
+        }
+    }
+
+    if (priorityElite && highestPriority > 0.0f)
+    {
+        LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | MainTankEliteAction EXECUTING - attacking Elite (priority: %.1f, GUID: %s)",
+            bot->GetName().c_str(), highestPriority, priorityElite->GetGUID().ToString().c_str());
+        return Attack(priorityElite);
+    }
+
+    LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | MainTankEliteAction FAILED - no priority Elite found",
+        bot->GetName().c_str());
+    return false;
+}
+
+bool VashjOfftankAddsAction::Execute(Event event)
+{
+    if (!bot || !botAI)
+        return false;
+
+    // WotLK Pattern: Only for off-tanks (tank but not main tank)
+    if (!botAI->IsTank(bot) || botAI->IsMainTank(bot))
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Phase 2 - off-tank picks up Striders and Tainted Elementals
+    if (!boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
+        return false;
+
+    // Use WotLK proven off-tank add management pattern
+    return HandleOfftankAddManagement(boss);
+}
+
+bool VashjOfftankAddsAction::HandleOfftankAddManagement(Unit* boss)
+{
+    Unit* mainTank = AI_VALUE(Unit*, "main tank");
+
+    // WotLK Pattern: Priority targeting for off-tank add pickup
+    Unit* priorityAdd = nullptr;
+    float highestPriority = 0.0f;
+
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = botAI->GetUnit(*i);
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        // Off-tank handles Striders and Tainted Elementals
+        if (unit->GetEntry() != NPC_COILFANG_STRIDER && unit->GetEntry() != NPC_TAINTED_ELEMENTAL)
+            continue;
+
+        float priority = 0.0f;
+        Unit* victim = unit->GetVictim();
+
+        if (!victim)
+        {
+            // Highest priority: Add with no target
+            priority = 100.0f;
+        }
+        else if (victim->GetTypeId() == TYPEID_PLAYER)
+        {
+            Player* targetPlayer = victim->ToPlayer();
+            PlayerbotAI* targetBotAI = GET_PLAYERBOT_AI(targetPlayer);
+
+            if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
+            {
+                // High priority: Add attacking non-tank
+                priority = 80.0f;
+            }
+            else if (mainTank && victim != mainTank && victim != bot)
+            {
+                // Medium priority: Add attacking other tank (not main tank or self)
+                priority = 60.0f;
+            }
+            // Low priority: Add attacking main tank or self = 0.0f
+        }
+
+        // Additional priority for Striders (fear ability)
+        if (unit->GetEntry() == NPC_COILFANG_STRIDER)
+        {
+            priority += 10.0f;
+        }
+
+        if (priority > highestPriority)
+        {
+            highestPriority = priority;
+            priorityAdd = unit;
+        }
+    }
+
+    if (priorityAdd && highestPriority > 0.0f)
+    {
+        return Attack(priorityAdd);
+    }
+
+    return false;
+}
+
+
+
+
+bool VashjForkedLightningAction::Execute(Event event)
+{
+    // WotLK Pattern: Use disperse distance AI value system for spread mechanics
+    SET_AI_VALUE(float, "disperse distance", 8.0f);
+    return true;
+}
+
+bool VashjShieldGeneratorAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Shield Generators are GameObjects - need to find and target them
+    // Since Action class doesn't have Attack method, set target instead
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (boss && boss->IsAlive())
+    {
+        // In Phase 3, prioritize shield generators by targeting boss
+        // The actual shield targeting should be handled by game mechanics
+        botAI->GetAiObjectContext()->GetValue<Unit*>("current target")->Set(boss);
+        return true;
+    }
+    
+    return false;
+}
+
+bool VashjElementalOverloadAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if bot has Tainted Core item in inventory
+    if (bot->GetItemCount(ITEM_TAINTED_CORE) > 0)
+    {
+        // Move toward center/boss position to find shield generators
+        Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+        if (boss && bot->GetDistance(boss) > 10.0f)
+        {
+            Position const& pos = boss->GetPosition();
+            return MoveTo(boss->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                         false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+        }
+    }
+
+    return false;
+}
+
+bool VashjStriderFearAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if bot is feared - simplified detection
+    if (bot->HasUnitState(UNIT_STATE_FLEEING))
+    {
+        // Use fear removal abilities if available
+        if (Value<std::list<uint32>>* spellIdsValue =
+            botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "remove fear"))
+        {
+            for (auto spellId : spellIdsValue->Get())
+            {
+                if (botAI->CanCastSpell(spellId, bot, false))
+                {
+                    return botAI->CastSpell(spellId, bot);
+                }
+            }
+        }
+    }
+
+    // If no fear removal available or not feared, return to combat
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (boss && bot->GetDistance(boss) > 30.0f)
+    {
+        Position const& pos = boss->GetPosition();
+        return MoveTo(boss->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                     false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    return false;
+}
+
+bool VashjMultiShotAvoidAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Multi-Shot targets players in front arc - move to sides/behind
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (!boss)
+        return false;
+
+    // Calculate safe position at boss's side (90 degrees from facing)
+    float bossOrientation = boss->GetOrientation();
+    float safeOrientation = bossOrientation + M_PI_2; // 90 degrees right
+    float distance = 8.0f; // Stay in melee range but avoid frontal arc
+
+    float x = boss->GetPositionX() + distance * cos(safeOrientation);
+    float y = boss->GetPositionY() + distance * sin(safeOrientation);
+    float z = boss->GetPositionZ();
+
+    return MoveTo(boss->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+}
+

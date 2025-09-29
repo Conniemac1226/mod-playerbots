@@ -138,9 +138,10 @@ float SerpentshrinePriorityMultiplier::GetValue(Action* action)
         return 1.0f;
     }
 
-    bool isAssist = dynamic_cast<DpsAssistAction*>(action) != nullptr ||
-                    dynamic_cast<TankAssistAction*>(action) != nullptr;
-    if (!isAssist)
+    bool isDpsAssist = dynamic_cast<DpsAssistAction*>(action) != nullptr;
+    bool isTankAssist = dynamic_cast<TankAssistAction*>(action) != nullptr;
+
+    if (!isDpsAssist && !isTankAssist)
     {
         return 1.0f;
     }
@@ -188,12 +189,116 @@ float SerpentshrinePriorityMultiplier::GetValue(Action* action)
 
     if (blockAll)
     {
-        return 0.0f;
+        // Block DpsAssist for all, but allow TankAssist for tanks during Lady Vashj adds
+        if (isDpsAssist)
+            return 0.0f;
+        if (isTankAssist && !botAI->IsTank(bot))
+            return 0.0f;
     }
 
     if (blockRangedOnly && PlayerbotAI::IsRanged(bot))
     {
-        return 0.0f;
+        // Block DpsAssist for ranged only
+        if (isDpsAssist)
+            return 0.0f;
+    }
+
+    return 1.0f;
+}
+
+float MorogrimOfftankMultiplier::GetValue(Action* action)
+{
+    if (!bot || !botAI || !action)
+        return 1.0f;
+
+    // WotLK Pattern: Only affects assist tanks (off-tanks)
+    if (!botAI->IsAssistTank(bot))
+        return 1.0f;
+
+    // Check if Morogrim Tidewalker encounter is active
+    Unit* boss = AI_VALUE2(Unit*, "find target", "morogrim tidewalker");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return 1.0f;
+
+    // Check for presence of murloc adds that need off-tank pickup
+    bool murlocsPresent = false;
+    if (Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("possible targets"))
+    {
+        GuidVector const npcs = npcsValue->Get();
+        for (ObjectGuid const& guid : npcs)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (unit && unit->IsAlive() && unit->GetEntry() == NPC_TIDEWALKER_LURKER)
+            {
+                murlocsPresent = true;
+                break;
+            }
+        }
+    }
+
+    // WotLK Pattern: Block TankAssist when murlocs need off-tank pickup
+    if (murlocsPresent && dynamic_cast<TankAssistAction*>(action))
+    {
+        return 0.0f; // Force off-tank to use MorogrimOfftankMurlocsAction instead
+    }
+
+    return 1.0f;
+}
+
+float VashjAddsMultiplier::GetValue(Action* action)
+{
+    if (!bot || !botAI || !action)
+        return 1.0f;
+
+    // Only affect DPS players during Lady Vashj encounter
+    if (botAI->IsHeal(bot))
+        return 1.0f;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return 1.0f;
+
+    // Phase 2 - Lady Vashj is IMMUNE during magic barrier
+    if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
+    {
+        // BLOCK BOSS TARGETING - she's immune!
+        if (dynamic_cast<DpsAssistAction*>(action))
+        {
+            return 0.0f; // Force DPS to target adds only
+        }
+
+        // Allow TankAssistAction only for main tanks (they might need to stay on boss for positioning)
+        // Off-tanks should use specific add targeting actions instead
+        if (dynamic_cast<TankAssistAction*>(action) && botAI->IsTank(bot) && !botAI->IsMainTank(bot))
+        {
+            return 0.0f; // Force off-tanks to use VashjOfftankAddsAction
+        }
+
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+
+        // WotLK Anti-Ping-Pong Pattern: If already attacking a Lady Vashj add, stick with it
+        if (currentTarget && currentTarget->IsAlive())
+        {
+            uint32 currentEntry = currentTarget->GetEntry();
+            if (currentEntry == NPC_COILFANG_ELITE ||
+                currentEntry == NPC_COILFANG_STRIDER ||
+                currentEntry == NPC_ENCHANTED_ELEMENTAL ||
+                currentEntry == NPC_TAINTED_ELEMENTAL)
+            {
+                // Check if this action targets a different add type
+                std::string actionName = action->getName();
+
+                // Block switching between different add types
+                if (currentEntry == NPC_COILFANG_ELITE && actionName != "vashj coilfang elite")
+                    return 0.0f;
+                if (currentEntry == NPC_COILFANG_STRIDER && actionName != "vashj coilfang strider")
+                    return 0.0f;
+                if (currentEntry == NPC_ENCHANTED_ELEMENTAL && actionName != "vashj enchanted elemental")
+                    return 0.0f;
+                if (currentEntry == NPC_TAINTED_ELEMENTAL && actionName != "vashj tainted elemental")
+                    return 0.0f;
+            }
+        }
     }
 
     return 1.0f;

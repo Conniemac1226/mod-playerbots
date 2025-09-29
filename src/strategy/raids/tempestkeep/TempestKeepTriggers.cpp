@@ -405,3 +405,75 @@ bool TelonicusRemoteToyTrigger::IsActive()
     // Check if we have Remote Toy debuff
     return bot->HasAura(SPELL_REMOTE_TOY);
 }
+
+// New Al'ar triggers for missing mechanics
+bool AlarFlameBuffetTrigger::IsActive()
+{
+    // Only relevant for tanks
+    if (!botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Phase 1 only - check if tank has stacking Flame Buffet debuff
+    return bot->HasAura(SPELL_FLAME_BUFFET) && boss->GetPositionZ() > 15.0f;
+}
+
+bool AlarEmberBlastTrigger::IsActive()
+{
+    // Check for nearby Ember of Al'ar adds that might cast Ember Blast
+    if (Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs"))
+    {
+        GuidVector const npcs = npcsValue->Get();
+        for (ObjectGuid const& guid : npcs)
+        {
+            Unit* unit = botAI->GetUnit(guid);
+            if (unit && unit->IsAlive() && unit->GetEntry() == NPC_EMBER_OF_ALAR)
+            {
+                // Check if ember is casting Ember Blast or if we're too close
+                if (unit->FindCurrentSpellBySpellId(SPELL_EMBER_BLAST) || 
+                    bot->GetDistance(unit) < 8.0f)
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool AlarMeltArmorTrigger::IsActive()
+{
+    // Only relevant for tanks in Phase 2
+    if (!botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Phase 2 - boss is on ground (Z < 10) and tank has Melt Armor debuff
+    return boss->GetPositionZ() < 10.0f && bot->HasAura(SPELL_MELT_ARMOR);
+}
+
+bool AlarChargeTrigger::IsActive()
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Phase 2 - check if boss is casting Charge
+    if (boss->GetPositionZ() < 10.0f && boss->FindCurrentSpellBySpellId(SPELL_ALAR_CHARGE))
+        return true;
+
+    // Also check if boss is facing us and might charge
+    if (boss->GetPositionZ() < 10.0f && boss->HasInArc(M_PI_4, bot))
+    {
+        float distance = bot->GetDistance(boss);
+        return distance > 5.0f && distance < 25.0f;
+    }
+
+    return false;
+}

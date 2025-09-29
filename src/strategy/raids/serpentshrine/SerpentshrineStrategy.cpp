@@ -5,6 +5,7 @@
 void SerpentshrineStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     // Strategy is loading correctly
+
     // Tank transition is highest priority - prevents wipes from too many stacks
     triggers.push_back(new TriggerNode(
         "hydross transition needed",
@@ -159,7 +160,16 @@ void SerpentshrineStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         NextAction::array(0, new NextAction("morogrim position", ACTION_MOVE + 4), nullptr)));
     
     // Lady Vashj triggers
-    // Phase 2 adds are highest priority
+    // Tank assignment has highest priority - must pick up adds before DPS attacks them
+    triggers.push_back(new TriggerNode(
+        "vashj main tank elite",
+        NextAction::array(0, new NextAction("vashj main tank elite", ACTION_EMERGENCY + 8), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "vashj offtank adds",
+        NextAction::array(0, new NextAction("vashj offtank adds", ACTION_EMERGENCY + 7), nullptr)));
+
+    // Phase 2 adds are highest priority for DPS
     triggers.push_back(new TriggerNode(
         "vashj coilfang elite",
         NextAction::array(0, new NextAction("vashj coilfang elite", ACTION_EMERGENCY + 5), nullptr)));
@@ -201,6 +211,27 @@ void SerpentshrineStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "vashj tainted core",
         NextAction::array(0, new NextAction("vashj tainted core", ACTION_EMERGENCY + 1), nullptr)));
     
+    // Critical Lady Vashj mechanics
+    triggers.push_back(new TriggerNode(
+        "vashj forked lightning",
+        NextAction::array(0, new NextAction("vashj forked lightning", ACTION_EMERGENCY + 3), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "vashj shield generator",
+        NextAction::array(0, new NextAction("vashj shield generator", ACTION_EMERGENCY + 4), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "vashj elemental overload",
+        NextAction::array(0, new NextAction("vashj elemental overload", ACTION_EMERGENCY + 2), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "vashj strider fear",
+        NextAction::array(0, new NextAction("vashj strider fear", ACTION_EMERGENCY + 1), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "vashj multi shot avoid",
+        NextAction::array(0, new NextAction("vashj multi shot avoid", ACTION_MOVE + 4), nullptr)));
+
     // Positioning
     triggers.push_back(new TriggerNode(
         "vashj position",
@@ -214,4 +245,12 @@ void SerpentshrineStrategy::InitMultipliers(std::vector<Multiplier*>& multiplier
     multipliers.push_back(new HydrossTankMultiplier(botAI));
     multipliers.push_back(new LeotherasThreatHoldMultiplier(botAI));
     multipliers.push_back(new SerpentshrinePriorityMultiplier(botAI));
+
+    // CRITICAL: Block TankAssist for off-tanks when murlocs present - prevents boss/add oscillation
+    // RESEARCHED: Following WotLK ICC pattern from RaidIccMultipliers.cpp
+    multipliers.push_back(new MorogrimOfftankMultiplier(botAI));
+
+    // CRITICAL: Prevent Lady Vashj add oscillation - force bots to stick with current add until dead
+    // RESEARCHED: Following WotLK ICC anti-ping-pong pattern
+    multipliers.push_back(new VashjAddsMultiplier(botAI));
 }

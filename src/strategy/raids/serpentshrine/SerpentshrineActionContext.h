@@ -60,6 +60,13 @@ public:
         creators["vashj sporebat"] = &SerpentshrineActionContext::vashj_sporebat;
         creators["vashj position"] = &SerpentshrineActionContext::vashj_position;
         creators["vashj tainted core"] = &SerpentshrineActionContext::vashj_tainted_core;
+        creators["vashj main tank elite"] = &SerpentshrineActionContext::vashj_main_tank_elite;
+        creators["vashj offtank adds"] = &SerpentshrineActionContext::vashj_offtank_adds;
+        creators["vashj forked lightning"] = &SerpentshrineActionContext::vashj_forked_lightning;
+        creators["vashj elemental overload"] = &SerpentshrineActionContext::vashj_elemental_overload;
+        creators["vashj shield generator"] = &SerpentshrineActionContext::vashj_shield_generator;
+        creators["vashj multi shot avoid"] = &SerpentshrineActionContext::vashj_multi_shot_avoid;
+        creators["vashj strider fear"] = &SerpentshrineActionContext::vashj_strider_fear;
     }
 
 private:
@@ -113,6 +120,13 @@ private:
     static Action* vashj_sporebat(PlayerbotAI* botAI) { return new VashjSporebatAction(botAI); }
     static Action* vashj_position(PlayerbotAI* botAI) { return new VashjPositionAction(botAI); }
     static Action* vashj_tainted_core(PlayerbotAI* botAI) { return new VashjTaintedCoreAction(botAI); }
+    static Action* vashj_main_tank_elite(PlayerbotAI* botAI) { return new VashjMainTankEliteAction(botAI); }
+    static Action* vashj_offtank_adds(PlayerbotAI* botAI) { return new VashjOfftankAddsAction(botAI); }
+    static Action* vashj_forked_lightning(PlayerbotAI* botAI) { return new VashjForkedLightningAction(botAI); }
+    static Action* vashj_elemental_overload(PlayerbotAI* botAI) { return new VashjElementalOverloadAction(botAI); }
+    static Action* vashj_shield_generator(PlayerbotAI* botAI) { return new VashjShieldGeneratorAction(botAI); }
+    static Action* vashj_multi_shot_avoid(PlayerbotAI* botAI) { return new VashjMultiShotAvoidAction(botAI); }
+    static Action* vashj_strider_fear(PlayerbotAI* botAI) { return new VashjStriderFearAction(botAI); }
 };
 
 #endif

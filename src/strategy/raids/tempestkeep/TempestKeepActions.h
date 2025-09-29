@@ -97,10 +97,38 @@ class AlarAddsAction : public AttackAction
 public:
     AlarAddsAction(PlayerbotAI* botAI) : AttackAction(botAI, "alar adds") {}
     bool Execute(Event event) override;
-    
+
 private:
     Unit* FindPriorityAdd();
     void MarkAddWithIcon(Unit* add);
+};
+
+class AlarFlameBuffetAction : public AttackAction
+{
+public:
+    AlarFlameBuffetAction(PlayerbotAI* botAI) : AttackAction(botAI, "alar flame buffet") {}
+    bool Execute(Event event) override;
+};
+
+class AlarEmberBlastAction : public MovementAction
+{
+public:
+    AlarEmberBlastAction(PlayerbotAI* botAI) : MovementAction(botAI, "alar ember blast") {}
+    bool Execute(Event event) override;
+};
+
+class AlarMeltArmorAction : public AttackAction
+{
+public:
+    AlarMeltArmorAction(PlayerbotAI* botAI) : AttackAction(botAI, "alar melt armor") {}
+    bool Execute(Event event) override;
+};
+
+class AlarChargeAction : public MovementAction
+{
+public:
+    AlarChargeAction(PlayerbotAI* botAI) : MovementAction(botAI, "alar charge") {}
+    bool Execute(Event event) override;
 };
 
 // Void Reaver actions

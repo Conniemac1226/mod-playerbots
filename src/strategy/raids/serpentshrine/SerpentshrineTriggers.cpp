@@ -1174,36 +1174,14 @@ bool VashjEnchantedElementalTrigger::IsActive()
         return false;
     }
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-    {
-        return false;
-    }
-
-    // Phase 2 - check for Enchanted Elementals
-    if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
-    {
-        Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
-        if (!npcsValue)
-        {
-            return false;
-        }
-        GuidVector npcs = npcsValue->Get();
-        
-        for (ObjectGuid const& npcGuid : npcs)
-        {
-            Unit* unit = botAI->GetUnit(npcGuid);
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            if (unit->GetEntry() == NPC_ENCHANTED_ELEMENTAL)
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < 50.0f)
-                {
-                    return true;
-                }
-            }
+    // ICC Pattern: Simple spawned add detection without complex boss validation
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets) {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_ENCHANTED_ELEMENTAL) {
+            LOG_INFO("playerbots", "VASHJ_PHASE2_DEBUG: %s | EnchantedElementalTrigger ACTIVATED - found Enchanted Elemental (Entry: %u, GUID: %s)",
+                bot->GetName().c_str(), unit->GetEntry(), guid.ToString().c_str());
+            return true; // Found spawned Enchanted Elemental
         }
     }
 
@@ -1217,36 +1195,14 @@ bool VashjTaintedElementalTrigger::IsActive()
         return false;
     }
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-    {
-        return false;
-    }
-
-    // Phase 2 - check for Tainted Elementals
-    if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
-    {
-        Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
-        if (!npcsValue)
-        {
-            return false;
-        }
-        GuidVector npcs = npcsValue->Get();
-        
-        for (ObjectGuid const& npcGuid : npcs)
-        {
-            Unit* unit = botAI->GetUnit(npcGuid);
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            if (unit->GetEntry() == NPC_TAINTED_ELEMENTAL)
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < 50.0f)
-                {
-                    return true;
-                }
-            }
+    // ICC Pattern: Simple spawned add detection without complex boss validation
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets) {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_TAINTED_ELEMENTAL) {
+            LOG_INFO("playerbots", "VASHJ_PHASE2_DEBUG: %s | TaintedElementalTrigger ACTIVATED - found Tainted Elemental (Entry: %u, GUID: %s)",
+                bot->GetName().c_str(), unit->GetEntry(), guid.ToString().c_str());
+            return true; // Found spawned Tainted Elemental
         }
     }
 
@@ -1260,36 +1216,14 @@ bool VashjCoilfangEliteTrigger::IsActive()
         return false;
     }
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-    {
-        return false;
-    }
-
-    // Phase 2 - check for Coilfang Elites
-    if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
-    {
-        Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
-        if (!npcsValue)
-        {
-            return false;
-        }
-        GuidVector npcs = npcsValue->Get();
-        
-        for (ObjectGuid const& npcGuid : npcs)
-        {
-            Unit* unit = botAI->GetUnit(npcGuid);
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            if (unit->GetEntry() == NPC_COILFANG_ELITE)
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < 50.0f)
-                {
-                    return true;
-                }
-            }
+    // ICC Pattern: Simple spawned add detection without complex boss validation
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets) {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_COILFANG_ELITE) {
+            LOG_INFO("playerbots", "VASHJ_PHASE2_DEBUG: %s | CoilfangEliteTrigger ACTIVATED - found Coilfang Elite (Entry: %u, GUID: %s)",
+                bot->GetName().c_str(), unit->GetEntry(), guid.ToString().c_str());
+            return true; // Found spawned Coilfang Elite
         }
     }
 
@@ -1303,36 +1237,14 @@ bool VashjCoilfangStriderTrigger::IsActive()
         return false;
     }
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-    {
-        return false;
-    }
-
-    // Phase 2 - check for Coilfang Striders
-    if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
-    {
-        Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
-        if (!npcsValue)
-        {
-            return false;
-        }
-        GuidVector npcs = npcsValue->Get();
-        
-        for (ObjectGuid const& npcGuid : npcs)
-        {
-            Unit* unit = botAI->GetUnit(npcGuid);
-            if (!unit || !unit->IsAlive())
-                continue;
-
-            if (unit->GetEntry() == NPC_COILFANG_STRIDER)
-            {
-                float distance = bot->GetDistance(unit);
-                if (distance < 50.0f)
-                {
-                    return true;
-                }
-            }
+    // ICC Pattern: Simple spawned add detection without complex boss validation
+    const GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (const auto& guid : targets) {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_COILFANG_STRIDER) {
+            LOG_INFO("playerbots", "VASHJ_PHASE2_DEBUG: %s | CoilfangStriderTrigger ACTIVATED - found Coilfang Strider (Entry: %u, GUID: %s)",
+                bot->GetName().c_str(), unit->GetEntry(), guid.ToString().c_str());
+            return true; // Found spawned Coilfang Strider
         }
     }
 
@@ -1395,6 +1307,12 @@ bool VashjPositionTrigger::IsActive()
         return false;
     }
 
+    // Additional check: Only position if boss has a victim (actively fighting)
+    if (!boss->GetVictim())
+    {
+        return false;
+    }
+
     float desiredDistance;
     
     // Phase 2 - spread out for adds
@@ -1433,3 +1351,197 @@ bool VashjTaintedCoreTrigger::IsActive()
 
     return false;
 }
+
+bool VashjMainTankEliteTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // WotLK Pattern: Only for main tanks
+    if (!botAI->IsTank(bot) || botAI->IsAssistTank(bot))
+        return false;
+
+    // ICC Pattern: Simple add detection without complex boss validation
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = botAI->GetUnit(*i);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_COILFANG_ELITE)
+        {
+            // WotLK Pattern: Check if Elite is attacking a non-tank or not attacking main tank
+            Unit* victim = unit->GetVictim();
+            if (victim && victim->GetTypeId() == TYPEID_PLAYER)
+            {
+                Player* targetPlayer = victim->ToPlayer();
+                PlayerbotAI* targetBotAI = GET_PLAYERBOT_AI(targetPlayer);
+
+                // Priority: Elite attacking non-tank
+                if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
+                {
+                    LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | MainTankEliteTrigger ACTIVATED - Elite attacking non-tank %s (Elite GUID: %s)",
+                        bot->GetName().c_str(), targetPlayer->GetName().c_str(), i->ToString().c_str());
+                    return true;
+                }
+
+                // Secondary: Elite not attacking main tank (bot)
+                if (victim != bot)
+                {
+                    LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | MainTankEliteTrigger ACTIVATED - Elite attacking other tank %s instead of main tank (Elite GUID: %s)",
+                        bot->GetName().c_str(), targetPlayer->GetName().c_str(), i->ToString().c_str());
+                    return true;
+                }
+            }
+            else if (!victim)
+            {
+                // Elite with no target needs to be picked up
+                LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | MainTankEliteTrigger ACTIVATED - Elite with no target needs pickup (Elite GUID: %s)",
+                    bot->GetName().c_str(), i->ToString().c_str());
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool VashjOfftankAddsTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    // WotLK Pattern: Only for off-tanks (tank but not main tank)
+    if (!botAI->IsTank(bot) || botAI->IsMainTank(bot))
+        return false;
+
+    // ICC Pattern: Simple add detection without complex boss validation
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    for (auto i = targets.begin(); i != targets.end(); ++i)
+    {
+        Unit* unit = botAI->GetUnit(*i);
+        if (unit && unit->IsAlive() &&
+            (unit->GetEntry() == NPC_COILFANG_STRIDER || unit->GetEntry() == NPC_TAINTED_ELEMENTAL))
+        {
+            // WotLK Pattern: Check if add is attacking a non-tank or not attacking main tank
+            Unit* victim = unit->GetVictim();
+            const char* addType = (unit->GetEntry() == NPC_COILFANG_STRIDER) ? "Strider" : "TaintedElemental";
+
+            if (victim && victim->GetTypeId() == TYPEID_PLAYER)
+            {
+                Player* targetPlayer = victim->ToPlayer();
+                PlayerbotAI* targetBotAI = GET_PLAYERBOT_AI(targetPlayer);
+
+                // Priority: Add attacking non-tank
+                if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
+                {
+                    LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | OfftankAddsTrigger ACTIVATED - %s attacking non-tank %s (Add GUID: %s)",
+                        bot->GetName().c_str(), addType, targetPlayer->GetName().c_str(), i->ToString().c_str());
+                    return true;
+                }
+
+                // Secondary: Add not attacking main tank
+                Unit* mainTank = AI_VALUE(Unit*, "main tank");
+                if (mainTank && victim != mainTank)
+                {
+                    LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | OfftankAddsTrigger ACTIVATED - %s attacking other tank %s instead of main tank (Add GUID: %s)",
+                        bot->GetName().c_str(), addType, targetPlayer->GetName().c_str(), i->ToString().c_str());
+                    return true;
+                }
+            }
+            else if (!victim)
+            {
+                // Add with no target needs to be collected
+                LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | OfftankAddsTrigger ACTIVATED - %s with no target needs pickup (Add GUID: %s)",
+                    bot->GetName().c_str(), addType, i->ToString().c_str());
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool VashjForkedLightningTrigger::IsActive()
+{
+    if (!bot || !botAI)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Phase 2 - boss casts Forked Lightning while rooted
+    if (!boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
+        return false;
+
+    // WotLK Pattern: Check if boss is casting Forked Lightning
+    if (boss->FindCurrentSpellBySpellId(SPELL_VASHJ_FORKED_LIGHTNING))
+        return true;
+
+    // WotLK Pattern: Check if disperse distance is already set to prevent re-triggering
+    return AI_VALUE(float, "disperse distance") != 8.0f;
+}
+
+
+
+
+bool VashjShieldGeneratorTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Phase 3 - when boss loses magic barrier, shield generators activate
+    if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
+        return false;
+
+    // In Phase 3, shield generators are always relevant
+    return boss->GetHealthPct() <= 50.0f;
+}
+
+bool VashjElementalOverloadTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if bot has Tainted Core item in inventory
+    return bot->GetItemCount(ITEM_TAINTED_CORE) > 0;
+}
+
+bool VashjMultiShotAvoidTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Only for melee classes during Phase 1 (when boss is targetable)
+    if (!PlayerbotAI::IsMelee(bot))
+        return false;
+
+    // Phase 1 - boss is targetable and casting Multi-Shot
+    if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
+        return false;
+
+    // Check if boss is casting Multi-Shot or Shoot
+    return boss->FindCurrentSpellBySpellId(SPELL_VASHJ_MULTI_SHOT) ||
+           boss->FindCurrentSpellBySpellId(SPELL_VASHJ_SHOOT);
+}
+
+bool VashjStriderFearTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Simple fear detection using fleeing state (fear causes fleeing)
+    return bot->HasUnitState(UNIT_STATE_FLEEING);
+}
+

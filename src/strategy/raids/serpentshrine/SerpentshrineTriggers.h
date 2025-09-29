@@ -298,4 +298,53 @@ public:
     bool IsActive() override;
 };
 
+class VashjMainTankEliteTrigger : public Trigger
+{
+public:
+    VashjMainTankEliteTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vashj main tank elite") {}
+    bool IsActive() override;
+};
+
+class VashjOfftankAddsTrigger : public Trigger
+{
+public:
+    VashjOfftankAddsTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vashj offtank adds") {}
+    bool IsActive() override;
+};
+
+class VashjForkedLightningTrigger : public Trigger
+{
+public:
+    VashjForkedLightningTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vashj forked lightning") {}
+    bool IsActive() override;
+};
+
+class VashjElementalOverloadTrigger : public Trigger
+{
+public:
+    VashjElementalOverloadTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vashj elemental overload") {}
+    bool IsActive() override;
+};
+
+class VashjShieldGeneratorTrigger : public Trigger
+{
+public:
+    VashjShieldGeneratorTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vashj shield generator") {}
+    bool IsActive() override;
+};
+
+class VashjMultiShotAvoidTrigger : public Trigger
+{
+public:
+    VashjMultiShotAvoidTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vashj multi shot avoid") {}
+    bool IsActive() override;
+};
+
+class VashjStriderFearTrigger : public Trigger
+{
+public:
+    VashjStriderFearTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vashj strider fear") {}
+    bool IsActive() override;
+};
+
 #endif
