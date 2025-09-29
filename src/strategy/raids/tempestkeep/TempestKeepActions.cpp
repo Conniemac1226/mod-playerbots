@@ -439,6 +439,10 @@ bool VoidReaverPoundingAction::Execute(Event event)
 
 bool VoidReaverArcaneOrbAction::Execute(Event event)
 {
+    // CLAUDE.md: HEALERS MUST HEAL - exclude healers from movement actions
+    if (botAI->IsHeal(bot))
+        return false;
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "void reaver");
     if (!boss)
         return false;
@@ -446,9 +450,9 @@ bool VoidReaverArcaneOrbAction::Execute(Event event)
     // Check if an arcane orb is targeting us
     // Arcane Orb targets players 20+ yards away from boss
     float distanceFromBoss = bot->GetDistance(boss);
-    
-    // If we're at risk range (20-40 yards), spread out to minimize orb damage
-    if (distanceFromBoss > 18.0f && distanceFromBoss < 35.0f)
+
+    // If we're at orb risk range (separate from positioning range), spread out
+    if (distanceFromBoss > 32.0f && distanceFromBoss < 45.0f)
     {
         // Check if other players are too close
         GuidVector members = AI_VALUE(GuidVector, "group members");
@@ -477,6 +481,10 @@ bool VoidReaverArcaneOrbAction::Execute(Event event)
 
 bool VoidReaverPositionAction::Execute(Event event)
 {
+    // CLAUDE.md: HEALERS MUST HEAL - exclude healers from movement actions
+    if (botAI->IsHeal(bot))
+        return false;
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "void reaver");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
@@ -494,49 +502,49 @@ bool VoidReaverPositionAction::HandleTankPosition(Unit* boss)
 {
     // Tank should be in melee range but ready for knock away
     float distance = bot->GetDistance(boss);
-    
-    // If knocked back, return to position
-    if (distance > 5.0f)
+
+    // If knocked back far, return to position
+    if (distance > 8.0f)
     {
         return TempestKeepMovementHelper::MoveTowardPosition(bot, TK_VOID_REAVER_TANK_POSITION, 3.0f);
     }
-    
-    // Face boss away from raid
-    if (distance < 3.0f)
+
+    // Face boss away from raid - only if very close
+    if (distance < 2.0f)
     {
         float angle = boss->GetAngle(TK_VOID_REAVER_RANGED_POSITION.GetPositionX(),
                                     TK_VOID_REAVER_RANGED_POSITION.GetPositionY());
-        float newX = boss->GetPositionX() + cos(angle + M_PI) * 3.0f;
-        float newY = boss->GetPositionY() + sin(angle + M_PI) * 3.0f;
-        
-        if (bot->GetDistance2d(newX, newY) > 2.0f)
+        float newX = boss->GetPositionX() + cos(angle + M_PI) * 4.0f;
+        float newY = boss->GetPositionY() + sin(angle + M_PI) * 4.0f;
+
+        if (bot->GetDistance2d(newX, newY) > 3.0f)
         {
             bot->GetMotionMaster()->MovePoint(0, newX, newY, boss->GetPositionZ(), false);
             return true;
         }
     }
-    
+
     return false;
 }
 
 bool VoidReaverPositionAction::HandleRangedPosition(Unit* boss)
 {
     float distance = bot->GetDistance(boss);
-    
-    // Ranged should stay 20-30 yards from boss
+
+    // Ranged should stay 22-32 yards from boss (separated from arcane orb range)
     // Too close - risk of pounding
-    if (distance < 20.0f)
+    if (distance < 18.0f)
     {
         Position safePos = TempestKeepMovementHelper::CalculateSafePosition(
-            boss->GetPosition(), bot->GetPosition(), 25.0f);
+            boss->GetPosition(), bot->GetPosition(), 27.0f);
         bot->GetMotionMaster()->MovePoint(0, safePos.GetPositionX(),
                                           safePos.GetPositionY(),
                                           safePos.GetPositionZ(), false);
         return true;
     }
-    
+
     // Too far - move closer for healing/dps
-    if (distance > 35.0f)
+    if (distance > 40.0f)
     {
         return TempestKeepMovementHelper::MoveTowardPosition(bot, TK_VOID_REAVER_RANGED_POSITION, 3.0f);
     }

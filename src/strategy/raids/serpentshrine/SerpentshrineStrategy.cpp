@@ -235,7 +235,7 @@ void SerpentshrineStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     // Positioning
     triggers.push_back(new TriggerNode(
         "vashj position",
-        NextAction::array(0, new NextAction("vashj position", ACTION_MOVE + 3), nullptr)));
+        NextAction::array(0, new NextAction("vashj position", ACTION_NORMAL), nullptr)));
 }
 
 void SerpentshrineStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)

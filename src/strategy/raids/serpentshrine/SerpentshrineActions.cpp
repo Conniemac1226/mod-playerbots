@@ -2733,6 +2733,12 @@ bool VashjPositionAction::Execute(Event event)
         return false;
     }
 
+    // CLAUDE.md: HEALERS MUST HEAL - exclude healers from movement actions
+    if (botAI->IsHeal(bot))
+    {
+        return false;
+    }
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {

@@ -50,11 +50,11 @@ void TempestKeepStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         
     triggers.push_back(new TriggerNode(
         "void reaver arcane orb",
-        NextAction::array(0, new NextAction("void reaver arcane orb", ACTION_MOVE + 3), nullptr)));
-        
+        NextAction::array(0, new NextAction("void reaver arcane orb", ACTION_NORMAL), nullptr)));
+
     triggers.push_back(new TriggerNode(
         "void reaver position",
-        NextAction::array(0, new NextAction("void reaver position", ACTION_MOVE + 2), nullptr)));
+        NextAction::array(0, new NextAction("void reaver position", ACTION_NORMAL), nullptr)));
 
     // Solarian triggers
     triggers.push_back(new TriggerNode(
