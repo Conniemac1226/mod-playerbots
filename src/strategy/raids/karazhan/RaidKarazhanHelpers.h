@@ -94,6 +94,7 @@ enum KarazhanNpcs
 // Chess helper constants (from core script boss_chess_event.cpp / karazhan.h)
 const uint32 KZ_SPELL_MOVE_GENERIC = 30012;
 const uint32 KZ_SPELL_MOVE_COOLDOWN = 30543;
+const uint32 KZ_SPELL_CHANGE_FACING = 30284;
 
 extern const Position KARAZHAN_MAIDEN_OF_VIRTUE_BOSS_POSITION;
 extern const Position KARAZHAN_MAIDEN_OF_VIRTUE_RANGED_POSITION[8];

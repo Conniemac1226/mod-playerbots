@@ -1397,31 +1397,84 @@ bool KarazhanChessEventMoveAction::Execute(Event event)
     float desiredDistance = isRanged ? 15.0f : 5.0f;
     float currentDistance = piece->GetExactDist2d(target);
 
-    // Move piece if not in optimal range
-    if (std::abs(currentDistance - desiredDistance) > 4.0f)
+    // First priority: Face the target if not facing it
+    if (!piece->HasInArc(M_PI / 4, target)) // Not facing target (45 degree arc)
     {
         if (!piece->HasAura(KZ_SPELL_MOVE_COOLDOWN))
         {
-            // Find move trigger in the direction of target
-            Position targetPos = target->GetPosition();
-            Creature* bestTrigger = nullptr;
-            float bestScore = 999999.0f;
-
+            // Find trigger closest to target direction for facing change
             std::list<Creature*> triggers;
-            piece->GetCreatureListWithEntryInGrid(triggers, NPC_CHESS_MOVE_TRIGGER, 15.0f);
+            piece->GetCreatureListWithEntryInGrid(triggers, NPC_CHESS_MOVE_TRIGGER, 8.0f);
+
+            Creature* bestTrigger = nullptr;
+            float bestAngleDiff = M_PI;
+
+            float targetAngle = piece->GetAngle(target);
 
             for (Creature* trigger : triggers)
             {
-                // Calculate distance from trigger to target
+                float triggerAngle = piece->GetAngle(trigger);
+                float angleDiff = std::abs(targetAngle - triggerAngle);
+
+                // Normalize angle difference
+                if (angleDiff > M_PI)
+                    angleDiff = 2 * M_PI - angleDiff;
+
+                if (angleDiff < bestAngleDiff)
+                {
+                    bestAngleDiff = angleDiff;
+                    bestTrigger = trigger;
+                }
+            }
+
+            if (bestTrigger)
+            {
+                piece->CastSpell(bestTrigger, KZ_SPELL_CHANGE_FACING, false);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Second priority: Move closer if not in optimal range
+    if (currentDistance > desiredDistance + 5.0f || currentDistance < desiredDistance - 5.0f)
+    {
+        if (!piece->HasAura(KZ_SPELL_MOVE_COOLDOWN))
+        {
+            // Find triggers and select one that moves toward target
+            std::list<Creature*> triggers;
+            piece->GetCreatureListWithEntryInGrid(triggers, NPC_CHESS_MOVE_TRIGGER, 12.0f);
+
+            Creature* bestTrigger = nullptr;
+            float bestDistance = currentDistance;
+
+            for (Creature* trigger : triggers)
+            {
+                // Skip our current position
+                if (trigger->GetExactDist2d(piece) < 1.0f)
+                    continue;
+
                 float triggerToTarget = trigger->GetExactDist2d(target);
 
-                // Prefer triggers that move us closer to desired range
-                float score = std::abs(triggerToTarget - desiredDistance);
-
-                if (score < bestScore)
+                // If too far, prefer triggers closer to target
+                // If too close, prefer triggers farther from target
+                if (currentDistance > desiredDistance)
                 {
-                    bestScore = score;
-                    bestTrigger = trigger;
+                    // Move closer - prefer triggers with smaller distance to target
+                    if (triggerToTarget < bestDistance)
+                    {
+                        bestDistance = triggerToTarget;
+                        bestTrigger = trigger;
+                    }
+                }
+                else
+                {
+                    // Move farther - prefer triggers with larger distance to target
+                    if (triggerToTarget > bestDistance)
+                    {
+                        bestDistance = triggerToTarget;
+                        bestTrigger = trigger;
+                    }
                 }
             }
 
