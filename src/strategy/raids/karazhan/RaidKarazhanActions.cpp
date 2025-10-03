@@ -1328,28 +1328,28 @@ bool KarazhanChessEventMoveAction::Execute(Event event)
 
         if (botAI->IsTank(bot))
         {
-            // Tanks control King first (required to start event), then Rooks
+            // Tanks control King first (required to start event), then Rooks, then Pawns (to clear path)
             piecePreference = isHorde ?
-                std::vector<uint32>{NPC_KING_H, NPC_ROOK_H, NPC_KNIGHT_H} :
-                std::vector<uint32>{NPC_KING_A, NPC_ROOK_A, NPC_KNIGHT_A};
+                std::vector<uint32>{NPC_KING_H, NPC_ROOK_H, NPC_KNIGHT_H, NPC_PAWN_H} :
+                std::vector<uint32>{NPC_KING_A, NPC_ROOK_A, NPC_KNIGHT_A, NPC_PAWN_A};
         }
         else if (botAI->IsHeal(bot))
         {
-            // Healers control Bishops (healing pieces)
+            // Healers control Bishops (healing pieces), then Pawns (to clear path)
             piecePreference = isHorde ?
-                std::vector<uint32>{NPC_BISHOP_H, NPC_QUEEN_H, NPC_ROOK_H} :
-                std::vector<uint32>{NPC_BISHOP_A, NPC_QUEEN_A, NPC_ROOK_A};
+                std::vector<uint32>{NPC_BISHOP_H, NPC_QUEEN_H, NPC_ROOK_H, NPC_PAWN_H} :
+                std::vector<uint32>{NPC_BISHOP_A, NPC_QUEEN_A, NPC_ROOK_A, NPC_PAWN_A};
         }
         else if (botAI->IsRanged(bot))
         {
-            // Ranged DPS controls Queens, then Bishops
+            // Ranged DPS controls Queens, then Bishops, then Pawns (to clear path)
             piecePreference = isHorde ?
-                std::vector<uint32>{NPC_QUEEN_H, NPC_BISHOP_H, NPC_ROOK_H} :
-                std::vector<uint32>{NPC_QUEEN_A, NPC_BISHOP_A, NPC_ROOK_A};
+                std::vector<uint32>{NPC_QUEEN_H, NPC_BISHOP_H, NPC_ROOK_H, NPC_PAWN_H} :
+                std::vector<uint32>{NPC_QUEEN_A, NPC_BISHOP_A, NPC_ROOK_A, NPC_PAWN_A};
         }
         else
         {
-            // Melee DPS controls Knights, Rooks, Pawns
+            // Melee DPS controls Knights, Rooks, Pawns (priority for pawns to clear blocking)
             piecePreference = isHorde ?
                 std::vector<uint32>{NPC_KNIGHT_H, NPC_ROOK_H, NPC_PAWN_H} :
                 std::vector<uint32>{NPC_KNIGHT_A, NPC_ROOK_A, NPC_PAWN_A};
