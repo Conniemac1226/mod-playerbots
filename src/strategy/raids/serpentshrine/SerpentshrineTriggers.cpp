@@ -1179,8 +1179,6 @@ bool VashjEnchantedElementalTrigger::IsActive()
     for (const auto& guid : targets) {
         Unit* unit = botAI->GetUnit(guid);
         if (unit && unit->IsAlive() && unit->GetEntry() == NPC_ENCHANTED_ELEMENTAL) {
-            LOG_INFO("playerbots", "VASHJ_PHASE2_DEBUG: %s | EnchantedElementalTrigger ACTIVATED - found Enchanted Elemental (Entry: %u, GUID: %s)",
-                bot->GetName().c_str(), unit->GetEntry(), guid.ToString().c_str());
             return true; // Found spawned Enchanted Elemental
         }
     }
@@ -1200,9 +1198,19 @@ bool VashjTaintedElementalTrigger::IsActive()
     for (const auto& guid : targets) {
         Unit* unit = botAI->GetUnit(guid);
         if (unit && unit->IsAlive() && unit->GetEntry() == NPC_TAINTED_ELEMENTAL) {
-            LOG_INFO("playerbots", "VASHJ_PHASE2_DEBUG: %s | TaintedElementalTrigger ACTIVATED - found Tainted Elemental (Entry: %u, GUID: %s)",
-                bot->GetName().c_str(), unit->GetEntry(), guid.ToString().c_str());
             return true; // Found spawned Tainted Elemental
+        }
+    }
+
+    // CRITICAL FIX: Also activate trigger if dead Tainted corpses nearby (for looting cores)
+    // This allows the action to continue running after Tainted dies so bots can loot the core
+    std::list<Creature*> corpses;
+    bot->GetCreatureListWithEntryInGrid(corpses, NPC_TAINTED_ELEMENTAL, 15.0f);
+    for (Creature* corpse : corpses)
+    {
+        if (corpse && corpse->isDead() && corpse->GetCorpseDelay() > 0)
+        {
+            return true; // Found dead Tainted corpse to loot
         }
     }
 
@@ -1221,8 +1229,6 @@ bool VashjCoilfangEliteTrigger::IsActive()
     for (const auto& guid : targets) {
         Unit* unit = botAI->GetUnit(guid);
         if (unit && unit->IsAlive() && unit->GetEntry() == NPC_COILFANG_ELITE) {
-            LOG_INFO("playerbots", "VASHJ_PHASE2_DEBUG: %s | CoilfangEliteTrigger ACTIVATED - found Coilfang Elite (Entry: %u, GUID: %s)",
-                bot->GetName().c_str(), unit->GetEntry(), guid.ToString().c_str());
             return true; // Found spawned Coilfang Elite
         }
     }
@@ -1242,8 +1248,6 @@ bool VashjCoilfangStriderTrigger::IsActive()
     for (const auto& guid : targets) {
         Unit* unit = botAI->GetUnit(guid);
         if (unit && unit->IsAlive() && unit->GetEntry() == NPC_COILFANG_STRIDER) {
-            LOG_INFO("playerbots", "VASHJ_PHASE2_DEBUG: %s | CoilfangStriderTrigger ACTIVATED - found Coilfang Strider (Entry: %u, GUID: %s)",
-                bot->GetName().c_str(), unit->GetEntry(), guid.ToString().c_str());
             return true; // Found spawned Coilfang Strider
         }
     }
@@ -1378,24 +1382,18 @@ bool VashjMainTankEliteTrigger::IsActive()
                 // Priority: Elite attacking non-tank
                 if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
                 {
-                    LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | MainTankEliteTrigger ACTIVATED - Elite attacking non-tank %s (Elite GUID: %s)",
-                        bot->GetName().c_str(), targetPlayer->GetName().c_str(), i->ToString().c_str());
                     return true;
                 }
 
                 // Secondary: Elite not attacking main tank (bot)
                 if (victim != bot)
                 {
-                    LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | MainTankEliteTrigger ACTIVATED - Elite attacking other tank %s instead of main tank (Elite GUID: %s)",
-                        bot->GetName().c_str(), targetPlayer->GetName().c_str(), i->ToString().c_str());
                     return true;
                 }
             }
             else if (!victim)
             {
                 // Elite with no target needs to be picked up
-                LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | MainTankEliteTrigger ACTIVATED - Elite with no target needs pickup (Elite GUID: %s)",
-                    bot->GetName().c_str(), i->ToString().c_str());
                 return true;
             }
         }
@@ -1413,45 +1411,64 @@ bool VashjOfftankAddsTrigger::IsActive()
     if (!botAI->IsTank(bot) || botAI->IsMainTank(bot))
         return false;
 
-    // ICC Pattern: Simple add detection without complex boss validation
+    // CRITICAL: Off-tank must pick up Coilfang Elites immediately
+    // Elites spawn on stairs and need immediate pickup before reaching raid
     GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    Unit* mainTank = AI_VALUE(Unit*, "main tank");
+
     for (auto i = targets.begin(); i != targets.end(); ++i)
     {
         Unit* unit = botAI->GetUnit(*i);
-        if (unit && unit->IsAlive() &&
-            (unit->GetEntry() == NPC_COILFANG_STRIDER || unit->GetEntry() == NPC_TAINTED_ELEMENTAL))
+        if (!unit || !unit->IsAlive())
+            continue;
+
+        // CRITICAL: Prioritize Coilfang Elites - they need immediate pickup
+        if (unit->GetEntry() == NPC_COILFANG_ELITE)
         {
-            // WotLK Pattern: Check if add is attacking a non-tank or not attacking main tank
             Unit* victim = unit->GetVictim();
-            const char* addType = (unit->GetEntry() == NPC_COILFANG_STRIDER) ? "Strider" : "TaintedElemental";
+
+            // Immediate pickup if Elite has no target
+            if (!victim)
+            {
+                return true;
+            }
+
+            // Immediate pickup if Elite is attacking non-tank
+            if (victim->GetTypeId() == TYPEID_PLAYER)
+            {
+                Player* targetPlayer = victim->ToPlayer();
+                PlayerbotAI* targetBotAI = GET_PLAYERBOT_AI(targetPlayer);
+
+                if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
+                {
+                    return true;
+                }
+
+                // Immediate pickup if Elite is NOT on main tank
+                if (mainTank && victim != mainTank)
+                {
+                    return true;
+                }
+            }
+        }
+        // Also handle Striders/Tainted Elementals if attacking non-tanks
+        else if (unit->GetEntry() == NPC_COILFANG_STRIDER || unit->GetEntry() == NPC_TAINTED_ELEMENTAL)
+        {
+            Unit* victim = unit->GetVictim();
 
             if (victim && victim->GetTypeId() == TYPEID_PLAYER)
             {
                 Player* targetPlayer = victim->ToPlayer();
                 PlayerbotAI* targetBotAI = GET_PLAYERBOT_AI(targetPlayer);
 
-                // Priority: Add attacking non-tank
+                // Only pick up if attacking non-tank
                 if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
                 {
-                    LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | OfftankAddsTrigger ACTIVATED - %s attacking non-tank %s (Add GUID: %s)",
-                        bot->GetName().c_str(), addType, targetPlayer->GetName().c_str(), i->ToString().c_str());
-                    return true;
-                }
-
-                // Secondary: Add not attacking main tank
-                Unit* mainTank = AI_VALUE(Unit*, "main tank");
-                if (mainTank && victim != mainTank)
-                {
-                    LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | OfftankAddsTrigger ACTIVATED - %s attacking other tank %s instead of main tank (Add GUID: %s)",
-                        bot->GetName().c_str(), addType, targetPlayer->GetName().c_str(), i->ToString().c_str());
                     return true;
                 }
             }
             else if (!victim)
             {
-                // Add with no target needs to be collected
-                LOG_INFO("playerbots", "VASHJ_TANK_DEBUG: %s | OfftankAddsTrigger ACTIVATED - %s with no target needs pickup (Add GUID: %s)",
-                    bot->GetName().c_str(), addType, i->ToString().c_str());
                 return true;
             }
         }
@@ -1543,5 +1560,31 @@ bool VashjStriderFearTrigger::IsActive()
 
     // Simple fear detection using fleeing state (fear causes fleeing)
     return bot->HasUnitState(UNIT_STATE_FLEEING);
+}
+
+bool VashjQuadrantPositionTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Only during Phase 2 (Magic Barrier active)
+    if (!boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
+        return false;
+
+    // Exclude healers from quadrant assignment
+    if (botAI->IsHeal(bot))
+        return false;
+
+    // Only ranged DPS assigned to quadrants
+    if (!PlayerbotAI::IsRangedDps(bot))
+        return false;
+
+    // Quadrant assignment managed in action - trigger always active during Phase 2 for ranged DPS
+    return true;
 }
 

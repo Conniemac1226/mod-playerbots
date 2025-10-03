@@ -19,7 +19,10 @@ public:
         creators["alar ember blast"] = &TempestKeepActionContext::alar_ember_blast;
         creators["alar melt armor"] = &TempestKeepActionContext::alar_melt_armor;
         creators["alar charge"] = &TempestKeepActionContext::alar_charge;
-        
+        creators["alar offtank platform"] = &TempestKeepActionContext::alar_offtank_platform;
+        creators["alar plate dps add tank"] = &TempestKeepActionContext::alar_plate_dps_add_tank;
+        creators["alar plate dps escape"] = &TempestKeepActionContext::alar_plate_dps_escape;
+
         // Void Reaver actions
         creators["void reaver pounding"] = &TempestKeepActionContext::void_reaver_pounding;
         creators["void reaver arcane orb"] = &TempestKeepActionContext::void_reaver_arcane_orb;
@@ -56,7 +59,10 @@ private:
     static Action* alar_ember_blast(PlayerbotAI* botAI) { return new AlarEmberBlastAction(botAI); }
     static Action* alar_melt_armor(PlayerbotAI* botAI) { return new AlarMeltArmorAction(botAI); }
     static Action* alar_charge(PlayerbotAI* botAI) { return new AlarChargeAction(botAI); }
-    
+    static Action* alar_offtank_platform(PlayerbotAI* botAI) { return new AlarOfftankPlatformAction(botAI); }
+    static Action* alar_plate_dps_add_tank(PlayerbotAI* botAI) { return new AlarPlateDpsAddTankAction(botAI); }
+    static Action* alar_plate_dps_escape(PlayerbotAI* botAI) { return new AlarPlateDpsEscapeAction(botAI); }
+
     // Void Reaver
     static Action* void_reaver_pounding(PlayerbotAI* botAI) { return new VoidReaverPoundingAction(botAI); }
     static Action* void_reaver_arcane_orb(PlayerbotAI* botAI) { return new VoidReaverArcaneOrbAction(botAI); }

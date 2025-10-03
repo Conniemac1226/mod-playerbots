@@ -372,6 +372,9 @@ class VashjCoilfangStriderAction : public AttackAction
 public:
     VashjCoilfangStriderAction(PlayerbotAI* botAI) : AttackAction(botAI, "vashj coilfang strider") {}
     bool Execute(Event event) override;
+
+private:
+    void ApplySlowToStrider(Unit* strider);
 };
 
 class VashjSporebatAction : public AttackAction
@@ -403,6 +406,7 @@ public:
 
 private:
     bool HandleMainTankAddManagement(Unit* boss);
+    bool IsEliteFacingAwayFromRaid(Unit* elite, Unit* boss);
 };
 
 class VashjOfftankAddsAction : public AttackAction
@@ -413,6 +417,7 @@ public:
 
 private:
     bool HandleOfftankAddManagement(Unit* boss);
+    bool IsEliteFacingAwayFromRaid(Unit* elite, Unit* boss);
 };
 
 class VashjForkedLightningAction : public MovementAction
@@ -450,6 +455,13 @@ class VashjStriderFearAction : public MovementAction
 {
 public:
     VashjStriderFearAction(PlayerbotAI* botAI) : MovementAction(botAI, "vashj strider fear") {}
+    bool Execute(Event event) override;
+};
+
+class VashjQuadrantPositionAction : public MovementAction
+{
+public:
+    VashjQuadrantPositionAction(PlayerbotAI* botAI) : MovementAction(botAI, "vashj quadrant position") {}
     bool Execute(Event event) override;
 };
 

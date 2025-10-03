@@ -67,6 +67,7 @@ public:
         creators["vashj shield generator"] = &SerpentshrineTriggerContext::vashj_shield_generator;
         creators["vashj multi shot avoid"] = &SerpentshrineTriggerContext::vashj_multi_shot_avoid;
         creators["vashj strider fear"] = &SerpentshrineTriggerContext::vashj_strider_fear;
+        creators["vashj quadrant position"] = &SerpentshrineTriggerContext::vashj_quadrant_position;
     }
 
 private:
@@ -127,6 +128,7 @@ private:
     static Trigger* vashj_shield_generator(PlayerbotAI* botAI) { return new VashjShieldGeneratorTrigger(botAI); }
     static Trigger* vashj_multi_shot_avoid(PlayerbotAI* botAI) { return new VashjMultiShotAvoidTrigger(botAI); }
     static Trigger* vashj_strider_fear(PlayerbotAI* botAI) { return new VashjStriderFearTrigger(botAI); }
+    static Trigger* vashj_quadrant_position(PlayerbotAI* botAI) { return new VashjQuadrantPositionTrigger(botAI); }
 };
 
 #endif

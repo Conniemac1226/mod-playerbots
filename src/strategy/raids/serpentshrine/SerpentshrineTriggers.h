@@ -347,4 +347,11 @@ public:
     bool IsActive() override;
 };
 
+class VashjQuadrantPositionTrigger : public Trigger
+{
+public:
+    VashjQuadrantPositionTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vashj quadrant position") {}
+    bool IsActive() override;
+};
+
 #endif

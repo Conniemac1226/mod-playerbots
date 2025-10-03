@@ -139,6 +139,27 @@ public:
     bool IsActive() override;
 };
 
+class AlarOfftankPlatformTrigger : public Trigger
+{
+public:
+    AlarOfftankPlatformTrigger(PlayerbotAI* botAI) : Trigger(botAI, "alar offtank platform") {}
+    bool IsActive() override;
+};
+
+class AlarPlateDpsAddTankTrigger : public Trigger
+{
+public:
+    AlarPlateDpsAddTankTrigger(PlayerbotAI* botAI) : Trigger(botAI, "alar plate dps add tank") {}
+    bool IsActive() override;
+};
+
+class AlarPlateDpsEscapeTrigger : public Trigger
+{
+public:
+    AlarPlateDpsEscapeTrigger(PlayerbotAI* botAI) : Trigger(botAI, "alar plate dps escape") {}
+    bool IsActive() override;
+};
+
 // Void Reaver triggers
 class VoidReaverPoundingTrigger : public Trigger
 {

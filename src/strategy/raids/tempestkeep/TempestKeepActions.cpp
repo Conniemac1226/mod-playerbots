@@ -443,40 +443,9 @@ bool VoidReaverArcaneOrbAction::Execute(Event event)
     if (botAI->IsHeal(bot))
         return false;
 
-    Unit* boss = AI_VALUE2(Unit*, "find target", "void reaver");
-    if (!boss)
-        return false;
-
-    // Check if an arcane orb is targeting us
-    // Arcane Orb targets players 20+ yards away from boss
-    float distanceFromBoss = bot->GetDistance(boss);
-
-    // If we're at orb risk range (separate from positioning range), spread out
-    if (distanceFromBoss > 32.0f && distanceFromBoss < 45.0f)
-    {
-        // Check if other players are too close
-        GuidVector members = AI_VALUE(GuidVector, "group members");
-        for (auto& guid : members)
-        {
-            Unit* member = botAI->GetUnit(guid);
-            if (!member || member == bot)
-                continue;
-                
-            float memberDistance = bot->GetDistance(member);
-            if (memberDistance < 10.0f)
-            {
-                // Spread out from other players
-                Position spreadPos = TempestKeepMovementHelper::CalculateSafePosition(
-                    member->GetPosition(), bot->GetPosition(), 15.0f);
-                bot->GetMotionMaster()->MovePoint(0, spreadPos.GetPositionX(),
-                                                  spreadPos.GetPositionY(),
-                                                  spreadPos.GetPositionZ(), false);
-                return true;
-            }
-        }
-    }
-
-    return false;
+    // WotLK Standard Pattern: Use disperse distance AI value system
+    SET_AI_VALUE(float, "disperse distance", 15.0f);
+    return true;
 }
 
 bool VoidReaverPositionAction::Execute(Event event)
@@ -485,55 +454,24 @@ bool VoidReaverPositionAction::Execute(Event event)
     if (botAI->IsHeal(bot))
         return false;
 
+    // Tanks handled by normal combat routine
+    if (botAI->IsTank(bot))
+        return false;
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "void reaver");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check if we're main tank
-    bool isMainTank = botAI->IsMainTank(bot);
-    
-    if (isMainTank)
-        return HandleTankPosition(boss);
-    else
-        return HandleRangedPosition(boss);
-}
-
-bool VoidReaverPositionAction::HandleTankPosition(Unit* boss)
-{
-    // Tank should be in melee range but ready for knock away
-    float distance = bot->GetDistance(boss);
-
-    // If knocked back far, return to position
-    if (distance > 8.0f)
-    {
-        return TempestKeepMovementHelper::MoveTowardPosition(bot, TK_VOID_REAVER_TANK_POSITION, 3.0f);
-    }
-
-    // Face boss away from raid - only if very close
-    if (distance < 2.0f)
-    {
-        float angle = boss->GetAngle(TK_VOID_REAVER_RANGED_POSITION.GetPositionX(),
-                                    TK_VOID_REAVER_RANGED_POSITION.GetPositionY());
-        float newX = boss->GetPositionX() + cos(angle + M_PI) * 4.0f;
-        float newY = boss->GetPositionY() + sin(angle + M_PI) * 4.0f;
-
-        if (bot->GetDistance2d(newX, newY) > 3.0f)
-        {
-            bot->GetMotionMaster()->MovePoint(0, newX, newY, boss->GetPositionZ(), false);
-            return true;
-        }
-    }
-
-    return false;
+    return HandleRangedPosition(boss);
 }
 
 bool VoidReaverPositionAction::HandleRangedPosition(Unit* boss)
 {
     float distance = bot->GetDistance(boss);
 
-    // Ranged should stay 22-32 yards from boss (separated from arcane orb range)
+    // Ranged should stay 20-35 yards from boss
     // Too close - risk of pounding
-    if (distance < 18.0f)
+    if (distance < 20.0f)
     {
         Position safePos = TempestKeepMovementHelper::CalculateSafePosition(
             boss->GetPosition(), bot->GetPosition(), 27.0f);
@@ -544,30 +482,11 @@ bool VoidReaverPositionAction::HandleRangedPosition(Unit* boss)
     }
 
     // Too far - move closer for healing/dps
-    if (distance > 40.0f)
+    if (distance > 35.0f)
     {
         return TempestKeepMovementHelper::MoveTowardPosition(bot, TK_VOID_REAVER_RANGED_POSITION, 3.0f);
     }
-    
-    // Spread from other players for arcane orb
-    GuidVector members = AI_VALUE(GuidVector, "group members");
-    for (auto& guid : members)
-    {
-        Unit* member = botAI->GetUnit(guid);
-        if (!member || member == bot)
-            continue;
-            
-        if (bot->GetDistance(member) < 8.0f)
-        {
-            Position spreadPos = TempestKeepMovementHelper::CalculateSafePosition(
-                member->GetPosition(), bot->GetPosition(), 10.0f);
-            bot->GetMotionMaster()->MovePoint(0, spreadPos.GetPositionX(),
-                                              spreadPos.GetPositionY(),
-                                              spreadPos.GetPositionZ(), false);
-            return true;
-        }
-    }
-    
+
     return false;
 }
 
@@ -577,29 +496,9 @@ bool SolarianWrathAction::Execute(Event event)
     // If we have Wrath of the Astromancer, spread out from raid
     if (bot->HasAura(SPELL_WRATH_OF_THE_ASTROMANCER))
     {
-        // Move away from other players to avoid explosion damage
-        GuidVector members = AI_VALUE(GuidVector, "group members");
-        for (auto& guid : members)
-        {
-            Unit* member = botAI->GetUnit(guid);
-            if (!member || member == bot)
-                continue;
-                
-            float memberDistance = bot->GetDistance(member);
-            if (memberDistance < 15.0f)
-            {
-                // Spread out urgently
-                Position spreadPos = TempestKeepMovementHelper::CalculateSafePosition(
-                    member->GetPosition(), bot->GetPosition(), 20.0f);
-                bot->GetMotionMaster()->MovePoint(0, spreadPos.GetPositionX(),
-                                                  spreadPos.GetPositionY(),
-                                                  spreadPos.GetPositionZ(), false);
-                return true;
-            }
-        }
-        
-        // Move to designated spread position if not already there
-        return TempestKeepMovementHelper::MoveTowardPosition(bot, TK_SOLARIAN_SPREAD_POSITION, 5.0f);
+        // WotLK Standard Pattern: Use disperse distance AI value system
+        SET_AI_VALUE(float, "disperse distance", 20.0f);
+        return true;
     }
 
     return false;
@@ -1136,7 +1035,7 @@ bool AlarEmberBlastAction::Execute(Event event)
 
 bool AlarMeltArmorAction::Execute(Event event)
 {
-    // Tank behavior for Melt Armor in Phase 2
+    // Tank swap behavior for Melt Armor in Phase 2
     if (!botAI->IsTank(bot))
         return false;
 
@@ -1144,9 +1043,30 @@ bool AlarMeltArmorAction::Execute(Event event)
     if (!boss)
         return false;
 
-    // Melt Armor reduces armor significantly - request armor buffs or support
+    // Check Melt Armor stacks
     if (bot->HasAura(SPELL_MELT_ARMOR))
     {
+        if (Aura* meltAura = bot->GetAura(SPELL_MELT_ARMOR))
+        {
+            uint32 stacks = meltAura->GetStackAmount();
+
+            // At 3+ stacks, offtank should taunt
+            if (stacks >= 3)
+            {
+                // Main tank should kite/move away
+                if (botAI->IsMainTank(bot))
+                {
+                    // Move away from boss to let offtank pick up
+                    Position kitePos = TempestKeepMovementHelper::CalculateSafePosition(
+                        boss->GetPosition(), bot->GetPosition(), 15.0f);
+
+                    return MoveTo(boss->GetMapId(), kitePos.GetPositionX(),
+                                 kitePos.GetPositionY(), kitePos.GetPositionZ(),
+                                 false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+                }
+            }
+        }
+
         // Use defensive cooldowns if available
         if (Value<std::list<uint32>>* spellIdsValue =
             botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "defensive"))
@@ -1154,8 +1074,35 @@ bool AlarMeltArmorAction::Execute(Event event)
             for (auto spellId : spellIdsValue->Get())
             {
                 if (botAI->CanCastSpell(spellId, bot, false))
-                {
                     return botAI->CastSpell(spellId, bot);
+            }
+        }
+    }
+    else if (!botAI->IsMainTank(bot))
+    {
+        // Offtank should taunt if main tank has high stacks
+        GuidVector members = AI_VALUE(GuidVector, "group members");
+        for (auto& guid : members)
+        {
+            Unit* member = botAI->GetUnit(guid);
+            if (member && member->HasAura(SPELL_MELT_ARMOR))
+            {
+                if (Aura* meltAura = member->GetAura(SPELL_MELT_ARMOR))
+                {
+                    uint32 stacks = meltAura->GetStackAmount();
+                    if (stacks >= 3)
+                    {
+                        // Offtank should taunt
+                        if (Value<std::list<uint32>>* spellIdsValue =
+                            botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "taunt"))
+                        {
+                            for (auto spellId : spellIdsValue->Get())
+                            {
+                                if (botAI->CanCastSpell(spellId, boss, false))
+                                    return botAI->CastSpell(spellId, boss);
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1177,14 +1124,126 @@ bool AlarChargeAction::Execute(Event event)
         // Calculate perpendicular movement to avoid charge line
         float bossOrientation = boss->GetAngle(bot);
         float escapeAngle = bossOrientation + M_PI_2; // 90 degrees to the side
-        
+
         float escapeX = bot->GetPositionX() + 10.0f * cos(escapeAngle);
         float escapeY = bot->GetPositionY() + 10.0f * sin(escapeAngle);
         float escapeZ = bot->GetPositionZ();
-        
+
         return MoveTo(boss->GetMapId(), escapeX, escapeY, escapeZ,
                      false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
     }
 
     return false;
+}
+
+bool AlarOfftankPlatformAction::Execute(Event event)
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss)
+        return false;
+
+    // Get the offtank platform position (next platform in rotation)
+    Position offtankPos = GetOfftankPlatform();
+
+    // Move to offtank platform
+    float distance = bot->GetDistance(offtankPos);
+    if (distance > 5.0f)
+    {
+        return MoveTo(boss->GetMapId(), offtankPos.GetPositionX(),
+                     offtankPos.GetPositionY(), offtankPos.GetPositionZ(),
+                     false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+    }
+
+    // Stay at platform and attack boss if in range
+    return Attack(boss);
+}
+
+Position AlarOfftankPlatformAction::GetOfftankPlatform()
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "al'ar");
+    if (!boss)
+        return TK_ALAR_PLATFORM_2;
+
+    const Position platforms[] = {
+        TK_ALAR_PLATFORM_1,
+        TK_ALAR_PLATFORM_2,
+        TK_ALAR_PLATFORM_3,
+        TK_ALAR_PLATFORM_4
+    };
+
+    // Find which platform boss is on
+    int bossPlatform = -1;
+    float minDist = 100.0f;
+    for (int i = 0; i < 4; ++i)
+    {
+        float dist = boss->GetDistance(platforms[i]);
+        if (dist < minDist)
+        {
+            minDist = dist;
+            bossPlatform = i;
+        }
+    }
+
+    // Offtank goes to next platform in rotation
+    int offtankPlatform = (bossPlatform + 1) % 4;
+    return platforms[offtankPlatform];
+}
+
+bool AlarPlateDpsAddTankAction::Execute(Event event)
+{
+    // Find Ember of Al'ar add to tank
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* ember = nullptr;
+
+    for (auto& guid : npcs)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->GetEntry() == NPC_EMBER_OF_ALAR && unit->IsAlive())
+        {
+            // Check if add has no tank or we're already tanking it
+            if (!unit->GetVictim() || unit->GetVictim() == bot)
+            {
+                ember = unit;
+                break;
+            }
+        }
+    }
+
+    if (!ember)
+        return false;
+
+    // Tank the add - attack it to generate threat
+    return Attack(ember);
+}
+
+bool AlarPlateDpsEscapeAction::Execute(Event event)
+{
+    // Find the low-health Ember of Al'ar we're tanking
+    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* emberToEscape = nullptr;
+
+    for (auto& guid : npcs)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->GetEntry() == NPC_EMBER_OF_ALAR && unit->IsAlive())
+        {
+            float healthPct = (unit->GetHealth() * 100.0f) / unit->GetMaxHealth();
+            if (healthPct < 10.0f && unit->GetTarget() == bot->GetGUID())
+            {
+                emberToEscape = unit;
+                break;
+            }
+        }
+    }
+
+    if (!emberToEscape)
+        return false;
+
+    // Run away from the add before it explodes
+    Position escapePos = TempestKeepMovementHelper::CalculateSafePosition(
+        emberToEscape->GetPosition(), bot->GetPosition(), 20.0f);
+
+    return MoveTo(bot->GetMapId(), escapePos.GetPositionX(),
+                 escapePos.GetPositionY(), escapePos.GetPositionZ(),
+                 false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
 }

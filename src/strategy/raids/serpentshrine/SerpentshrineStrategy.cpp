@@ -161,76 +161,91 @@ void SerpentshrineStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     
     // Lady Vashj triggers
     // Tank assignment has highest priority - must pick up adds before DPS attacks them
+    // CRITICAL SAFETY: CLAUDE.md max priority = 95 (blocks chat commands at 100)
+    // ICC/Ulduar max observed: ACTION_RAID + 10 = ~40
+    // Using ACTION_RAID base (30) to stay well under limit
+
     triggers.push_back(new TriggerNode(
         "vashj main tank elite",
-        NextAction::array(0, new NextAction("vashj main tank elite", ACTION_EMERGENCY + 8), nullptr)));
+        NextAction::array(0, new NextAction("vashj main tank elite", ACTION_RAID + 8), nullptr)));
 
     triggers.push_back(new TriggerNode(
         "vashj offtank adds",
-        NextAction::array(0, new NextAction("vashj offtank adds", ACTION_EMERGENCY + 7), nullptr)));
+        NextAction::array(0, new NextAction("vashj offtank adds", ACTION_RAID + 7), nullptr)));
 
-    // Phase 2 adds are highest priority for DPS
-    triggers.push_back(new TriggerNode(
-        "vashj coilfang elite",
-        NextAction::array(0, new NextAction("vashj coilfang elite", ACTION_EMERGENCY + 5), nullptr)));
-    
-    triggers.push_back(new TriggerNode(
-        "vashj coilfang strider",
-        NextAction::array(0, new NextAction("vashj coilfang strider", ACTION_EMERGENCY + 4), nullptr)));
-    
-    triggers.push_back(new TriggerNode(
-        "vashj enchanted elemental",
-        NextAction::array(0, new NextAction("vashj enchanted elemental", ACTION_EMERGENCY + 3), nullptr)));
-    
+    // CRITICAL: Tainted Elementals are HIGHEST PRIORITY - they drop cores needed to exit Phase 2
+    // Despawn in 15 seconds, spawn 60-100 yards away - must be killed immediately
     triggers.push_back(new TriggerNode(
         "vashj tainted elemental",
-        NextAction::array(0, new NextAction("vashj tainted elemental", ACTION_EMERGENCY + 3), nullptr)));
-    
+        NextAction::array(0, new NextAction("vashj tainted elemental", ACTION_RAID + 9), nullptr)));
+
+    // Phase 2 adds are highest priority for DPS after Tainted
+    triggers.push_back(new TriggerNode(
+        "vashj coilfang elite",
+        NextAction::array(0, new NextAction("vashj coilfang elite", ACTION_RAID + 5), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "vashj coilfang strider",
+        NextAction::array(0, new NextAction("vashj coilfang strider", ACTION_RAID + 4), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "vashj enchanted elemental",
+        NextAction::array(0, new NextAction("vashj enchanted elemental", ACTION_RAID + 3), nullptr)));
+
     // Phase 3 sporebats
     triggers.push_back(new TriggerNode(
         "vashj sporebat",
-        NextAction::array(0, new NextAction("vashj sporebat", ACTION_EMERGENCY + 4), nullptr)));
+        NextAction::array(0, new NextAction("vashj sporebat", ACTION_RAID + 4), nullptr)));
     
     // Shock Blast avoidance
     triggers.push_back(new TriggerNode(
         "vashj shock blast",
-        NextAction::array(0, new NextAction("vashj shock blast", ACTION_EMERGENCY + 2), nullptr)));
-    
+        NextAction::array(0, new NextAction("vashj shock blast", ACTION_MOVE + 8), nullptr)));
+
     // Static Charge spread
     triggers.push_back(new TriggerNode(
         "vashj static charge",
-        NextAction::array(0, new NextAction("vashj static charge", ACTION_EMERGENCY + 2), nullptr)));
-    
+        NextAction::array(0, new NextAction("vashj static charge", ACTION_MOVE + 8), nullptr)));
+
     // Entangle removal
     triggers.push_back(new TriggerNode(
         "vashj entangle",
         NextAction::array(0, new NextAction("vashj entangle", ACTION_DISPEL + 3), nullptr)));
-    
-    // Tainted Core movement (Phase 2)
+
+    // CRITICAL: Core delivery and shield activation are ABSOLUTE HIGHEST PRIORITY
+    // These are the only way to exit Phase 2 - must override everything else
     triggers.push_back(new TriggerNode(
         "vashj tainted core",
-        NextAction::array(0, new NextAction("vashj tainted core", ACTION_EMERGENCY + 1), nullptr)));
-    
-    // Critical Lady Vashj mechanics
-    triggers.push_back(new TriggerNode(
-        "vashj forked lightning",
-        NextAction::array(0, new NextAction("vashj forked lightning", ACTION_EMERGENCY + 3), nullptr)));
+        NextAction::array(0, new NextAction("vashj tainted core", ACTION_RAID + 10), nullptr)));
 
     triggers.push_back(new TriggerNode(
         "vashj shield generator",
-        NextAction::array(0, new NextAction("vashj shield generator", ACTION_EMERGENCY + 4), nullptr)));
+        NextAction::array(0, new NextAction("vashj shield generator", ACTION_RAID + 10), nullptr)));
+
+    // Critical Lady Vashj mechanics
+    triggers.push_back(new TriggerNode(
+        "vashj forked lightning",
+        NextAction::array(0, new NextAction("vashj forked lightning", ACTION_MOVE + 9), nullptr)));
 
     triggers.push_back(new TriggerNode(
         "vashj elemental overload",
-        NextAction::array(0, new NextAction("vashj elemental overload", ACTION_EMERGENCY + 2), nullptr)));
+        NextAction::array(0, new NextAction("vashj elemental overload", ACTION_MOVE + 6), nullptr)));
 
     triggers.push_back(new TriggerNode(
         "vashj strider fear",
-        NextAction::array(0, new NextAction("vashj strider fear", ACTION_EMERGENCY + 1), nullptr)));
+        NextAction::array(0, new NextAction("vashj strider fear", ACTION_MOVE + 5), nullptr)));
 
     triggers.push_back(new TriggerNode(
         "vashj multi shot avoid",
         NextAction::array(0, new NextAction("vashj multi shot avoid", ACTION_MOVE + 4), nullptr)));
+
+    // CRITICAL: Phase 2 quadrant pre-positioning for Tainted Elemental fast response
+    // RESEARCHED: Tainted spawn 60-100 yards away (boss_lady_vashj.cpp:357-360)
+    // SOLUTION: Assign 4 ranged DPS to quadrants for instant engagement (0-2 sec travel time)
+    // PRIORITY: ACTION_RAID + 11 = highest priority - assigned bots MUST reach quadrants above all else
+    triggers.push_back(new TriggerNode(
+        "vashj quadrant position",
+        NextAction::array(0, new NextAction("vashj quadrant position", ACTION_RAID + 11), nullptr)));
 
     // Positioning
     triggers.push_back(new TriggerNode(

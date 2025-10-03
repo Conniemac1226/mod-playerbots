@@ -43,6 +43,19 @@ void TempestKeepStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "alar charge",
         NextAction::array(0, new NextAction("alar charge", ACTION_EMERGENCY + 4), nullptr)));
 
+    // Al'ar specialized mechanics
+    triggers.push_back(new TriggerNode(
+        "alar offtank platform",
+        NextAction::array(0, new NextAction("alar offtank platform", ACTION_MOVE + 4), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "alar plate dps add tank",
+        NextAction::array(0, new NextAction("alar plate dps add tank", ACTION_RAID + 4), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "alar plate dps escape",
+        NextAction::array(0, new NextAction("alar plate dps escape", ACTION_EMERGENCY + 5), nullptr)));
+
     // Void Reaver triggers
     triggers.push_back(new TriggerNode(
         "void reaver pounding",
@@ -133,4 +146,9 @@ void TempestKeepStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
     multipliers.push_back(new SolarianWrathMultiplier(botAI));
     multipliers.push_back(new SolarianBlindingLightMultiplier(botAI));
     multipliers.push_back(new KaelthasGravityLapseMultiplier(botAI));
+
+    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
+    multipliers.push_back(new AlarAddMultiplier(botAI));
+    multipliers.push_back(new SolarianAddMultiplier(botAI));
+    multipliers.push_back(new KaelthasAdvisorMultiplier(botAI));
 }

@@ -2403,6 +2403,11 @@ bool VashjEnchantedElementalAction::Execute(Event event)
         return false;
     }
 
+    if (botAI->IsHeal(bot))
+    {
+        return false;
+    }
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
@@ -2412,15 +2417,6 @@ bool VashjEnchantedElementalAction::Execute(Event event)
     // Phase 2 - Enchanted Elementals must die quickly
     if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
     {
-        // ICC Pattern: Anti-ping-pong - continue current target if attacking same add type
-        Unit* currentTarget = AI_VALUE(Unit*, "current target");
-        if (currentTarget && currentTarget->IsAlive() && currentTarget->GetEntry() == NPC_ENCHANTED_ELEMENTAL)
-        {
-            LOG_INFO("playerbots", "VASHJ_ACTION_DEBUG: %s | EnchantedElementalAction SKIPPED - already attacking Enchanted Elemental %s",
-                bot->GetName().c_str(), currentTarget->GetGUID().ToString().c_str());
-            return false; // Continue attacking current Enchanted Elemental
-        }
-
         Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
         if (!npcsValue)
         {
@@ -2428,6 +2424,8 @@ bool VashjEnchantedElementalAction::Execute(Event event)
         }
         GuidVector npcs = npcsValue->Get();
 
+        bool striderAlive = false;
+        bool eliteAlive = false;
         Unit* nearestElemental = nullptr;
         float minDistance = 100.0f;
 
@@ -2446,18 +2444,38 @@ bool VashjEnchantedElementalAction::Execute(Event event)
                     nearestElemental = unit;
                 }
             }
+            else if (unit->GetEntry() == NPC_COILFANG_STRIDER)
+            {
+                striderAlive = true;
+            }
+            else if (unit->GetEntry() == NPC_COILFANG_ELITE)
+            {
+                eliteAlive = true;
+            }
+        }
+
+        // Ranged DPS should focus on striders when they are active
+        if (PlayerbotAI::IsRangedDps(bot) && striderAlive)
+        {
+            return false;
+        }
+
+        // Melee (including off-tanks) should prioritize elites while any are alive
+        if (!PlayerbotAI::IsRanged(bot) && eliteAlive)
+        {
+            return false;
+        }
+
+        // ICC Pattern: Anti-ping-pong - continue current target if attacking same add type
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+        if (currentTarget && currentTarget->IsAlive() && currentTarget->GetEntry() == NPC_ENCHANTED_ELEMENTAL)
+        {
+            return false; // Continue attacking current Enchanted Elemental
         }
 
         if (nearestElemental)
         {
-            LOG_INFO("playerbots", "VASHJ_ACTION_DEBUG: %s | EnchantedElementalAction EXECUTING - attacking Enchanted Elemental %s (distance: %.1f)",
-                bot->GetName().c_str(), nearestElemental->GetGUID().ToString().c_str(), minDistance);
             return Attack(nearestElemental);
-        }
-        else
-        {
-            LOG_INFO("playerbots", "VASHJ_ACTION_DEBUG: %s | EnchantedElementalAction FAILED - no Enchanted Elementals found",
-                bot->GetName().c_str());
         }
     }
 
@@ -2471,6 +2489,11 @@ bool VashjTaintedElementalAction::Execute(Event event)
         return false;
     }
 
+    if (botAI->IsHeal(bot))
+    {
+        return false;
+    }
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
@@ -2478,15 +2501,9 @@ bool VashjTaintedElementalAction::Execute(Event event)
     }
 
     // Phase 2 - Tainted Elementals drop cores needed for shield generators
+    // RESEARCHED: Tainted Elementals spawn 60-100 yards away and are STATIONARY (boss_lady_vashj.cpp:140-141, 357-360)
     if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
     {
-        // ICC Pattern: Anti-ping-pong - continue current target if attacking same add type
-        Unit* currentTarget = AI_VALUE(Unit*, "current target");
-        if (currentTarget && currentTarget->IsAlive() && currentTarget->GetEntry() == NPC_TAINTED_ELEMENTAL)
-        {
-            return false; // Continue attacking current Tainted Elemental
-        }
-
         Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
         if (!npcsValue)
         {
@@ -2494,6 +2511,8 @@ bool VashjTaintedElementalAction::Execute(Event event)
         }
         GuidVector npcs = npcsValue->Get();
 
+        bool striderAlive = false;
+        bool eliteAlive = false;
         Unit* nearestTainted = nullptr;
         float minDistance = 100.0f;
 
@@ -2512,10 +2531,138 @@ bool VashjTaintedElementalAction::Execute(Event event)
                     nearestTainted = unit;
                 }
             }
+            else if (unit->GetEntry() == NPC_COILFANG_STRIDER)
+            {
+                striderAlive = true;
+            }
+            else if (unit->GetEntry() == NPC_COILFANG_ELITE)
+            {
+                eliteAlive = true;
+            }
+        }
+
+        // Get current target for anti-ping-pong logic
+        Unit* currentTarget = AI_VALUE(Unit*, "current target");
+
+        // CRITICAL: Check if bot already has core - if so, defer to core delivery action
+        if (bot->HasItemCount(ITEM_TAINTED_CORE, 1))
+        {
+            return false; // Already have core, let core delivery action handle it
+        }
+
+        // CRITICAL: Check for dead Tainted Elemental corpses nearby and loot them
+        // Playerbots don't auto-loot during combat, so must manually trigger loot
+        std::list<Creature*> corpses;
+        bot->GetCreatureListWithEntryInGrid(corpses, NPC_TAINTED_ELEMENTAL, 15.0f);
+
+        // Track which bots are looting which corpses to prevent duplicate looting
+        static std::map<ObjectGuid, ObjectGuid> corpseBeingLootedBy; // corpse GUID -> bot GUID
+        static std::map<ObjectGuid, time_t> corpseLastLootAttempt;   // corpse GUID -> timestamp
+        time_t currentTime = time(nullptr);
+
+        for (Creature* corpse : corpses)
+        {
+            if (!corpse || !corpse->isDead() || corpse->GetCorpseDelay() == 0)
+                continue;
+
+            ObjectGuid corpseGuid = corpse->GetGUID();
+
+            // Skip if another bot is already looting this corpse (within last 5 seconds)
+            if (corpseBeingLootedBy.count(corpseGuid) > 0)
+            {
+                ObjectGuid lootingBotGuid = corpseBeingLootedBy[corpseGuid];
+                if (lootingBotGuid != bot->GetGUID())
+                {
+                    // Check if loot attempt is still recent (within 5 seconds)
+                    if (corpseLastLootAttempt.count(corpseGuid) > 0 &&
+                        (currentTime - corpseLastLootAttempt[corpseGuid]) < 5)
+                    {
+                        continue; // Another bot is handling this corpse
+                    }
+                }
+            }
+
+            // Move to corpse if too far
+            float corpseDistance = bot->GetDistance(corpse);
+            if (corpseDistance > 5.0f)
+            {
+                // Mark this bot as looting this corpse
+                corpseBeingLootedBy[corpseGuid] = bot->GetGUID();
+                corpseLastLootAttempt[corpseGuid] = currentTime;
+
+                Position const& pos = corpse->GetPosition();
+                return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                             false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
+            }
+
+            // At corpse - send loot request
+            corpseBeingLootedBy[corpseGuid] = bot->GetGUID();
+            corpseLastLootAttempt[corpseGuid] = currentTime;
+
+            WorldPacket packet(CMSG_LOOT, 8);
+            packet << corpse->GetGUID();
+            bot->GetSession()->HandleLootOpcode(packet);
+            return true;
+        }
+
+        // ICC Pattern: Anti-ping-pong - continue current target if attacking same add type
+        if (currentTarget && currentTarget->GetEntry() == NPC_TAINTED_ELEMENTAL)
+        {
+            // Check if current Tainted target just died - INSTANT LOOT before corpse despawns
+            if (currentTarget->isDead())
+            {
+                Creature* corpse = currentTarget->ToCreature();
+                if (corpse && corpse->GetCorpseDelay() > 0)
+                {
+                    float corpseDistance = bot->GetDistance(corpse);
+                    if (corpseDistance <= 5.0f)
+                    {
+                        // INSTANT LOOT - corpse despawns in ~1 second!
+                        WorldPacket packet(CMSG_LOOT, 8);
+                        packet << corpse->GetGUID();
+                        bot->GetSession()->HandleLootOpcode(packet);
+                        return true;
+                    }
+                    else if (corpseDistance <= 15.0f)
+                    {
+                        // Rush to corpse for instant loot
+                        Position const& pos = corpse->GetPosition();
+                        return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                                     false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
+                    }
+                }
+                // Corpse already despawned or too far - find next Tainted
+                return false;
+            }
+
+            // Still alive - check if in range
+            if (currentTarget->IsAlive())
+            {
+                float currentDistance = bot->GetDistance(currentTarget);
+                if (currentDistance > 35.0f)
+                {
+                    // Move closer to stationary Tainted Elemental
+                    Position const& pos = currentTarget->GetPosition();
+                    return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                                 false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
+                }
+                return false; // In range - continue attacking current Tainted Elemental
+            }
         }
 
         if (nearestTainted)
         {
+            // CRITICAL: Move to Tainted Elemental location (they spawn 60-100 yards away at bottom of stairs)
+            // RESEARCHED: boss_lady_vashj.cpp:357-360 - minDist=60f, maxDist=100f for Tainted spawns
+            // Must get within attack range before 15-second despawn timer expires
+            float distance = bot->GetDistance(nearestTainted);
+            if (distance > 40.0f)  // Start moving when > 40 yards (they spawn 60-100 yards away)
+            {
+                Position const& pos = nearestTainted->GetPosition();
+                return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                             false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
+            }
+
             return Attack(nearestTainted);
         }
     }
@@ -2526,6 +2673,12 @@ bool VashjTaintedElementalAction::Execute(Event event)
 bool VashjCoilfangEliteAction::Execute(Event event)
 {
     if (!bot || !botAI)
+    {
+        return false;
+    }
+
+    // Keep elites on melee DPS and tanks; ranged focuses on elementals
+    if (botAI->IsHeal(bot) || (botAI->IsRanged(bot) && !botAI->IsTank(bot)))
     {
         return false;
     }
@@ -2589,13 +2742,19 @@ bool VashjCoilfangStriderAction::Execute(Event event)
         return false;
     }
 
+    // Assign striders to ranged DPS ONLY for kiting and slows
+    if (botAI->IsHeal(bot) || !PlayerbotAI::IsRangedDps(bot))
+    {
+        return false;
+    }
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
 
-    // Phase 2 - Coilfang Striders fear and must be controlled
+    // Phase 2 - Coilfang Striders fear and must be controlled by ranged
     if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
     {
         Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
@@ -2604,10 +2763,11 @@ bool VashjCoilfangStriderAction::Execute(Event event)
             return false;
         }
         GuidVector npcs = npcsValue->Get();
-        
+
         Unit* nearestStrider = nullptr;
+        Unit* myAggroStrider = nullptr;
         float minDistance = 100.0f;
-        
+
         for (ObjectGuid const& npcGuid : npcs)
         {
             Unit* unit = botAI->GetUnit(npcGuid);
@@ -2616,6 +2776,12 @@ bool VashjCoilfangStriderAction::Execute(Event event)
 
             if (unit->GetEntry() == NPC_COILFANG_STRIDER)
             {
+                // CRITICAL: Check if this bot has aggro on the Strider
+                if (unit->GetVictim() && unit->GetVictim()->GetGUID() == bot->GetGUID())
+                {
+                    myAggroStrider = unit;
+                }
+
                 float distance = bot->GetDistance(unit);
                 if (distance < minDistance)
                 {
@@ -2624,34 +2790,167 @@ bool VashjCoilfangStriderAction::Execute(Event event)
                 }
             }
         }
-        
+
+        // CRITICAL: If this bot has aggro, kite the Strider around platform edge
+        if (myAggroStrider)
+        {
+            float striderDistance = bot->GetDistance(myAggroStrider);
+
+            // Kite around platform edge - maintain 15-20 yard distance
+            if (striderDistance < 15.0f || striderDistance > 25.0f)
+            {
+                // Kite in circular pattern around boss (platform center)
+                float bossX = boss->GetPositionX();
+                float bossY = boss->GetPositionY();
+                float botX = bot->GetPositionX();
+                float botY = bot->GetPositionY();
+
+                // Calculate angle from boss to bot
+                float currentAngle = atan2(botY - bossY, botX - bossX);
+
+                // Move clockwise around platform edge (45-50 yard radius from boss)
+                float kiteRadius = 47.0f;
+                float angleIncrement = M_PI / 8.0f; // 22.5 degrees
+
+                // If too close to strider, move faster around circle
+                if (striderDistance < 15.0f)
+                    angleIncrement = M_PI / 4.0f; // 45 degrees
+
+                float newAngle = currentAngle + angleIncrement;
+                float newX = bossX + cos(newAngle) * kiteRadius;
+                float newY = bossY + sin(newAngle) * kiteRadius;
+                float newZ = bot->GetPositionZ();
+
+                bot->UpdateAllowedPositionZ(newX, newY, newZ);
+
+                // Apply slows while kiting
+                ApplySlowToStrider(myAggroStrider);
+
+                return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+            }
+
+            // In proper kite range - attack and slow
+            ApplySlowToStrider(myAggroStrider);
+            return Attack(myAggroStrider);
+        }
+
         // ICC Pattern: Anti-ping-pong - continue current target if attacking same add type
         Unit* currentTarget = AI_VALUE(Unit*, "current target");
         if (currentTarget && currentTarget->IsAlive() && currentTarget->GetEntry() == NPC_COILFANG_STRIDER)
         {
+            // Apply class-specific slows to strider while assisting
+            ApplySlowToStrider(currentTarget);
             return false; // Continue attacking current Coilfang Strider
         }
 
+        // Assist with nearest Strider if not kiting
         if (nearestStrider)
         {
-            // Kite striders if possible
-            if (botAI->IsRanged(bot) && minDistance < 15.0f)
+            // Check if Strider is in range (40 yards max for ranged attacks)
+            float striderDistance = bot->GetDistance(nearestStrider);
+            if (striderDistance <= 40.0f)
             {
-                float angle = bot->GetAngle(nearestStrider) + M_PI;
-                float moveDistance = 20.0f;
-                float x = bot->GetPositionX() + cos(angle) * moveDistance;
-                float y = bot->GetPositionY() + sin(angle) * moveDistance;
-                float z = bot->GetPositionZ();
+                // Apply class-specific slows to assist
+                ApplySlowToStrider(nearestStrider);
+                return Attack(nearestStrider);
+            }
+        }
 
-                bot->UpdateAllowedPositionZ(x, y, z);
-                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+        // SMART FALLBACK: If no Strider in range, attack Elite instead of standing idle
+        // This prevents ranged from doing nothing when Striders are far away
+        // Anti-oscillation: Only switch if not currently attacking anything
+        if (!nearestStrider || (nearestStrider && bot->GetDistance(nearestStrider) > 40.0f))
+        {
+            Unit* currentTarget = AI_VALUE(Unit*, "current target");
+
+            // Anti-oscillation: Don't switch if already attacking something
+            if (currentTarget && currentTarget->IsAlive())
+            {
+                // Allow staying on Elite if already attacking it
+                if (currentTarget->GetEntry() == NPC_COILFANG_ELITE)
+                    return false; // Continue Elite
+
+                // If attacking non-Strider/Elite, let fallback happen
+                if (currentTarget->GetEntry() != NPC_COILFANG_STRIDER)
+                {
+                    // Fall through to Elite targeting below
+                }
+                else
+                {
+                    // Currently attacking Strider but it's out of range - can switch to Elite
+                    // Fall through to Elite targeting below
+                }
             }
 
-            return Attack(nearestStrider);
+            // Find nearest Elite as fallback target
+            Unit* nearestElite = nullptr;
+            float minEliteDistance = 40.0f; // Only attack Elites within range
+
+            for (ObjectGuid const& npcGuid : npcs)
+            {
+                Unit* unit = botAI->GetUnit(npcGuid);
+                if (!unit || !unit->IsAlive())
+                    continue;
+
+                if (unit->GetEntry() == NPC_COILFANG_ELITE)
+                {
+                    float distance = bot->GetDistance(unit);
+                    if (distance < minEliteDistance)
+                    {
+                        minEliteDistance = distance;
+                        nearestElite = unit;
+                    }
+                }
+            }
+
+            if (nearestElite)
+            {
+                return Attack(nearestElite);
+            }
         }
     }
 
     return false;
+}
+
+void VashjCoilfangStriderAction::ApplySlowToStrider(Unit* strider)
+{
+    if (!strider || !bot || !botAI)
+        return;
+
+    // RESEARCHED: Following ICC Lich King Valkyr slow pattern (RaidIccActions.cpp:9270-9317)
+    // Class-specific slow abilities to kite striders and prevent fear
+    switch (bot->getClass())
+    {
+        case CLASS_MAGE:
+            if (!botAI->HasAura("Frost Nova", strider) && !botAI->HasAura("Frostbolt", strider))
+                botAI->CastSpell("Frostbolt", strider);
+            break;
+        case CLASS_HUNTER:
+            if (!botAI->HasAura("Concussive Shot", strider))
+                botAI->CastSpell("Concussive Shot", strider);
+            break;
+        case CLASS_SHAMAN:
+            if (!botAI->HasAura("Frost Shock", strider))
+                botAI->CastSpell("Frost Shock", strider);
+            break;
+        case CLASS_WARLOCK:
+            if (!botAI->HasAura("Curse of Exhaustion", strider))
+                botAI->CastSpell("Curse of Exhaustion", strider);
+            break;
+        case CLASS_DRUID:
+            if (PlayerbotAI::IsRangedDps(bot)) // Balance druids only
+            {
+                if (!botAI->HasAura("Entangling Roots", strider))
+                    botAI->CastSpell("Entangling Roots", strider);
+            }
+            break;
+        case CLASS_PRIEST:
+            // Shadow priests have no slows - rely on distance
+            break;
+        default:
+            break;
+    }
 }
 
 bool VashjSporebatAction::Execute(Event event)
@@ -2746,28 +3045,75 @@ bool VashjPositionAction::Execute(Event event)
     }
 
     float desiredDistance;
-    
-    // Phase 2 - spread out for adds
+
+    // Phase 2 - spread ranged around platform perimeter for better Tainted Elemental coverage
     if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
     {
-        desiredDistance = botAI->IsRanged(bot) ? 30.0f : 20.0f;
+        if (botAI->IsRanged(bot))
+        {
+            // Ranged spread around platform edges (35-45 yards from boss)
+            // This gives better coverage for Tainted Elementals spawning 60-100 yards away
+            desiredDistance = 40.0f;
+
+            float currentDistance = bot->GetDistance(boss);
+
+            // Use bot GUID to assign fixed positions around the circle (prevents constant repositioning)
+            // This creates a stable spread formation
+            static std::map<ObjectGuid, float> assignedAngles;
+            ObjectGuid botGuid = bot->GetGUID();
+
+            if (assignedAngles.find(botGuid) == assignedAngles.end())
+            {
+                // Assign angle based on GUID hash for consistent positioning
+                uint32 guidHash = botGuid.GetCounter();
+                assignedAngles[botGuid] = (guidHash % 360) * (M_PI / 180.0f);
+            }
+
+            float angle = assignedAngles[botGuid];
+
+            // Only reposition if significantly out of place (> 10 yards)
+            if (fabs(currentDistance - desiredDistance) > 10.0f)
+            {
+                float x = boss->GetPositionX() + cos(angle) * desiredDistance;
+                float y = boss->GetPositionY() + sin(angle) * desiredDistance;
+                float z = boss->GetPositionZ();
+
+                boss->UpdateAllowedPositionZ(x, y, z);
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+            }
+        }
+        else
+        {
+            // Melee stay closer
+            desiredDistance = 20.0f;
+            float currentDistance = bot->GetDistance(boss);
+            if (fabs(currentDistance - desiredDistance) > 5.0f)
+            {
+                float angle = boss->GetAngle(bot);
+                float x = boss->GetPositionX() + cos(angle) * desiredDistance;
+                float y = boss->GetPositionY() + sin(angle) * desiredDistance;
+                float z = boss->GetPositionZ();
+
+                boss->UpdateAllowedPositionZ(x, y, z);
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+            }
+        }
     }
     // Phase 1 and 3 - standard positioning
     else
     {
         desiredDistance = botAI->IsMelee(bot) ? 5.0f : 25.0f;
-    }
-    
-    float currentDistance = bot->GetDistance(boss);
-    if (fabs(currentDistance - desiredDistance) > 5.0f)
-    {
-        float angle = boss->GetAngle(bot);
-        float x = boss->GetPositionX() + cos(angle) * desiredDistance;
-        float y = boss->GetPositionY() + sin(angle) * desiredDistance;
-        float z = boss->GetPositionZ();
-        
-        boss->UpdateAllowedPositionZ(x, y, z);
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+        float currentDistance = bot->GetDistance(boss);
+        if (fabs(currentDistance - desiredDistance) > 5.0f)
+        {
+            float angle = boss->GetAngle(bot);
+            float x = boss->GetPositionX() + cos(angle) * desiredDistance;
+            float y = boss->GetPositionY() + sin(angle) * desiredDistance;
+            float z = boss->GetPositionZ();
+
+            boss->UpdateAllowedPositionZ(x, y, z);
+            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+        }
     }
 
     return false;
@@ -2796,6 +3142,48 @@ bool VashjTaintedCoreAction::Execute(Event event)
     if (!coreItem)
     {
         return false;
+    }
+
+
+    // CRITICAL SAFETY CHECK: Do not deliver cores while dangerous adds are alive
+    // Using core locks player in place for channel - must ensure safety first
+    Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
+    if (npcsValue)
+    {
+        GuidVector npcs = npcsValue->Get();
+        bool dangerousAddsAlive = false;
+
+        for (ObjectGuid const& npcGuid : npcs)
+        {
+            Unit* unit = botAI->GetUnit(npcGuid);
+            if (!unit || !unit->IsAlive())
+                continue;
+
+            uint32 entry = unit->GetEntry();
+
+            // Check for dangerous Phase 2 adds within threat range
+            if (entry == NPC_COILFANG_STRIDER || entry == NPC_COILFANG_ELITE || entry == NPC_TAINTED_ELEMENTAL)
+            {
+                float distance = bot->GetDistance(unit);
+
+                // Striders have 40-yard Mind Blast range, Elites have melee cleave
+                // Tainted Elementals have 200-yard Poison Bolt range
+                if ((entry == NPC_COILFANG_STRIDER && distance < 45.0f) ||
+                    (entry == NPC_COILFANG_ELITE && distance < 20.0f) ||
+                    (entry == NPC_TAINTED_ELEMENTAL && distance < 50.0f))
+                {
+                    dangerousAddsAlive = true;
+                    break;
+                }
+            }
+        }
+
+        // If dangerous adds nearby, abort core delivery and return to combat
+        // This ensures bot doesn't stand idle - will fall through to normal combat actions
+        if (dangerousAddsAlive)
+        {
+            return false;
+        }
     }
 
     GameObject* nearestGenerator = nullptr;
@@ -2862,6 +3250,7 @@ bool VashjTaintedCoreAction::Execute(Event event)
         return true;
     }
 
+    // Core usage failed - return false to allow other combat actions instead of standing idle
     return false;
 }
 
@@ -2891,23 +3280,27 @@ bool VashjMainTankEliteAction::HandleMainTankAddManagement(Unit* boss)
     // WotLK Pattern: Priority targeting for main tank Elite pickup
     Unit* priorityElite = nullptr;
     float highestPriority = 0.0f;
+    float closestDistance = 200.0f;
 
-    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (auto i = targets.begin(); i != targets.end(); ++i)
+    // CRITICAL: Use GetCreatureListWithEntryInGrid for WIDE search (150 yards)
+    // Elites spawn far away and "possible targets" has limited range
+    std::list<Creature*> elites;
+    bot->GetCreatureListWithEntryInGrid(elites, NPC_COILFANG_ELITE, 150.0f);
+
+
+    for (Creature* elite : elites)
     {
-        Unit* unit = botAI->GetUnit(*i);
-        if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_COILFANG_ELITE)
+        if (!elite || !elite->IsAlive())
             continue;
 
+        float distance = bot->GetDistance(elite);
         float priority = 0.0f;
-        Unit* victim = unit->GetVictim();
+        Unit* victim = elite->GetVictim();
 
         if (!victim)
         {
             // Highest priority: Elite with no target
             priority = 100.0f;
-            LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | Found Elite with no target (priority: %.1f, GUID: %s)",
-                bot->GetName().c_str(), priority, i->ToString().c_str());
         }
         else if (victim->GetTypeId() == TYPEID_PLAYER)
         {
@@ -2918,36 +3311,114 @@ bool VashjMainTankEliteAction::HandleMainTankAddManagement(Unit* boss)
             {
                 // High priority: Elite attacking non-tank
                 priority = 80.0f;
-                LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | Found Elite attacking non-tank %s (priority: %.1f, GUID: %s)",
-                    bot->GetName().c_str(), targetPlayer->GetName().c_str(), priority, i->ToString().c_str());
             }
             else if (victim != bot)
             {
                 // Medium priority: Elite attacking other tank
                 priority = 60.0f;
-                LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | Found Elite attacking other tank %s (priority: %.1f, GUID: %s)",
-                    bot->GetName().c_str(), targetPlayer->GetName().c_str(), priority, i->ToString().c_str());
             }
             // Low priority: Elite already attacking main tank (bot) = 0.0f
         }
 
-        if (priority > highestPriority)
+        // Pick highest priority, or closest if same priority
+        if (priority > highestPriority || (priority == highestPriority && distance < closestDistance))
         {
             highestPriority = priority;
-            priorityElite = unit;
+            closestDistance = distance;
+            priorityElite = elite;
         }
     }
 
     if (priorityElite && highestPriority > 0.0f)
     {
-        LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | MainTankEliteAction EXECUTING - attacking Elite (priority: %.1f, GUID: %s)",
-            bot->GetName().c_str(), highestPriority, priorityElite->GetGUID().ToString().c_str());
+        float eliteDistance = bot->GetDistance(priorityElite);
+
+        // CRITICAL: If Elite is far away, MOVE TO IT first before trying to attack
+        if (eliteDistance > 10.0f)
+        {
+            Position const& pos = priorityElite->GetPosition();
+            return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                         false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
+        }
+
+        // CRITICAL: Position Elite away from raid to avoid Cleave hitting others
+        Unit* victim = priorityElite->GetVictim();
+        if (victim && victim == bot)
+        {
+            // Bot has aggro - position Elite away from boss/raid
+            float eliteDistance = bot->GetDistance(priorityElite);
+
+            // CRITICAL: Simple positioning - tank stays far from boss on opposite side of Elite
+            // This naturally makes Elite face away from raid without complex facing checks
+            static std::map<ObjectGuid, time_t> lastRepositionTime;
+            ObjectGuid botGuid = bot->GetGUID();
+            time_t currentTime = time(nullptr);
+
+            // Calculate distance from bot to boss
+            float distanceToBoss = bot->GetDistance(boss);
+
+            // Only reposition if too close to Elite OR too close to boss (< 30 yards)
+            // Cooldown prevents constant repositioning
+            bool needsReposition = (eliteDistance < 5.0f || distanceToBoss < 30.0f);
+            bool cooldownExpired = (currentTime - lastRepositionTime[botGuid]) > 8;
+
+            if (needsReposition && cooldownExpired)
+            {
+                // Move to position far from boss - this pulls Elite away from raid
+                float bossX = boss->GetPositionX();
+                float bossY = boss->GetPositionY();
+                float eliteX = priorityElite->GetPositionX();
+                float eliteY = priorityElite->GetPositionY();
+
+                // Calculate angle from boss to Elite
+                float angleBossToElite = atan2(eliteY - bossY, eliteX - bossX);
+
+                // Position bot 15 yards beyond Elite away from boss
+                float moveDistance = 15.0f;
+                float newX = eliteX + cos(angleBossToElite) * moveDistance;
+                float newY = eliteY + sin(angleBossToElite) * moveDistance;
+                float newZ = bot->GetPositionZ();
+
+                bot->UpdateAllowedPositionZ(newX, newY, newZ);
+                lastRepositionTime[botGuid] = currentTime;
+                return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
+            }
+        }
+
         return Attack(priorityElite);
     }
 
-    LOG_INFO("playerbots", "VASHJ_TANK_ACTION_DEBUG: %s | MainTankEliteAction FAILED - no priority Elite found",
-        bot->GetName().c_str());
     return false;
+}
+
+bool VashjMainTankEliteAction::IsEliteFacingAwayFromRaid(Unit* elite, Unit* boss)
+{
+    if (!elite || !boss || !bot)
+        return true; // Default to true if can't check
+
+    // Get Elite's facing direction
+    float eliteOrientation = elite->GetOrientation();
+
+    // Calculate angle from Elite to boss
+    float eliteX = elite->GetPositionX();
+    float eliteY = elite->GetPositionY();
+    float bossX = boss->GetPositionX();
+    float bossY = boss->GetPositionY();
+
+    float angleToBoss = atan2(bossY - eliteY, bossX - eliteX);
+
+    // Normalize angles to 0-2PI range
+    float normalizedEliteOrientation = Position::NormalizeOrientation(eliteOrientation);
+    float normalizedAngleToBoss = Position::NormalizeOrientation(angleToBoss);
+
+    // Calculate angle difference
+    float angleDiff = std::abs(normalizedEliteOrientation - normalizedAngleToBoss);
+    if (angleDiff > M_PI)
+        angleDiff = 2 * M_PI - angleDiff;
+
+    // Elite is facing away if angle difference is > 90 degrees (M_PI/2)
+    // We want Elite facing AWAY from boss, so angle diff should be > 90 degrees
+    return angleDiff > (M_PI / 2.0f);
 }
 
 bool VashjOfftankAddsAction::Execute(Event event)
@@ -2963,7 +3434,7 @@ bool VashjOfftankAddsAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Phase 2 - off-tank picks up Striders and Tainted Elementals
+    // Phase 2 - off-tank supports by controlling extra elites or helping on elementals
     if (!boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
         return false;
 
@@ -2978,25 +3449,30 @@ bool VashjOfftankAddsAction::HandleOfftankAddManagement(Unit* boss)
     // WotLK Pattern: Priority targeting for off-tank add pickup
     Unit* priorityAdd = nullptr;
     float highestPriority = 0.0f;
+    float closestDistance = 200.0f;
 
-    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (auto i = targets.begin(); i != targets.end(); ++i)
+    // CRITICAL: Use GetCreatureListWithEntryInGrid for WIDE search (150 yards)
+    // Elites spawn far away and "possible targets" has limited range
+    std::list<Creature*> elites;
+    bot->GetCreatureListWithEntryInGrid(elites, NPC_COILFANG_ELITE, 150.0f);
+
+    for (Creature* elite : elites)
     {
-        Unit* unit = botAI->GetUnit(*i);
-        if (!unit || !unit->IsAlive())
+        if (!elite || !elite->IsAlive())
             continue;
 
-        // Off-tank handles Striders and Tainted Elementals
-        if (unit->GetEntry() != NPC_COILFANG_STRIDER && unit->GetEntry() != NPC_TAINTED_ELEMENTAL)
-            continue;
-
+        float distance = bot->GetDistance(elite);
         float priority = 0.0f;
-        Unit* victim = unit->GetVictim();
+        Unit* victim = elite->GetVictim();
+
+        if (victim == bot || (mainTank && victim == mainTank))
+        {
+            continue; // Already being handled by a tank
+        }
 
         if (!victim)
         {
-            // Highest priority: Add with no target
-            priority = 100.0f;
+            priority = 130.0f; // Pick up loose elite immediately
         }
         else if (victim->GetTypeId() == TYPEID_PLAYER)
         {
@@ -3005,39 +3481,118 @@ bool VashjOfftankAddsAction::HandleOfftankAddManagement(Unit* boss)
 
             if (!targetBotAI || !targetBotAI->IsTank(targetPlayer))
             {
-                // High priority: Add attacking non-tank
-                priority = 80.0f;
+                priority = 120.0f; // Elite attacking non-tank
             }
-            else if (mainTank && victim != mainTank && victim != bot)
+            else if (victim != bot)
             {
-                // Medium priority: Add attacking other tank (not main tank or self)
-                priority = 60.0f;
+                priority = 90.0f; // Help other tanks with additional elite
             }
-            // Low priority: Add attacking main tank or self = 0.0f
         }
 
-        // Additional priority for Striders (fear ability)
-        if (unit->GetEntry() == NPC_COILFANG_STRIDER)
-        {
-            priority += 10.0f;
-        }
-
-        if (priority > highestPriority)
+        // Pick highest priority, or closest if same priority
+        if (priority > highestPriority || (priority == highestPriority && distance < closestDistance))
         {
             highestPriority = priority;
-            priorityAdd = unit;
+            closestDistance = distance;
+            priorityAdd = elite;
         }
     }
 
     if (priorityAdd && highestPriority > 0.0f)
     {
+        float addDistance = bot->GetDistance(priorityAdd);
+
+        // CRITICAL: If Elite is far away, MOVE TO IT first before trying to attack
+        if (addDistance > 10.0f)
+        {
+            Position const& pos = priorityAdd->GetPosition();
+            return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                         false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
+        }
+
+        // CRITICAL: Position Elite away from raid to avoid Cleave hitting others
+        if (priorityAdd->GetEntry() == NPC_COILFANG_ELITE)
+        {
+            // Check if Elite needs repositioning
+            Unit* victim = priorityAdd->GetVictim();
+            if (victim && victim == bot)
+            {
+                // Bot has aggro - position Elite away from boss/raid
+                float eliteDistance = bot->GetDistance(priorityAdd);
+
+                // CRITICAL: Simple positioning - tank stays far from boss on opposite side of Elite
+                // This naturally makes Elite face away from raid without complex facing checks
+                static std::map<ObjectGuid, time_t> lastRepositionTime;
+                ObjectGuid botGuid = bot->GetGUID();
+                time_t currentTime = time(nullptr);
+
+                // Calculate distance from bot to boss
+                float distanceToBoss = bot->GetDistance(boss);
+
+                // Only reposition if too close to Elite OR too close to boss (< 30 yards)
+                // Cooldown prevents constant repositioning
+                bool needsReposition = (eliteDistance < 5.0f || distanceToBoss < 30.0f);
+                bool cooldownExpired = (currentTime - lastRepositionTime[botGuid]) > 8;
+
+                if (needsReposition && cooldownExpired)
+                {
+                    // Move to position far from boss - this pulls Elite away from raid
+                    float bossX = boss->GetPositionX();
+                    float bossY = boss->GetPositionY();
+                    float eliteX = priorityAdd->GetPositionX();
+                    float eliteY = priorityAdd->GetPositionY();
+
+                    // Calculate angle from boss to Elite
+                    float angleBossToElite = atan2(eliteY - bossY, eliteX - bossX);
+
+                    // Position bot 15 yards beyond Elite away from boss
+                    float moveDistance = 15.0f;
+                    float newX = eliteX + cos(angleBossToElite) * moveDistance;
+                    float newY = eliteY + sin(angleBossToElite) * moveDistance;
+                    float newZ = bot->GetPositionZ();
+
+                    bot->UpdateAllowedPositionZ(newX, newY, newZ);
+                    lastRepositionTime[botGuid] = currentTime;
+                    return MoveTo(bot->GetMapId(), newX, newY, newZ, false, false, false, false, MovementPriority::MOVEMENT_COMBAT);
+                }
+            }
+        }
+
         return Attack(priorityAdd);
     }
 
     return false;
 }
 
+bool VashjOfftankAddsAction::IsEliteFacingAwayFromRaid(Unit* elite, Unit* boss)
+{
+    if (!elite || !boss || !bot)
+        return true; // Default to true if can't check
 
+    // Get Elite's facing direction
+    float eliteOrientation = elite->GetOrientation();
+
+    // Calculate angle from Elite to boss
+    float eliteX = elite->GetPositionX();
+    float eliteY = elite->GetPositionY();
+    float bossX = boss->GetPositionX();
+    float bossY = boss->GetPositionY();
+
+    float angleToBoss = atan2(bossY - eliteY, bossX - eliteX);
+
+    // Normalize angles to 0-2PI range
+    float normalizedEliteOrientation = Position::NormalizeOrientation(eliteOrientation);
+    float normalizedAngleToBoss = Position::NormalizeOrientation(angleToBoss);
+
+    // Calculate angle difference
+    float angleDiff = std::abs(normalizedEliteOrientation - normalizedAngleToBoss);
+    if (angleDiff > M_PI)
+        angleDiff = 2 * M_PI - angleDiff;
+
+    // Elite is facing away if angle difference is > 90 degrees (M_PI/2)
+    // We want Elite facing AWAY from boss, so angle diff should be > 90 degrees
+    return angleDiff > (M_PI / 2.0f);
+}
 
 
 bool VashjForkedLightningAction::Execute(Event event)
@@ -3112,6 +3667,50 @@ bool VashjStriderFearAction::Execute(Event event)
         }
     }
 
+    // CRITICAL: Melee bots must stay away from striders to avoid fear
+    // Ranged bots kite and slow striders, melee bots avoid them entirely
+    if (PlayerbotAI::IsMelee(bot))
+    {
+        // Find nearest strider to avoid
+        Value<GuidVector>* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
+        if (npcsValue)
+        {
+            GuidVector npcs = npcsValue->Get();
+            Unit* nearestStrider = nullptr;
+            float minDistance = 100.0f;
+
+            for (ObjectGuid const& npcGuid : npcs)
+            {
+                Unit* unit = botAI->GetUnit(npcGuid);
+                if (!unit || !unit->IsAlive())
+                    continue;
+
+                if (unit->GetEntry() == NPC_COILFANG_STRIDER)
+                {
+                    float distance = bot->GetDistance(unit);
+                    if (distance < minDistance)
+                    {
+                        minDistance = distance;
+                        nearestStrider = unit;
+                    }
+                }
+            }
+
+            // If strider is within 15 yards, move away from it
+            if (nearestStrider && minDistance < 15.0f)
+            {
+                float angle = bot->GetAngle(nearestStrider) + M_PI; // Opposite direction
+                float moveDistance = 20.0f;
+                float x = bot->GetPositionX() + cos(angle) * moveDistance;
+                float y = bot->GetPositionY() + sin(angle) * moveDistance;
+                float z = bot->GetPositionZ();
+
+                bot->UpdateAllowedPositionZ(x, y, z);
+                return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+            }
+        }
+    }
+
     // If no fear removal available or not feared, return to combat
     Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
     if (boss && bot->GetDistance(boss) > 30.0f)
@@ -3147,3 +3746,185 @@ bool VashjMultiShotAvoidAction::Execute(Event event)
     return MoveTo(boss->GetMapId(), x, y, z, false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
 }
 
+
+// Add this code to the END of SerpentshrineActions.cpp (after VashjMultiShotAvoidAction::Execute)
+
+// RESEARCHED: Quadrant system for Tainted Elemental fast response
+// PROBLEM: Tainted Elementals spawn 60-100 yards away (boss_lady_vashj.cpp:357-360) and despawn quickly
+// SOLUTION: Pre-position 4 ranged DPS at quadrants during Phase 2 for instant engagement
+
+namespace
+{
+    // Quadrant position definitions - 70 yards from boss center (intercept distance for Tainted spawns)
+    // RESEARCHED: Boss center approximately (29.8, -923.4, -5.0) - using relative positioning
+    struct VashjQuadrant
+    {
+        Position pos;
+        const char* name;
+    };
+
+    // Calculate quadrant positions dynamically based on boss position
+    std::vector<VashjQuadrant> GetQuadrantPositions(Unit* boss)
+    {
+        if (!boss)
+            return {};
+
+        // Cast to Creature to access GetHomePosition()
+        Creature* bossCreature = boss->ToCreature();
+        if (!bossCreature)
+            return {};
+
+        float centerX = bossCreature->GetHomePosition().GetPositionX();
+        float centerY = bossCreature->GetHomePosition().GetPositionY();
+        float centerZ = bossCreature->GetHomePosition().GetPositionZ();
+        float distance = 70.0f; // Optimal intercept distance for Tainted spawns
+
+        std::vector<VashjQuadrant> quadrants;
+
+        // North quadrant (0 degrees)
+        quadrants.push_back({{centerX, centerY - distance, centerZ, 0.0f}, "North"});
+
+        // East quadrant (90 degrees)
+        quadrants.push_back({{centerX + distance, centerY, centerZ, 0.0f}, "East"});
+
+        // South quadrant (180 degrees)
+        quadrants.push_back({{centerX, centerY + distance, centerZ, 0.0f}, "South"});
+
+        // West quadrant (270 degrees)
+        quadrants.push_back({{centerX - distance, centerY, centerZ, 0.0f}, "West"});
+
+        return quadrants;
+    }
+
+    // Global quadrant assignment tracking
+    std::map<ObjectGuid, uint8> g_vashjQuadrantAssignment;     // bot GUID -> quadrant (0-3, 255=none)
+    bool g_vashjQuadrantsAssigned = false;
+
+    void AssignQuadrants(Group* group, Unit* boss)
+    {
+        if (!group || !boss || g_vashjQuadrantsAssigned)
+            return;
+
+        std::vector<Player*> rangedDps;
+
+        // Collect all ranged DPS
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || !member->IsAlive())
+                continue;
+
+            PlayerbotAI* memberBotAI = GET_PLAYERBOT_AI(member);
+            if (!memberBotAI)
+                continue;
+
+            // Exclude healers - only actual ranged DPS get quadrant assignments
+            if (memberBotAI->IsHeal(member))
+                continue;
+
+            if (PlayerbotAI::IsRangedDps(member))
+            {
+                rangedDps.push_back(member);
+            }
+        }
+
+        // Sort by mobility priority: Hunter > Mage > Warlock > Shadow Priest
+        std::sort(rangedDps.begin(), rangedDps.end(), [](Player* a, Player* b) {
+            uint8 classA = a->getClass();
+            uint8 classB = b->getClass();
+
+            if (classA == CLASS_HUNTER && classB != CLASS_HUNTER) return true;
+            if (classB == CLASS_HUNTER && classA != CLASS_HUNTER) return false;
+
+            if (classA == CLASS_MAGE && classB != CLASS_MAGE) return true;
+            if (classB == CLASS_MAGE && classA != CLASS_MAGE) return false;
+
+            if (classA == CLASS_WARLOCK && classB != CLASS_WARLOCK) return true;
+            if (classB == CLASS_WARLOCK && classA != CLASS_WARLOCK) return false;
+
+            return false;
+        });
+
+        // Assign first 4 to quadrants (or all if less than 4)
+        size_t assignCount = std::min(rangedDps.size(), size_t(4));
+        for (size_t i = 0; i < assignCount; ++i)
+        {
+            g_vashjQuadrantAssignment[rangedDps[i]->GetGUID()] = static_cast<uint8>(i);
+        }
+
+        // Mark remaining ranged DPS as not assigned (stay center)
+        for (size_t i = assignCount; i < rangedDps.size(); ++i)
+        {
+            g_vashjQuadrantAssignment[rangedDps[i]->GetGUID()] = 255; // No assignment
+        }
+
+        g_vashjQuadrantsAssigned = true;
+    }
+
+    void ResetQuadrantAssignments()
+    {
+        g_vashjQuadrantAssignment.clear();
+        g_vashjQuadrantsAssigned = false;
+    }
+}
+
+bool VashjQuadrantPositionAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "lady vashj");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // Only during Phase 2 (Magic Barrier active)
+    if (!boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
+    {
+        // Reset assignments when leaving Phase 2
+        if (g_vashjQuadrantsAssigned)
+        {
+            ResetQuadrantAssignments();
+        }
+        return false;
+    }
+
+    // Assign quadrants on first Phase 2 entry
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    if (!g_vashjQuadrantsAssigned)
+    {
+        AssignQuadrants(group, boss);
+    }
+
+    // Check if this bot is assigned to a quadrant
+    if (g_vashjQuadrantAssignment.count(bot->GetGUID()) == 0 ||
+        g_vashjQuadrantAssignment[bot->GetGUID()] == 255)
+    {
+        return false; // Not assigned to quadrant - stay center with raid
+    }
+
+    // Get assigned quadrant position
+    uint8 quadrant = g_vashjQuadrantAssignment[bot->GetGUID()];
+    std::vector<VashjQuadrant> quadrants = GetQuadrantPositions(boss);
+
+    if (quadrant >= quadrants.size())
+        return false;
+
+    Position targetPos = quadrants[quadrant].pos;
+    float distance = bot->GetDistance(targetPos);
+
+    // Only move if more than 15 yards away from assigned position
+    // This creates a 15-yard "zone" where bot can fight adds while staying in quadrant
+    if (distance < 15.0f)
+    {
+        // At position - allow combat with nearby adds while holding quadrant
+        return false;
+    }
+
+    // Move to assigned quadrant position
+    return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY, targetPos.m_positionZ,
+                 false, false, false, false, MovementPriority::MOVEMENT_NORMAL);
+}

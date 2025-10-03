@@ -80,4 +80,25 @@ public:
     float GetValue(Action* action) override;
 };
 
+class AlarAddMultiplier : public Multiplier
+{
+public:
+    AlarAddMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "alar add") {}
+    float GetValue(Action* action) override;
+};
+
+class SolarianAddMultiplier : public Multiplier
+{
+public:
+    SolarianAddMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "solarian add") {}
+    float GetValue(Action* action) override;
+};
+
+class KaelthasAdvisorMultiplier : public Multiplier
+{
+public:
+    KaelthasAdvisorMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "kaelthas advisor") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

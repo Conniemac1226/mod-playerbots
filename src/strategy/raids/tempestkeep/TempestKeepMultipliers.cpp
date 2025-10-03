@@ -3,6 +3,7 @@
 #include "PlayerbotAI.h"
 #include "Player.h"
 #include "Unit.h"
+#include "ChooseTargetActions.h"
 
 float AlarFlameQuillsMultiplier::GetValue(Action* action)
 {
@@ -67,16 +68,9 @@ float VoidReaverPositionMultiplier::GetValue(Action* action)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return 1.0f;
 
-    // Prioritize positioning actions
+    // Prioritize ranged positioning actions (tanks handled by normal combat routine)
     if (dynamic_cast<VoidReaverPositionAction*>(action))
-    {
-        // Tank positioning is critical after knock away
-        if (botAI->IsMainTank(bot))
-            return 1.0f;
-            
-        // Ranged positioning for arcane orb
-        return 0.9f;
-    }
+        return 1.0f;
 
     return 1.0f;
 }
@@ -216,6 +210,87 @@ float AlarChargeMultiplier::GetValue(Action* action)
             return 0.5f;
         }
     }
+
+    return 1.0f;
+}
+
+// CLAUDE.md: BOSS/ADD OSCILLATION FIX - Block DpsAssist when adds present
+float AlarAddMultiplier::GetValue(Action* action)
+{
+    if (botAI->IsHeal(bot))
+        return 1.0f;
+
+    // Check for Ember of Al'ar adds
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    bool addPresent = false;
+
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_EMBER_OF_ALAR)
+        {
+            addPresent = true;
+            break;
+        }
+    }
+
+    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
+    if (addPresent && dynamic_cast<DpsAssistAction*>(action))
+        return 0.0f;
+
+    return 1.0f;
+}
+
+float SolarianAddMultiplier::GetValue(Action* action)
+{
+    if (botAI->IsHeal(bot))
+        return 1.0f;
+
+    // Check for Solarian adds
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
+    bool addPresent = false;
+
+    for (auto& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (unit && unit->IsInCombat())
+        {
+            uint32 entry = unit->GetEntry();
+            if (entry == NPC_SOLARIUM_AGENT || entry == NPC_SOLARIUM_PRIEST)
+            {
+                addPresent = true;
+                break;
+            }
+        }
+    }
+
+    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
+    if (addPresent && dynamic_cast<DpsAssistAction*>(action))
+        return 0.0f;
+
+    return 1.0f;
+}
+
+float KaelthasAdvisorMultiplier::GetValue(Action* action)
+{
+    if (botAI->IsHeal(bot))
+        return 1.0f;
+
+    // Check for Kael'thas advisors (pre-existing adds)
+    bool advisorPresent = false;
+
+    if (AI_VALUE2(Unit*, "find target", "thaladred the darkener"))
+        advisorPresent = true;
+    else if (AI_VALUE2(Unit*, "find target", "lord sanguinar"))
+        advisorPresent = true;
+    else if (AI_VALUE2(Unit*, "find target", "grand astromancer capernian"))
+        advisorPresent = true;
+    else if (AI_VALUE2(Unit*, "find target", "master engineer telonicus"))
+        advisorPresent = true;
+
+    // CRITICAL: Block DpsAssist when advisors present - prevents boss/add oscillation
+    if (advisorPresent && dynamic_cast<DpsAssistAction*>(action))
+        return 0.0f;
 
     return 1.0f;
 }

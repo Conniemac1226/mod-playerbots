@@ -26,7 +26,6 @@ const Position TK_ALAR_SAFE_SPOT_3 = Position(390.0f, -35.0f, 20.3f, 0.0f);
 const Position TK_ALAR_SAFE_SPOT_4 = Position(335.0f, -58.0f, 18.0f, 0.0f);
 
 // Void Reaver positions
-const Position TK_VOID_REAVER_TANK_POSITION = Position(432.59f, -373.73f, 20.0f, 0.0f);
 const Position TK_VOID_REAVER_RANGED_POSITION = Position(432.59f, -350.0f, 20.0f, 0.0f);
 
 // Solarian positions
@@ -131,6 +130,30 @@ public:
     bool Execute(Event event) override;
 };
 
+class AlarOfftankPlatformAction : public AttackAction
+{
+public:
+    AlarOfftankPlatformAction(PlayerbotAI* botAI) : AttackAction(botAI, "alar offtank platform") {}
+    bool Execute(Event event) override;
+
+private:
+    Position GetOfftankPlatform();
+};
+
+class AlarPlateDpsAddTankAction : public AttackAction
+{
+public:
+    AlarPlateDpsAddTankAction(PlayerbotAI* botAI) : AttackAction(botAI, "alar plate dps add tank") {}
+    bool Execute(Event event) override;
+};
+
+class AlarPlateDpsEscapeAction : public MovementAction
+{
+public:
+    AlarPlateDpsEscapeAction(PlayerbotAI* botAI) : MovementAction(botAI, "alar plate dps escape") {}
+    bool Execute(Event event) override;
+};
+
 // Void Reaver actions
 class VoidReaverPoundingAction : public MovementAction
 {
@@ -151,9 +174,8 @@ class VoidReaverPositionAction : public AttackAction
 public:
     VoidReaverPositionAction(PlayerbotAI* botAI) : AttackAction(botAI, "void reaver position") {}
     bool Execute(Event event) override;
-    
+
 private:
-    bool HandleTankPosition(Unit* boss);
     bool HandleRangedPosition(Unit* boss);
 };
 

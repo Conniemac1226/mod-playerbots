@@ -258,6 +258,51 @@ float VashjAddsMultiplier::GetValue(Action* action)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return 1.0f;
 
+    auto getAddPriority = [&](uint32 entry) -> uint8
+    {
+        // CRITICAL: Tainted Elementals are ALWAYS highest priority - they drop cores needed to exit Phase 2
+        // They despawn in 15 seconds and spawn 60-100 yards away, so must be killed IMMEDIATELY
+        if (entry == NPC_TAINTED_ELEMENTAL)
+            return 5; // Highest priority for all roles
+
+        if (PlayerbotAI::IsRangedDps(bot))
+        {
+            switch (entry)
+            {
+                case NPC_COILFANG_STRIDER: return 4;       // Ranged kite + burst target
+                case NPC_ENCHANTED_ELEMENTAL: return 2;    // Clean up remaining adds
+                case NPC_COILFANG_ELITE: return 1;         // Assist only when nothing else alive
+                default: return 0;
+            }
+        }
+
+        // Melee and tanks focus on elites first, then elementals
+        switch (entry)
+        {
+            case NPC_COILFANG_ELITE: return 4;             // Maintain elite control
+            case NPC_ENCHANTED_ELEMENTAL: return 2;        // Clean up ambient elementals
+            case NPC_COILFANG_STRIDER: return 1;           // Low priority for melee (avoid fear)
+            default: return 0;
+        }
+    };
+
+    auto actionNameToEntry = [](std::string const& actionName) -> uint32
+    {
+        if (actionName == "vashj tainted elemental" || actionName == "vashj tainted core")
+            return NPC_TAINTED_ELEMENTAL;
+
+        if (actionName == "vashj coilfang strider")
+            return NPC_COILFANG_STRIDER;
+
+        if (actionName == "vashj coilfang elite")
+            return NPC_COILFANG_ELITE;
+
+        if (actionName == "vashj enchanted elemental")
+            return NPC_ENCHANTED_ELEMENTAL;
+
+        return 0;
+    };
+
     // Phase 2 - Lady Vashj is IMMUNE during magic barrier
     if (boss->HasAura(SPELL_VASHJ_MAGIC_BARRIER))
     {
@@ -276,27 +321,26 @@ float VashjAddsMultiplier::GetValue(Action* action)
 
         Unit* currentTarget = AI_VALUE(Unit*, "current target");
 
-        // WotLK Anti-Ping-Pong Pattern: If already attacking a Lady Vashj add, stick with it
+        // WotLK Anti-Ping-Pong Pattern with priority override: stay on higher or equal priority targets
         if (currentTarget && currentTarget->IsAlive())
         {
             uint32 currentEntry = currentTarget->GetEntry();
-            if (currentEntry == NPC_COILFANG_ELITE ||
-                currentEntry == NPC_COILFANG_STRIDER ||
-                currentEntry == NPC_ENCHANTED_ELEMENTAL ||
-                currentEntry == NPC_TAINTED_ELEMENTAL)
+            uint8 currentPriority = getAddPriority(currentEntry);
+            if (currentPriority > 0)
             {
-                // Check if this action targets a different add type
-                std::string actionName = action->getName();
+                std::string const actionName = action->getName();
+                uint32 actionEntry = actionNameToEntry(actionName);
 
-                // Block switching between different add types
-                if (currentEntry == NPC_COILFANG_ELITE && actionName != "vashj coilfang elite")
-                    return 0.0f;
-                if (currentEntry == NPC_COILFANG_STRIDER && actionName != "vashj coilfang strider")
-                    return 0.0f;
-                if (currentEntry == NPC_ENCHANTED_ELEMENTAL && actionName != "vashj enchanted elemental")
-                    return 0.0f;
-                if (currentEntry == NPC_TAINTED_ELEMENTAL && actionName != "vashj tainted elemental")
-                    return 0.0f;
+                if (actionEntry)
+                {
+                    uint8 actionPriority = getAddPriority(actionEntry);
+
+                    // Allow switching to same, higher or unknown priority targets
+                    if (actionEntry != currentEntry && actionPriority > 0 && actionPriority < currentPriority)
+                    {
+                        return 0.0f;
+                    }
+                }
             }
         }
     }
