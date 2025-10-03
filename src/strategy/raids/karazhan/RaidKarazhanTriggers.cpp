@@ -110,15 +110,19 @@ bool KarazhanChessEventTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if bot is already possessing a chess piece (vehicle)
-    if (bot->GetVehicleBase())
+    // Check if bot is controlling a chess piece
+    if (bot->GetCharm())
         return true;
 
-    // Check for SPELL_GAME_IN_SESSION aura on bot
+    // Check if recently released from controlling a piece (cooldown active)
+    if (bot->HasAura(SPELL_RECENTLY_INGAME))
+        return true;
+
+    // Check for SPELL_GAME_IN_SESSION aura (event is active for this bot)
     if (bot->HasAura(SPELL_GAME_IN_SESSION))
         return true;
 
-    // Check for SPELL_GAME_IN_SESSION aura on nearby group members
+    // Check if any group member has the event active
     if (Group* group = bot->GetGroup())
     {
         for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
@@ -126,26 +130,13 @@ bool KarazhanChessEventTrigger::IsActive()
             Player* member = ref->GetSource();
             if (!member || member->GetMapId() != bot->GetMapId())
                 continue;
-            if (member->IsAlive() && member->GetDistance(bot) < 120.0f && member->HasAura(SPELL_GAME_IN_SESSION))
-                return true;
+
+            if (member->IsAlive() && member->GetDistance(bot) < 120.0f)
+            {
+                if (member->HasAura(SPELL_GAME_IN_SESSION) || member->GetCharm())
+                    return true;
+            }
         }
-    }
-
-    // Check for active chess pieces nearby (someone controlling them)
-    std::list<Creature*> nearbyCreatures;
-    bot->GetCreatureListWithEntryInGrid(nearbyCreatures, NPC_HUMAN_FOOTMAN, 120.0f);
-    for (Creature* creature : nearbyCreatures)
-    {
-        if (creature && !creature->GetCharmerGUID().IsEmpty())
-            return true;
-    }
-
-    nearbyCreatures.clear();
-    bot->GetCreatureListWithEntryInGrid(nearbyCreatures, NPC_ORC_GRUNT, 120.0f);
-    for (Creature* creature : nearbyCreatures)
-    {
-        if (creature && !creature->GetCharmerGUID().IsEmpty())
-            return true;
     }
 
     return false;

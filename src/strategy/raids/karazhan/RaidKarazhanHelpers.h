@@ -32,6 +32,8 @@ enum KarazhanSpells
 
     // Chess Event
     SPELL_GAME_IN_SESSION            = 39331,
+    SPELL_CONTROL_PIECE              = 30019,
+    SPELL_RECENTLY_INGAME            = 30529,
 };
 
 enum KarazhanNpcs
@@ -57,6 +59,24 @@ enum KarazhanNpcs
 
     // Chess Event
     NPC_ECHO_OF_MEDIVH               = 16816,
+
+    // Alliance pieces (chess piece type = job name)
+    NPC_KING_A                       = 21684, // King Llane
+    NPC_QUEEN_A                      = 21683, // Human Conjurer
+    NPC_BISHOP_A                     = 21682, // Human Cleric
+    NPC_KNIGHT_A                     = 21664, // Human Charger
+    NPC_ROOK_A                       = 21160, // Human Conjured Water Elemental
+    NPC_PAWN_A                       = 17211, // Human Footman
+
+    // Horde pieces
+    NPC_KING_H                       = 21752, // Warchief Blackhand
+    NPC_QUEEN_H                      = 21750, // Orc Warlock
+    NPC_BISHOP_H                     = 21747, // Orc Necrolyte
+    NPC_KNIGHT_H                     = 21748, // Orc Wolf
+    NPC_ROOK_H                       = 21726, // Orc Grunt (Rook)
+    NPC_PAWN_H                       = 17469, // Orc Grunt (Pawn)
+
+    // Legacy naming for backwards compatibility
     NPC_CHESS_KING_LLANE             = 21684,
     NPC_WARCHIEF_BLACKHAND           = 21752,
     NPC_HUMAN_FOOTMAN                = 17211,
@@ -67,7 +87,7 @@ enum KarazhanNpcs
     NPC_ORC_WARLOCK                  = 21750,
     NPC_HUMAN_CLERIC                 = 21682,
     NPC_ORC_NECROLYTE                = 21747,
-    NPC_CONJURED_WATER_ELEMENTAL     = 21160,
+
     NPC_CHESS_MOVE_TRIGGER           = 22519,
 };
 

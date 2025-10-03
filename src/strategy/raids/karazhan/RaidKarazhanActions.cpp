@@ -1270,32 +1270,37 @@ bool KarazhanPrinceMalchezaarTankAvoidHazardAction::isUseful()
     return boss && botAI->IsTank(bot) && botAI->HasAggro(boss) && boss->GetVictim() == bot;
 }
 // Chess Event Actions
-// Helper function to select enemy chess pieces
+// Helper function to select enemy chess pieces with proper priority
 static Creature* SelectChessEnemy(Creature* piece, float maxRange)
 {
     if (!piece)
         return nullptr;
 
     uint32 pieceEntry = piece->GetEntry();
-    bool isHumanPiece = (pieceEntry == NPC_HUMAN_FOOTMAN || pieceEntry == NPC_HUMAN_CHARGER || 
-                         pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_HUMAN_CLERIC || 
-                         pieceEntry == NPC_CHESS_KING_LLANE);
-    
-    // Target priority: healers > casters > melee > king
+
+    // Determine if this is an Alliance or Horde piece
+    bool isAlliancePiece = (pieceEntry == NPC_PAWN_A || pieceEntry == NPC_KNIGHT_A ||
+                            pieceEntry == NPC_QUEEN_A || pieceEntry == NPC_BISHOP_A ||
+                            pieceEntry == NPC_ROOK_A || pieceEntry == NPC_KING_A);
+
+    // Target priority: Bishops (healers) > Queens (casters) > Rooks (AOE) > Knights > Pawns > King (last)
     std::vector<uint32> priorityTargets;
-    if (isHumanPiece)
+    if (isAlliancePiece)
     {
-        priorityTargets = {NPC_ORC_NECROLYTE, NPC_ORC_WARLOCK, NPC_ORC_GRUNT, NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
+        // Alliance attacks Horde pieces
+        priorityTargets = {NPC_BISHOP_H, NPC_QUEEN_H, NPC_ROOK_H, NPC_KNIGHT_H, NPC_PAWN_H, NPC_KING_H};
     }
     else
     {
-        priorityTargets = {NPC_HUMAN_CLERIC, NPC_HUMAN_CONJURER, NPC_HUMAN_FOOTMAN, NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
+        // Horde attacks Alliance pieces
+        priorityTargets = {NPC_BISHOP_A, NPC_QUEEN_A, NPC_ROOK_A, NPC_KNIGHT_A, NPC_PAWN_A, NPC_KING_A};
     }
 
+    // Find first available target in priority order
     for (uint32 targetEntry : priorityTargets)
     {
         Creature* target = piece->FindNearestCreature(targetEntry, maxRange, true);
-        if (target && target->IsAlive() && target->IsInCombat())
+        if (target && target->IsAlive())
             return target;
     }
 
@@ -1308,86 +1313,126 @@ bool KarazhanChessEventMoveAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Check if controlling a chess piece (vehicle)
-    Unit* vehicle = bot->GetVehicleBase();
-    Creature* pieceCreature = vehicle ? vehicle->ToCreature() : nullptr;
-
-    if (!pieceCreature)
+    // Check if already controlling a chess piece
+    Unit* charmedUnit = bot->GetCharm();
+    if (!charmedUnit)
     {
-        // Not controlling a piece - try to find and control one
-        bool isHorde = (bot->GetTeamId() == TEAM_HORDE);
-        
-        std::vector<uint32> pieceTypes;
-        if (isHorde)
-            pieceTypes = {NPC_ORC_NECROLYTE, NPC_ORC_WARLOCK, NPC_ORC_GRUNT, NPC_ORC_WOLF};
-        else
-            pieceTypes = {NPC_HUMAN_CLERIC, NPC_HUMAN_CONJURER, NPC_HUMAN_FOOTMAN, NPC_HUMAN_CHARGER};
+        // Not controlling a piece - select one based on bot role and game phase
+        if (bot->HasAura(SPELL_RECENTLY_INGAME))
+            return false; // Just released a piece, cooldown active
 
-        // Find nearest free piece
-        for (uint32 pieceType : pieceTypes)
+        bool isHorde = (bot->GetTeamId() == TEAM_HORDE);
+
+        // Determine which piece to control based on bot role
+        std::vector<uint32> piecePreference;
+
+        if (botAI->IsTank(bot))
+        {
+            // Tanks control King first (required to start event), then Rooks
+            piecePreference = isHorde ?
+                std::vector<uint32>{NPC_KING_H, NPC_ROOK_H, NPC_KNIGHT_H} :
+                std::vector<uint32>{NPC_KING_A, NPC_ROOK_A, NPC_KNIGHT_A};
+        }
+        else if (botAI->IsHeal(bot))
+        {
+            // Healers control Bishops (healing pieces)
+            piecePreference = isHorde ?
+                std::vector<uint32>{NPC_BISHOP_H, NPC_QUEEN_H, NPC_ROOK_H} :
+                std::vector<uint32>{NPC_BISHOP_A, NPC_QUEEN_A, NPC_ROOK_A};
+        }
+        else if (botAI->IsRanged(bot))
+        {
+            // Ranged DPS controls Queens, then Bishops
+            piecePreference = isHorde ?
+                std::vector<uint32>{NPC_QUEEN_H, NPC_BISHOP_H, NPC_ROOK_H} :
+                std::vector<uint32>{NPC_QUEEN_A, NPC_BISHOP_A, NPC_ROOK_A};
+        }
+        else
+        {
+            // Melee DPS controls Knights, Rooks, Pawns
+            piecePreference = isHorde ?
+                std::vector<uint32>{NPC_KNIGHT_H, NPC_ROOK_H, NPC_PAWN_H} :
+                std::vector<uint32>{NPC_KNIGHT_A, NPC_ROOK_A, NPC_PAWN_A};
+        }
+
+        // Find first available piece from preference list
+        for (uint32 pieceType : piecePreference)
         {
             Creature* piece = bot->FindNearestCreature(pieceType, 120.0f, true);
-            if (piece && piece->IsAlive() && piece->GetCharmerGUID().IsEmpty())
+            if (piece && piece->IsAlive() && !piece->GetCharmerGUID())
             {
-                // Move to piece if too far
-                if (bot->GetDistance(piece) > 4.5f)
+                // Move closer if too far
+                float distance = bot->GetExactDist2d(piece);
+                if (distance > 5.0f)
                 {
                     return MoveTo(bot->GetMapId(), piece->GetPositionX(), piece->GetPositionY(), piece->GetPositionZ());
                 }
-                
-                // Interact with piece via gossip
-                WorldPacket hello;
-                hello << piece->GetGUID();
-                bot->GetSession()->HandleGossipHelloOpcode(hello);
-                
-                if (bot->PlayerTalkClass)
+
+                // Cast control spell on the piece (this is what gossip option does)
+                if (bot->IsWithinLOSInMap(piece))
                 {
-                    GossipMenu& menu = bot->PlayerTalkClass->GetGossipMenu();
-                    GossipMenuItemContainer const& items = menu.GetMenuItems();
-                    if (!items.empty())
-                    {
-                        uint32 menuId = menu.GetMenuId();
-                        WorldPacket sel;
-                        sel << piece->GetGUID();
-                        sel << menuId << uint32(0);  // First gossip option
-                        sel << std::string("");
-                        bot->GetSession()->HandleGossipSelectOptionOpcode(sel);
-                        return true;
-                    }
+                    bot->CastSpell(piece, SPELL_CONTROL_PIECE, false);
+                    return true;
                 }
             }
         }
         return false;
     }
 
-    // Controlling a piece - perform combat actions
-    Creature* target = SelectChessEnemy(pieceCreature, 60.0f);
+    // Already controlling a piece - move it into position
+    Creature* piece = charmedUnit->ToCreature();
+    if (!piece)
+        return false;
+
+    Creature* target = SelectChessEnemy(piece, 60.0f);
     if (!target)
         return false;
 
-    uint32 pieceEntry = pieceCreature->GetEntry();
-    bool isRanged = (pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_ORC_WARLOCK ||
-                     pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_ORC_NECROLYTE);
+    uint32 pieceEntry = piece->GetEntry();
 
-    float desiredDistance = isRanged ? 18.0f : 6.0f;
-    float currentDistance = pieceCreature->GetDistance(target);
+    // Determine if piece is ranged or melee
+    bool isRanged = (pieceEntry == NPC_QUEEN_A || pieceEntry == NPC_QUEEN_H ||
+                     pieceEntry == NPC_BISHOP_A || pieceEntry == NPC_BISHOP_H);
+
+    float desiredDistance = isRanged ? 15.0f : 5.0f;
+    float currentDistance = piece->GetExactDist2d(target);
 
     // Move piece if not in optimal range
-    if (std::abs(currentDistance - desiredDistance) > 3.0f)
+    if (std::abs(currentDistance - desiredDistance) > 4.0f)
     {
-        if (!pieceCreature->HasAura(KZ_SPELL_MOVE_COOLDOWN))
+        if (!piece->HasAura(KZ_SPELL_MOVE_COOLDOWN))
         {
-            Creature* moveTrigger = pieceCreature->FindNearestCreature(NPC_CHESS_MOVE_TRIGGER, 25.0f, true);
-            if (moveTrigger)
+            // Find move trigger in the direction of target
+            Position targetPos = target->GetPosition();
+            Creature* bestTrigger = nullptr;
+            float bestScore = 999999.0f;
+
+            std::list<Creature*> triggers;
+            piece->GetCreatureListWithEntryInGrid(triggers, NPC_CHESS_MOVE_TRIGGER, 15.0f);
+
+            for (Creature* trigger : triggers)
             {
-                pieceCreature->CastSpell(moveTrigger, KZ_SPELL_MOVE_GENERIC, false);
+                // Calculate distance from trigger to target
+                float triggerToTarget = trigger->GetExactDist2d(target);
+
+                // Prefer triggers that move us closer to desired range
+                float score = std::abs(triggerToTarget - desiredDistance);
+
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    bestTrigger = trigger;
+                }
+            }
+
+            if (bestTrigger)
+            {
+                piece->CastSpell(bestTrigger, KZ_SPELL_MOVE_GENERIC, false);
                 return true;
             }
         }
     }
 
-    // Face the target
-    pieceCreature->SetFacingTo(pieceCreature->GetAngle(target));
     return false;
 }
 
@@ -1411,37 +1456,96 @@ bool KarazhanChessEventAbilityAction::Execute(Event event)
         return false;
 
     // Must be controlling a piece
-    Unit* vehicle = bot->GetVehicleBase();
-    Creature* piece = vehicle ? vehicle->ToCreature() : nullptr;
+    Unit* charmedUnit = bot->GetCharm();
+    if (!charmedUnit)
+        return false;
+
+    Creature* piece = charmedUnit->ToCreature();
     if (!piece)
         return false;
 
+    uint32 pieceEntry = piece->GetEntry();
+
+    // Bishops heal friendly pieces instead of attacking
+    if (pieceEntry == NPC_BISHOP_A || pieceEntry == NPC_BISHOP_H)
+    {
+        // Find damaged friendly piece
+        Creature* healTarget = nullptr;
+        uint32 lowestHpPct = 100;
+
+        std::list<Creature*> nearbyCreatures;
+        piece->GetCreatureListWithEntryInGrid(nearbyCreatures, pieceEntry == NPC_BISHOP_A ? NPC_PAWN_A : NPC_PAWN_H, 30.0f);
+
+        // Also check other piece types
+        std::vector<uint32> friendlyTypes;
+        if (pieceEntry == NPC_BISHOP_A)
+            friendlyTypes = {NPC_KING_A, NPC_QUEEN_A, NPC_ROOK_A, NPC_KNIGHT_A, NPC_PAWN_A};
+        else
+            friendlyTypes = {NPC_KING_H, NPC_QUEEN_H, NPC_ROOK_H, NPC_KNIGHT_H, NPC_PAWN_H};
+
+        for (uint32 friendlyType : friendlyTypes)
+        {
+            std::list<Creature*> pieces;
+            piece->GetCreatureListWithEntryInGrid(pieces, friendlyType, 30.0f);
+            for (Creature* friendly : pieces)
+            {
+                if (friendly && friendly->IsAlive())
+                {
+                    uint32 hpPct = friendly->GetHealthPct();
+                    if (hpPct < lowestHpPct && hpPct < 80)
+                    {
+                        lowestHpPct = hpPct;
+                        healTarget = friendly;
+                    }
+                }
+            }
+        }
+
+        if (healTarget)
+        {
+            // Cast healing spell (SPELL_BISHOP_A_2 = 37455 or SPELL_BISHOP_H_2 = 37456)
+            uint32 healSpell = (pieceEntry == NPC_BISHOP_A) ? 37455 : 37456;
+            if (!piece->HasSpellCooldown(healSpell))
+            {
+                piece->CastSpell(healTarget, healSpell, false);
+                return true;
+            }
+        }
+    }
+
+    // All other pieces attack enemies
     Creature* target = SelectChessEnemy(piece, 60.0f);
     if (!target)
         return false;
 
-    // Use first available spell from creature's spells
+    // Cast offensive abilities based on piece type
+    // Each piece has 2 spells - we try both in order of priority
     CreatureTemplate const* cInfo = piece->GetCreatureTemplate();
-    if (cInfo)
+    if (!cInfo)
+        return false;
+
+    for (uint32 i = 0; i < MAX_CREATURE_SPELLS; ++i)
     {
-        for (uint32 i = 0; i < CREATURE_MAX_SPELLS; ++i)
+        uint32 spellId = cInfo->spells[i];
+        if (!spellId)
+            continue;
+
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
+        if (!spellInfo)
+            continue;
+
+        // Skip if on cooldown
+        if (piece->HasSpellCooldown(spellId))
+            continue;
+
+        // Check range and line of sight
+        float maxRange = spellInfo->GetMaxRange(false);
+        float distance = piece->GetExactDist2d(target);
+
+        if (distance <= maxRange && piece->IsWithinLOSInMap(target))
         {
-            uint32 spellId = cInfo->spells[i];
-            if (!spellId)
-                continue;
-
-            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
-            if (!spellInfo)
-                continue;
-
-            if (piece->IsWithinLOSInMap(target) && piece->GetDistance(target) <= spellInfo->GetMaxRange(false))
-            {
-                if (piece->IsSpellReady(spellId))
-                {
-                    piece->CastSpell(target, spellId, false);
-                    return true;
-                }
-            }
+            piece->CastSpell(target, spellId, false);
+            return true;
         }
     }
 
@@ -1451,5 +1555,8 @@ bool KarazhanChessEventAbilityAction::Execute(Event event)
 bool KarazhanChessEventAbilityAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    return bot && bot->GetVehicleBase();
+    if (!bot)
+        return false;
+
+    return bot->GetCharm() != nullptr;
 }
