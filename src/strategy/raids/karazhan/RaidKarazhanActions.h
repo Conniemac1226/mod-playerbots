@@ -215,4 +215,22 @@ public:
     bool isUseful() override;
 };
 
+class KarazhanChessEventMoveAction : public Action
+{
+public:
+    KarazhanChessEventMoveAction(PlayerbotAI* botAI, std::string const name = "karazhan chess event move") : Action(botAI, name) {}
+
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class KarazhanChessEventAbilityAction : public Action
+{
+public:
+    KarazhanChessEventAbilityAction(PlayerbotAI* botAI, std::string const name = "karazhan chess event ability") : Action(botAI, name) {}
+
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 #endif

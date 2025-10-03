@@ -43,6 +43,9 @@ public:
 
         creators["karazhan prince malchezaar non tank avoid hazard"] = &RaidKarazhanActionContext::karazhan_prince_malchezaar_non_tank_avoid_hazard;
         creators["karazhan prince malchezaar tank avoid hazard"] = &RaidKarazhanActionContext::karazhan_prince_malchezaar_tank_avoid_hazard;
+
+        creators["karazhan chess event move"] = &RaidKarazhanActionContext::karazhan_chess_event_move;
+        creators["karazhan chess event ability"] = &RaidKarazhanActionContext::karazhan_chess_event_ability;
     }
 
 private:
@@ -80,6 +83,9 @@ private:
 
     static Action* karazhan_prince_malchezaar_non_tank_avoid_hazard(PlayerbotAI* botAI) { return new KarazhanPrinceMalchezaarNonTankAvoidHazardAction(botAI); }
     static Action* karazhan_prince_malchezaar_tank_avoid_hazard(PlayerbotAI* botAI) { return new KarazhanPrinceMalchezaarTankAvoidHazardAction(botAI); }
+
+    static Action* karazhan_chess_event_move(PlayerbotAI* botAI) { return new KarazhanChessEventMoveAction(botAI); }
+    static Action* karazhan_chess_event_ability(PlayerbotAI* botAI) { return new KarazhanChessEventAbilityAction(botAI); }
 };
 
 #endif

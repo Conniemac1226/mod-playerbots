@@ -1269,3 +1269,187 @@ bool KarazhanPrinceMalchezaarTankAvoidHazardAction::isUseful()
     
     return boss && botAI->IsTank(bot) && botAI->HasAggro(boss) && boss->GetVictim() == bot;
 }
+// Chess Event Actions
+// Helper function to select enemy chess pieces
+static Creature* SelectChessEnemy(Creature* piece, float maxRange)
+{
+    if (!piece)
+        return nullptr;
+
+    uint32 pieceEntry = piece->GetEntry();
+    bool isHumanPiece = (pieceEntry == NPC_HUMAN_FOOTMAN || pieceEntry == NPC_HUMAN_CHARGER || 
+                         pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_HUMAN_CLERIC || 
+                         pieceEntry == NPC_CHESS_KING_LLANE);
+    
+    // Target priority: healers > casters > melee > king
+    std::vector<uint32> priorityTargets;
+    if (isHumanPiece)
+    {
+        priorityTargets = {NPC_ORC_NECROLYTE, NPC_ORC_WARLOCK, NPC_ORC_GRUNT, NPC_ORC_WOLF, NPC_WARCHIEF_BLACKHAND};
+    }
+    else
+    {
+        priorityTargets = {NPC_HUMAN_CLERIC, NPC_HUMAN_CONJURER, NPC_HUMAN_FOOTMAN, NPC_HUMAN_CHARGER, NPC_CHESS_KING_LLANE};
+    }
+
+    for (uint32 targetEntry : priorityTargets)
+    {
+        Creature* target = piece->FindNearestCreature(targetEntry, maxRange, true);
+        if (target && target->IsAlive() && target->IsInCombat())
+            return target;
+    }
+
+    return nullptr;
+}
+
+bool KarazhanChessEventMoveAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if controlling a chess piece (vehicle)
+    Unit* vehicle = bot->GetVehicleBase();
+    Creature* pieceCreature = vehicle ? vehicle->ToCreature() : nullptr;
+
+    if (!pieceCreature)
+    {
+        // Not controlling a piece - try to find and control one
+        bool isHorde = (bot->GetTeamId() == TEAM_HORDE);
+        
+        std::vector<uint32> pieceTypes;
+        if (isHorde)
+            pieceTypes = {NPC_ORC_NECROLYTE, NPC_ORC_WARLOCK, NPC_ORC_GRUNT, NPC_ORC_WOLF};
+        else
+            pieceTypes = {NPC_HUMAN_CLERIC, NPC_HUMAN_CONJURER, NPC_HUMAN_FOOTMAN, NPC_HUMAN_CHARGER};
+
+        // Find nearest free piece
+        for (uint32 pieceType : pieceTypes)
+        {
+            Creature* piece = bot->FindNearestCreature(pieceType, 120.0f, true);
+            if (piece && piece->IsAlive() && piece->GetCharmerGUID().IsEmpty())
+            {
+                // Move to piece if too far
+                if (bot->GetDistance(piece) > 4.5f)
+                {
+                    return MoveTo(bot->GetMapId(), piece->GetPositionX(), piece->GetPositionY(), piece->GetPositionZ());
+                }
+                
+                // Interact with piece via gossip
+                WorldPacket hello;
+                hello << piece->GetGUID();
+                bot->GetSession()->HandleGossipHelloOpcode(hello);
+                
+                if (bot->PlayerTalkClass)
+                {
+                    GossipMenu& menu = bot->PlayerTalkClass->GetGossipMenu();
+                    GossipMenuItemContainer const& items = menu.GetMenuItems();
+                    if (!items.empty())
+                    {
+                        uint32 menuId = menu.GetMenuId();
+                        WorldPacket sel;
+                        sel << piece->GetGUID();
+                        sel << menuId << uint32(0);  // First gossip option
+                        sel << std::string("");
+                        bot->GetSession()->HandleGossipSelectOptionOpcode(sel);
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    // Controlling a piece - perform combat actions
+    Creature* target = SelectChessEnemy(pieceCreature, 60.0f);
+    if (!target)
+        return false;
+
+    uint32 pieceEntry = pieceCreature->GetEntry();
+    bool isRanged = (pieceEntry == NPC_HUMAN_CONJURER || pieceEntry == NPC_ORC_WARLOCK ||
+                     pieceEntry == NPC_HUMAN_CLERIC || pieceEntry == NPC_ORC_NECROLYTE);
+
+    float desiredDistance = isRanged ? 18.0f : 6.0f;
+    float currentDistance = pieceCreature->GetDistance(target);
+
+    // Move piece if not in optimal range
+    if (std::abs(currentDistance - desiredDistance) > 3.0f)
+    {
+        if (!pieceCreature->HasAura(KZ_SPELL_MOVE_COOLDOWN))
+        {
+            Creature* moveTrigger = pieceCreature->FindNearestCreature(NPC_CHESS_MOVE_TRIGGER, 25.0f, true);
+            if (moveTrigger)
+            {
+                pieceCreature->CastSpell(moveTrigger, KZ_SPELL_MOVE_GENERIC, false);
+                return true;
+            }
+        }
+    }
+
+    // Face the target
+    pieceCreature->SetFacingTo(pieceCreature->GetAngle(target));
+    return false;
+}
+
+bool KarazhanChessEventMoveAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Useful if controlling a piece or event is active
+    if (bot->GetVehicleBase())
+        return true;
+
+    return bot->HasAura(SPELL_GAME_IN_SESSION);
+}
+
+bool KarazhanChessEventAbilityAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Must be controlling a piece
+    Unit* vehicle = bot->GetVehicleBase();
+    Creature* piece = vehicle ? vehicle->ToCreature() : nullptr;
+    if (!piece)
+        return false;
+
+    Creature* target = SelectChessEnemy(piece, 60.0f);
+    if (!target)
+        return false;
+
+    // Use first available spell from creature's spells
+    CreatureTemplate const* cInfo = piece->GetCreatureTemplate();
+    if (cInfo)
+    {
+        for (uint32 i = 0; i < CREATURE_MAX_SPELLS; ++i)
+        {
+            uint32 spellId = cInfo->spells[i];
+            if (!spellId)
+                continue;
+
+            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
+            if (!spellInfo)
+                continue;
+
+            if (piece->IsWithinLOSInMap(target) && piece->GetDistance(target) <= spellInfo->GetMaxRange(false))
+            {
+                if (piece->IsSpellReady(spellId))
+                {
+                    piece->CastSpell(target, spellId, false);
+                    return true;
+                }
+            }
+        }
+    }
+
+    return false;
+}
+
+bool KarazhanChessEventAbilityAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    return bot && bot->GetVehicleBase();
+}

@@ -29,6 +29,9 @@ enum KarazhanSpells
 
     // Prince Malchezaar
     SPELL_ENFEEBLE                   = 30843,
+
+    // Chess Event
+    SPELL_GAME_IN_SESSION            = 39331,
 };
 
 enum KarazhanNpcs
@@ -51,7 +54,26 @@ enum KarazhanNpcs
 
     // Prince Malchezaar
     NPC_NETHERSPITE_INFERNAL         = 17646,
+
+    // Chess Event
+    NPC_ECHO_OF_MEDIVH               = 16816,
+    NPC_CHESS_KING_LLANE             = 21684,
+    NPC_WARCHIEF_BLACKHAND           = 21752,
+    NPC_HUMAN_FOOTMAN                = 17211,
+    NPC_ORC_GRUNT                    = 17469,
+    NPC_HUMAN_CHARGER                = 21664,
+    NPC_ORC_WOLF                     = 21748,
+    NPC_HUMAN_CONJURER               = 21683,
+    NPC_ORC_WARLOCK                  = 21750,
+    NPC_HUMAN_CLERIC                 = 21682,
+    NPC_ORC_NECROLYTE                = 21747,
+    NPC_CONJURED_WATER_ELEMENTAL     = 21160,
+    NPC_CHESS_MOVE_TRIGGER           = 22519,
 };
+
+// Chess helper constants (from core script boss_chess_event.cpp / karazhan.h)
+const uint32 KZ_SPELL_MOVE_GENERIC = 30012;
+const uint32 KZ_SPELL_MOVE_COOLDOWN = 30543;
 
 extern const Position KARAZHAN_MAIDEN_OF_VIRTUE_BOSS_POSITION;
 extern const Position KARAZHAN_MAIDEN_OF_VIRTUE_RANGED_POSITION[8];

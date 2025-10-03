@@ -70,6 +70,12 @@ void RaidKarazhanStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         new NextAction("karazhan prince malchezaar non tank avoid hazard", ACTION_EMERGENCY + 6),
         new NextAction("karazhan prince malchezaar tank avoid hazard", ACTION_EMERGENCY + 6),
         nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "karazhan chess event", NextAction::array(0,
+        new NextAction("karazhan chess event ability", ACTION_RAID + 3),
+        new NextAction("karazhan chess event move", ACTION_RAID + 2),
+        nullptr)));
 }
 
 void RaidKarazhanStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)

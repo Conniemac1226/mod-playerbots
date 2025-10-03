@@ -80,4 +80,11 @@ public:
     bool IsActive() override;
 };
 
+class KarazhanChessEventTrigger : public Trigger
+{
+public:
+    KarazhanChessEventTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karazhan chess event") {}
+    bool IsActive() override;
+};
+
 #endif

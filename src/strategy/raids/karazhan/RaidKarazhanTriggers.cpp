@@ -103,3 +103,50 @@ bool KarazhanPrinceMalchezaarTrigger::IsActive()
 
     return boss && boss->IsAlive();
 }
+
+bool KarazhanChessEventTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    // Check if bot is already possessing a chess piece (vehicle)
+    if (bot->GetVehicleBase())
+        return true;
+
+    // Check for SPELL_GAME_IN_SESSION aura on bot
+    if (bot->HasAura(SPELL_GAME_IN_SESSION))
+        return true;
+
+    // Check for SPELL_GAME_IN_SESSION aura on nearby group members
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member->GetMapId() != bot->GetMapId())
+                continue;
+            if (member->IsAlive() && member->GetDistance(bot) < 120.0f && member->HasAura(SPELL_GAME_IN_SESSION))
+                return true;
+        }
+    }
+
+    // Check for active chess pieces nearby (someone controlling them)
+    std::list<Creature*> nearbyCreatures;
+    bot->GetCreatureListWithEntryInGrid(nearbyCreatures, NPC_HUMAN_FOOTMAN, 120.0f);
+    for (Creature* creature : nearbyCreatures)
+    {
+        if (creature && !creature->GetCharmerGUID().IsEmpty())
+            return true;
+    }
+
+    nearbyCreatures.clear();
+    bot->GetCreatureListWithEntryInGrid(nearbyCreatures, NPC_ORC_GRUNT, 120.0f);
+    for (Creature* creature : nearbyCreatures)
+    {
+        if (creature && !creature->GetCharmerGUID().IsEmpty())
+            return true;
+    }
+
+    return false;
+}
