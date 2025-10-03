@@ -1328,10 +1328,10 @@ bool KarazhanChessEventMoveAction::Execute(Event event)
 
         if (botAI->IsTank(bot))
         {
-            // Tanks control King first (required to start event), then Rooks, then Pawns (to clear path)
+            // Tanks control Rooks, Knights, Pawns (King reserved for real players - required to start event)
             piecePreference = isHorde ?
-                std::vector<uint32>{NPC_KING_H, NPC_ROOK_H, NPC_KNIGHT_H, NPC_PAWN_H} :
-                std::vector<uint32>{NPC_KING_A, NPC_ROOK_A, NPC_KNIGHT_A, NPC_PAWN_A};
+                std::vector<uint32>{NPC_ROOK_H, NPC_KNIGHT_H, NPC_PAWN_H} :
+                std::vector<uint32>{NPC_ROOK_A, NPC_KNIGHT_A, NPC_PAWN_A};
         }
         else if (botAI->IsHeal(bot))
         {
