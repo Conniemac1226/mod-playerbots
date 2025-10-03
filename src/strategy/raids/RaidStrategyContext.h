@@ -12,7 +12,6 @@
 #include "RaidAq20Strategy.h"
 #include "RaidIccStrategy.h"
 #include "RaidVoAStrategy.h"
-#include "karazhan/KarazhanStrategy.h"
 #include "gruul/GruulStrategy.h"
 #include "magtheridon/MagtheridonStrategy.h"
 #include "serpentshrine/SerpentshrineStrategy.h"
@@ -38,7 +37,6 @@ public:
         creators["uld"] = &RaidStrategyContext::uld;
         creators["icc"] = &RaidStrategyContext::icc;
         creators["onyxia"] = &RaidStrategyContext::onyxia;
-        creators["karazhan"] = &RaidStrategyContext::karazhan;
         creators["gruul"] = &RaidStrategyContext::gruul;
         creators["magtheridon"] = &RaidStrategyContext::magtheridon;
         creators["serpentshrine"] = &RaidStrategyContext::serpentshrine;
@@ -73,7 +71,6 @@ private:
     static Strategy* uld(PlayerbotAI* botAI) { return new RaidUlduarStrategy(botAI); }
     static Strategy* icc(PlayerbotAI* botAI) { return new RaidIccStrategy(botAI); }
     static Strategy* onyxia(PlayerbotAI* botAI) { return new RaidOnyxiaStrategy(botAI); }
-    static Strategy* karazhan(PlayerbotAI* botAI) { return new KarazhanStrategy(botAI); }
     static Strategy* gruul(PlayerbotAI* botAI) { return new GruulStrategy(botAI); }
     static Strategy* magtheridon(PlayerbotAI* botAI) { return new MagtheridonStrategy(botAI); }
     static Strategy* serpentshrine(PlayerbotAI* botAI) { return new SerpentshrineStrategy(botAI); }

@@ -1615,9 +1615,6 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 616:
             strategyName = "wotlk-eoe";  // Eye Of Eternity
             break;
-        case 532:
-            strategyName = "karazhan";  // Karazhan
-            break;
         case 544:
             strategyName = "magtheridon";  // Magtheridon's Lair
             break;
