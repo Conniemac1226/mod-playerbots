@@ -15,15 +15,18 @@ bool AttackCharmingTotemAction::Execute(Event event)
 
     Unit* totem = nullptr;
 
-    // WotLK pattern for spawned adds
-    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (auto& target : targets)
+    // ICC Pattern (RaidIccTriggers.cpp:301-312): No IsInCombat check for spawned adds
+    // RESEARCHED: Totems may not be flagged as "in combat" when first spawned
+    const GuidVector& npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (const auto& npc : npcs)
     {
-        Unit* unit = botAI->GetUnit(target);
-        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_CHARMING_TOTEM)
+        if (Unit* unit = botAI->GetUnit(npc))
         {
-            totem = unit;
-            break;
+            if (unit->GetEntry() == NPC_CHARMING_TOTEM && unit->IsAlive())
+            {
+                totem = unit;
+                break;
+            }
         }
     }
 
@@ -38,7 +41,7 @@ bool AttackCharmingTotemAction::Execute(Event event)
     {
         return false;
     }
-    
+
     return Attack(totem);
 }
 
@@ -363,15 +366,17 @@ bool AttackBroodOfAnzuAction::Execute(Event event)
 {
     Unit* brood = nullptr;
 
-    // WotLK pattern for spawned adds
-    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (auto& target : targets)
+    // ICC Pattern (RaidIccTriggers.cpp:301-312): No IsInCombat check for spawned adds
+    const GuidVector& npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (const auto& npc : npcs)
     {
-        Unit* unit = botAI->GetUnit(target);
-        if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_BROOD_OF_ANZU)
+        if (Unit* unit = botAI->GetUnit(npc))
         {
-            brood = unit;
-            break;
+            if (unit->GetEntry() == NPC_BROOD_OF_ANZU && unit->IsAlive())
+            {
+                brood = unit;
+                break;
+            }
         }
     }
 
@@ -386,7 +391,7 @@ bool AttackBroodOfAnzuAction::Execute(Event event)
     {
         return false;
     }
-    
+
     return Attack(brood);
 }
 
