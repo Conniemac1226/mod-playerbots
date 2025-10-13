@@ -49,12 +49,14 @@ const Position IKISS_LOS_SAFE_POSITIONS[4] =
 extern std::map<ObjectGuid, uint32> g_ikiss_lastMoveTime;
 extern std::map<ObjectGuid, bool> g_ikiss_inSafePosition;
 
-class AttackCharmingTotemAction : public AttackAction
+class MarkCharmingTotemAction : public Action
 {
 public:
-    AttackCharmingTotemAction(PlayerbotAI* ai) : AttackAction(ai, "attack charming totem") {}
+    MarkCharmingTotemAction(PlayerbotAI* ai) : Action(ai, "mark charming totem") {}
     bool Execute(Event event) override;
-    bool isUseful() override;
+
+private:
+    void UpdateSkullMarker(Unit* totem);
 };
 
 class InterruptControllerAction : public Action

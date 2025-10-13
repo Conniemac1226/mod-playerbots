@@ -3,12 +3,7 @@
 
 #include "Multiplier.h"
 
-class CharmingTotemMultiplier : public Multiplier
-{
-public:
-    CharmingTotemMultiplier(PlayerbotAI* ai) : Multiplier(ai, "charming totem") {}
-    float GetValue(Action* action) override;
-};
+// REMOVED: CharmingTotemMultiplier (ICC Pattern: skull marking replaces multiplier)
 
 class IkissPhaseMultiplier : public Multiplier
 {

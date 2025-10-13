@@ -7,13 +7,14 @@ void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("sethekk spirit nearby",
              NextAction::array(0, new NextAction("flee sethekk spirit", ACTION_EMERGENCY + 3), nullptr)));
     
-    // Trash: Time-Lost Controller - Charming Totem Priority
+    // Trash: Time-Lost Controller - ICC Pattern: Skull mark Charming Totem
+    // RESEARCHED: RaidIccActions.cpp:1276-1297 (UpdateSkullMarker pattern)
     triggers.push_back(new TriggerNode("charming totem spawned",
-             NextAction::array(0, 
-                new NextAction("attack charming totem", ACTION_EMERGENCY + 2),
+             NextAction::array(0,
+                new NextAction("mark charming totem", ACTION_EMERGENCY + 2),
                 new NextAction("continue fight with charmed ally", ACTION_MOVE + 1),
                 nullptr)));
-    
+
     triggers.push_back(new TriggerNode("time lost controller casting totem",
              NextAction::array(0, new NextAction("interrupt controller", ACTION_INTERRUPT + 1), nullptr)));
     
@@ -31,8 +32,7 @@ void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 
 void TbcDungeonSHStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
 {
-    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
-    // RESEARCHED: Following HallsOfLightningStrategy.cpp:37-40 pattern
-    multipliers.push_back(new CharmingTotemMultiplier(botAI));
+    // ICC Pattern: Skull marking replaces need for CharmingTotemMultiplier
+    // CRITICAL: Block DpsAssist when Brood adds present - prevents boss/add oscillation
     multipliers.push_back(new BroodOfAnzuMultiplier(botAI));
 }

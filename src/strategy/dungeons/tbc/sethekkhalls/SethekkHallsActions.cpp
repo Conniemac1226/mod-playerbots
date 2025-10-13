@@ -8,15 +8,15 @@
 std::map<ObjectGuid, uint32> g_ikiss_lastMoveTime;
 std::map<ObjectGuid, bool> g_ikiss_inSafePosition;
 
-bool AttackCharmingTotemAction::Execute(Event event)
+bool MarkCharmingTotemAction::Execute(Event event)
 {
-    if (bot->IsCharmed())
+    Player* bot = botAI->GetBot();
+    if (!bot || bot->IsCharmed())
         return false;
 
     Unit* totem = nullptr;
 
-    // ICC Pattern (RaidIccTriggers.cpp:301-312): No IsInCombat check for spawned adds
-    // RESEARCHED: Totems may not be flagged as "in combat" when first spawned
+    // ICC Pattern (RaidIccActions.cpp:1254-1274): Find priority target using GuidVector
     const GuidVector& npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (const auto& npc : npcs)
     {
@@ -30,24 +30,37 @@ bool AttackCharmingTotemAction::Execute(Event event)
         }
     }
 
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    // Prevent ping-pong between multiple totems if attacking one already
-    if (totem && currentTarget && currentTarget->GetEntry() == NPC_CHARMING_TOTEM)
-    {
+    if (!totem)
         return false;
-    }
 
-    if (!totem || AI_VALUE(Unit*, "current target") == totem)
-    {
-        return false;
-    }
+    // ICC Pattern (RaidIccActions.cpp:1276-1297): Update skull marker on priority target
+    UpdateSkullMarker(totem);
 
-    return Attack(totem);
+    return false;
 }
 
-bool AttackCharmingTotemAction::isUseful()
+void MarkCharmingTotemAction::UpdateSkullMarker(Unit* totem)
 {
-    return !botAI->IsHeal(bot) && !bot->IsCharmed();
+    if (!totem)
+        return;
+
+    Player* bot = botAI->GetBot();
+    Group* group = bot->GetGroup();
+    if (!group)
+        return;
+
+    constexpr uint8_t skullIconId = 7;
+
+    // Get current skull target
+    ObjectGuid currentSkull = group->GetTargetIcon(skullIconId);
+    Unit* currentSkullUnit = botAI->GetUnit(currentSkull);
+
+    // Determine if skull marker needs updating
+    bool needsUpdate = !currentSkullUnit || !currentSkullUnit->IsAlive() || currentSkullUnit != totem;
+
+    // Update if needed
+    if (needsUpdate)
+        group->SetTargetIcon(skullIconId, bot->GetGUID(), totem->GetGUID());
 }
 
 bool InterruptControllerAction::Execute(Event event)

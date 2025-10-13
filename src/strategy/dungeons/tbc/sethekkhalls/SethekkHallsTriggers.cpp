@@ -6,19 +6,14 @@
 
 bool CharmingTotemSpawnedTrigger::IsActive()
 {
-    if (botAI->IsHeal(bot)) { return false; }
-
-    if (bot->IsCharmed())
-        return false;
-
-    // ICC Pattern (RaidIccTriggers.cpp:301-312): No IsInCombat check for spawned adds
-    // RESEARCHED: Totems may not be flagged as "in combat" when first spawned
+    // ICC Pattern (RaidIccTriggers.cpp:301-325): Simple existence check for spawned adds
+    // Skull marking system handles targeting - trigger just detects presence
     const GuidVector& npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (const auto& npc : npcs)
     {
         if (Unit* unit = botAI->GetUnit(npc))
         {
-            if (unit->GetEntry() == NPC_CHARMING_TOTEM)
+            if (unit->GetEntry() == NPC_CHARMING_TOTEM && unit->IsAlive())
                 return true;
         }
     }
