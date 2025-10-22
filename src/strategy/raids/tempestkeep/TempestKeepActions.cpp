@@ -54,7 +54,7 @@ bool TempestKeepMovementHelper::MoveTowardPosition(Player* bot, const Position& 
     float moveX = currentX + (dx / distance) * incrementSize;
     float moveY = currentY + (dy / distance) * incrementSize;
     
-    bot->GetMotionMaster()->MovePoint(0, moveX, moveY, targetZ, false);
+    bot->GetMotionMaster()->MovePoint(0, moveX, moveY, targetZ, FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
     return true;
 }
 
@@ -170,9 +170,9 @@ bool AlarDiveBombAction::Execute(Event event)
     if (IsDiveBombTarget())
     {
         Position escapePos = CalculateEscapePosition();
-        bot->GetMotionMaster()->MovePoint(0, escapePos.GetPositionX(), 
+        bot->GetMotionMaster()->MovePoint(0, escapePos.GetPositionX(),
                                           escapePos.GetPositionY(),
-                                          escapePos.GetPositionZ(), false);
+                                          escapePos.GetPositionZ(), FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
         return true;
     }
 
@@ -229,7 +229,7 @@ bool AlarFlamePatchAction::Execute(Event event)
             flamePatch->GetPosition(), bot->GetPosition(), 10.0f);
         bot->GetMotionMaster()->MovePoint(0, safePos.GetPositionX(),
                                           safePos.GetPositionY(),
-                                          safePos.GetPositionZ(), false);
+                                          safePos.GetPositionZ(), FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
         return true;
     }
 
@@ -430,7 +430,7 @@ bool VoidReaverPoundingAction::Execute(Event event)
             boss->GetPosition(), bot->GetPosition(), 25.0f);
         bot->GetMotionMaster()->MovePoint(0, safePos.GetPositionX(),
                                           safePos.GetPositionY(),
-                                          safePos.GetPositionZ(), false);
+                                          safePos.GetPositionZ(), FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
         return true;
     }
 
@@ -477,7 +477,7 @@ bool VoidReaverPositionAction::HandleRangedPosition(Unit* boss)
             boss->GetPosition(), bot->GetPosition(), 27.0f);
         bot->GetMotionMaster()->MovePoint(0, safePos.GetPositionX(),
                                           safePos.GetPositionY(),
-                                          safePos.GetPositionZ(), false);
+                                          safePos.GetPositionZ(), FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
         return true;
     }
 
@@ -752,7 +752,7 @@ bool KaelthsFlamestrikeAction::Execute(Event event)
             flamestrike->GetPosition(), bot->GetPosition(), 15.0f);
         bot->GetMotionMaster()->MovePoint(0, safePos.GetPositionX(),
                                           safePos.GetPositionY(),
-                                          safePos.GetPositionZ(), false);
+                                          safePos.GetPositionZ(), FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
         return true;
     }
 
@@ -798,7 +798,7 @@ void KaelthasGravityLapseAction::HandleGravityMovement()
     float newY = bot->GetPositionY() + sin(angle) * moveDistance;
     float newZ = bot->GetPositionZ() + 2.0f; // Float up slightly
     
-    bot->GetMotionMaster()->MovePoint(0, newX, newY, newZ, false);
+    bot->GetMotionMaster()->MovePoint(0, newX, newY, newZ, FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
 }
 
 bool KaelthasPyroblastAction::Execute(Event event)
@@ -875,7 +875,7 @@ bool KaelthasNetherVaporAction::Execute(Event event)
             vapor->GetPosition(), bot->GetPosition(), 15.0f);
         bot->GetMotionMaster()->MovePoint(0, safePos.GetPositionX(),
                                           safePos.GetPositionY(),
-                                          safePos.GetPositionZ(), false);
+                                          safePos.GetPositionZ(), FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
         return true;
     }
 
@@ -922,7 +922,7 @@ bool ThaladredFixateAction::Execute(Event event)
                 thaladred->GetPosition(), bot->GetPosition(), 15.0f);
             bot->GetMotionMaster()->MovePoint(0, escapePos.GetPositionX(),
                                               escapePos.GetPositionY(),
-                                              escapePos.GetPositionZ(), false);
+                                              escapePos.GetPositionZ(), FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
             return true;
         }
     }
@@ -950,7 +950,7 @@ bool CapernianConflagrationAction::Execute(Event event)
                     member->GetPosition(), bot->GetPosition(), 15.0f);
                 bot->GetMotionMaster()->MovePoint(0, spreadPos.GetPositionX(),
                                                   spreadPos.GetPositionY(),
-                                                  spreadPos.GetPositionZ(), false);
+                                                  spreadPos.GetPositionZ(), FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
                 return true;
             }
         }
