@@ -14,7 +14,6 @@
 #include "RaidUlduarStrategy.h"
 #include "RaidOnyxiaStrategy.h"
 #include "RaidIccStrategy.h"
-#include "gruul/GruulStrategy.h"
 #include "magtheridon/MagtheridonStrategy.h"
 #include "serpentshrine/SerpentshrineStrategy.h"
 #include "tempestkeep/TempestKeepStrategy.h"
@@ -38,7 +37,6 @@ public:
         creators["uld"] = &RaidStrategyContext::uld;
         creators["onyxia"] = &RaidStrategyContext::onyxia;
         creators["icc"] = &RaidStrategyContext::icc;
-        creators["gruul"] = &RaidStrategyContext::gruul;
         creators["magtheridon"] = &RaidStrategyContext::magtheridon;
         creators["serpentshrine"] = &RaidStrategyContext::serpentshrine;
         creators["tempestkeep"] = &RaidStrategyContext::tempestkeep;
@@ -74,7 +72,6 @@ private:
     static Strategy* uld(PlayerbotAI* botAI) { return new RaidUlduarStrategy(botAI); }
     static Strategy* onyxia(PlayerbotAI* botAI) { return new RaidOnyxiaStrategy(botAI); }
     static Strategy* icc(PlayerbotAI* botAI) { return new RaidIccStrategy(botAI); }
-    static Strategy* gruul(PlayerbotAI* botAI) { return new GruulStrategy(botAI); }
     static Strategy* magtheridon(PlayerbotAI* botAI) { return new MagtheridonStrategy(botAI); }
     static Strategy* serpentshrine(PlayerbotAI* botAI) { return new SerpentshrineStrategy(botAI); }
     static Strategy* tempestkeep(PlayerbotAI* botAI) { return new TempestKeepStrategy(botAI); }
