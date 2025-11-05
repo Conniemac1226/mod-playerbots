@@ -1580,6 +1580,9 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 560:
             strategyName = "tbc-efd";  // Escape from Durnholde
             break;
+        case 565:
+            strategyName = "gruulslair";  // Gruul's Lair
+            break;
         case 574:
             strategyName = "wotlk-uk";  // Utgarde Keep
             break;
