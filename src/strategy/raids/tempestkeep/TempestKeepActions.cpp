@@ -185,7 +185,7 @@ bool AlarDiveBombAction::Execute(Event event)
             TK_ALAR_DIVE_POSITION, bot->GetPosition(), 20.0f);
         bot->GetMotionMaster()->MovePoint(0, escapePos.GetPositionX(),
                                           escapePos.GetPositionY(),
-                                          escapePos.GetPositionZ(), false);
+                                          escapePos.GetPositionZ(), FORCED_MOVEMENT_NONE, 0.f, 0.0f, false);
         return true;
     }
 
