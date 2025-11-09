@@ -6,6 +6,7 @@
 #include "RaidMcStrategy.h"
 #include "RaidBwlStrategy.h"
 #include "RaidKarazhanStrategy.h"
+#include "RaidMagtheridonStrategy.h"
 #include "RaidGruulsLairStrategy.h"
 #include "RaidNaxxStrategy.h"
 #include "RaidOsStrategy.h"
@@ -14,7 +15,6 @@
 #include "RaidUlduarStrategy.h"
 #include "RaidOnyxiaStrategy.h"
 #include "RaidIccStrategy.h"
-#include "magtheridon/MagtheridonStrategy.h"
 #include "serpentshrine/SerpentshrineStrategy.h"
 #include "tempestkeep/TempestKeepStrategy.h"
 #include "blacktemple/BlackTempleStrategy.h"
@@ -29,6 +29,7 @@ public:
         creators["mc"] = &RaidStrategyContext::mc;
         creators["bwl"] = &RaidStrategyContext::bwl;
         creators["karazhan"] = &RaidStrategyContext::karazhan;
+        creators["magtheridon"] = &RaidStrategyContext::magtheridon;
         creators["gruulslair"] = &RaidStrategyContext::gruulslair;
         creators["naxx"] = &RaidStrategyContext::naxx;
         creators["wotlk-os"] = &RaidStrategyContext::wotlk_os;
@@ -37,7 +38,6 @@ public:
         creators["uld"] = &RaidStrategyContext::uld;
         creators["onyxia"] = &RaidStrategyContext::onyxia;
         creators["icc"] = &RaidStrategyContext::icc;
-        creators["magtheridon"] = &RaidStrategyContext::magtheridon;
         creators["serpentshrine"] = &RaidStrategyContext::serpentshrine;
         creators["tempestkeep"] = &RaidStrategyContext::tempestkeep;
         creators["blacktemple"] = &RaidStrategyContext::blacktemple;
@@ -64,6 +64,7 @@ private:
     static Strategy* mc(PlayerbotAI* botAI) { return new RaidMcStrategy(botAI); }
     static Strategy* bwl(PlayerbotAI* botAI) { return new RaidBwlStrategy(botAI); }
     static Strategy* karazhan(PlayerbotAI* botAI) { return new RaidKarazhanStrategy(botAI); }
+    static Strategy* magtheridon(PlayerbotAI* botAI) { return new RaidMagtheridonStrategy(botAI); }
     static Strategy* gruulslair(PlayerbotAI* botAI) { return new RaidGruulsLairStrategy(botAI); }
     static Strategy* naxx(PlayerbotAI* botAI) { return new RaidNaxxStrategy(botAI); }
     static Strategy* wotlk_os(PlayerbotAI* botAI) { return new RaidOsStrategy(botAI); }
@@ -72,7 +73,6 @@ private:
     static Strategy* uld(PlayerbotAI* botAI) { return new RaidUlduarStrategy(botAI); }
     static Strategy* onyxia(PlayerbotAI* botAI) { return new RaidOnyxiaStrategy(botAI); }
     static Strategy* icc(PlayerbotAI* botAI) { return new RaidIccStrategy(botAI); }
-    static Strategy* magtheridon(PlayerbotAI* botAI) { return new MagtheridonStrategy(botAI); }
     static Strategy* serpentshrine(PlayerbotAI* botAI) { return new SerpentshrineStrategy(botAI); }
     static Strategy* tempestkeep(PlayerbotAI* botAI) { return new TempestKeepStrategy(botAI); }
     static Strategy* blacktemple(PlayerbotAI* botAI) { return new RaidBtStrategy(botAI); }
