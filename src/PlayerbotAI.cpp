@@ -1469,9 +1469,6 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 540:
             strategyName = "tbc-shh";  // The Shattered Halls
             break;
-        case 544:
-            strategyName = "magtheridon";  // Magtheridon's Lair
-            break;
         case 545:
             strategyName = "tbc-sv";  // The Steamvault
             break;
