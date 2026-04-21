@@ -19,6 +19,23 @@
 #include "Ai/Raid/Onyxia/RaidOnyxiaTriggerContext.h"
 #include "Ai/Raid/Icecrown/RaidIccTriggerContext.h"
 #include "Ai/Dungeon/WotlkDungeonTriggerContext.h"
+#include "../../../strategy/raids/blacktemple/BlackTempleTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/auchenaicrypts/AuchenaiCryptsTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/steamvault/SteamvaultTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/bloodfurnace/BloodFurnaceTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/slavepens/SlavePensTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/underbog/UnderbogTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/manatombs/ManaTombsTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/arcatraz/ArcatrazTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/botanica/BotanicaTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/mechanar/MechanarTriggerContext.h"
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
 {
@@ -56,4 +73,23 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new WotlkDungeonFoSTriggerContext());
     triggerContexts.Add(new WotlkDungeonPoSTriggerContext());
     triggerContexts.Add(new WotlkDungeonToCTriggerContext());
+
+    // Custom
+    triggerContexts.Add(new RaidBtTriggerContext());
+    triggerContexts.Add(new EscapeFromDurnholdeTriggerContext());
+    triggerContexts.Add(new TbcDungeonSHTriggerContext());
+    triggerContexts.Add(new TbcDungeonACTriggerContext());
+    triggerContexts.Add(new BlackMorassTriggerContext());
+    triggerContexts.Add(new MagistersTerraceTriggerContext());
+    triggerContexts.Add(new SteamvaultTriggerContext());
+    triggerContexts.Add(new HellfireRampartsTriggerContext());
+    triggerContexts.Add(new BloodFurnaceTriggerContext());
+    triggerContexts.Add(new SlavePensTriggerContext());
+    triggerContexts.Add(new UnderbogTriggerContext());
+    triggerContexts.Add(new ManaTombsTriggerContext());
+    triggerContexts.Add(new ShatteredHallsTriggerContext());
+    triggerContexts.Add(new ShadowLabyrinthTriggerContext());
+    triggerContexts.Add(new ArcatrazTriggerContext());
+    triggerContexts.Add(new BotanicaTriggerContext());
+    triggerContexts.Add(new MechanarTriggerContext());
 }

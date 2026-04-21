@@ -19,6 +19,23 @@
 #include "Ai/Raid/Onyxia/RaidOnyxiaActionContext.h"
 #include "Ai/Raid/Icecrown/RaidIccActionContext.h"
 #include "Ai/Dungeon/WotlkDungeonActionContext.h"
+#include "../../../strategy/raids/blacktemple/BlackTempleActionContext.h"
+#include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsActionContext.h"
+#include "../../../strategy/dungeons/tbc/auchenaicrypts/AuchenaiCryptsActionContext.h"
+#include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassActionContext.h"
+#include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeActionContext.h"
+#include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceActionContext.h"
+#include "../../../strategy/dungeons/tbc/steamvault/SteamvaultActionContext.h"
+#include "../../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsActionContext.h"
+#include "../../../strategy/dungeons/tbc/bloodfurnace/BloodFurnaceActionContext.h"
+#include "../../../strategy/dungeons/tbc/slavepens/SlavePensActionContext.h"
+#include "../../../strategy/dungeons/tbc/underbog/UnderbogActionContext.h"
+#include "../../../strategy/dungeons/tbc/manatombs/ManaTombsActionContext.h"
+#include "../../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsActionContext.h"
+#include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthActionContext.h"
+#include "../../../strategy/dungeons/tbc/arcatraz/ArcatrazActionContext.h"
+#include "../../../strategy/dungeons/tbc/botanica/BotanicaActionContext.h"
+#include "../../../strategy/dungeons/tbc/mechanar/MechanarActionContext.h"
 
 void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Action>& actionContexts)
 {
@@ -56,4 +73,23 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new WotlkDungeonFoSActionContext());
     actionContexts.Add(new WotlkDungeonPoSActionContext());
     actionContexts.Add(new WotlkDungeonToCActionContext());
+
+    // Custom
+    actionContexts.Add(new RaidBtActionContext());
+    actionContexts.Add(new EscapeFromDurnholdeActionContext());
+    actionContexts.Add(new TbcDungeonSHActionContext());
+    actionContexts.Add(new TbcDungeonACActionContext());
+    actionContexts.Add(new BlackMorassActionContext());
+    actionContexts.Add(new MagistersTerraceActionContext());
+    actionContexts.Add(new SteamvaultActionContext());
+    actionContexts.Add(new HellfireRampartsActionContext());
+    actionContexts.Add(new BloodFurnaceActionContext());
+    actionContexts.Add(new SlavePensActionContext());
+    actionContexts.Add(new UnderbogActionContext());
+    actionContexts.Add(new ManaTombsActionContext());
+    actionContexts.Add(new ShatteredHallsActionContext());
+    actionContexts.Add(new ShadowLabyrinthActionContext());
+    actionContexts.Add(new ArcatrazActionContext());
+    actionContexts.Add(new BotanicaActionContext());
+    actionContexts.Add(new MechanarActionContext());
 }

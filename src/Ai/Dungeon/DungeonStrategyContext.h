@@ -17,6 +17,22 @@
 #include "ForgeOfSouls/Strategy/ForgeOfSoulsStrategy.h"
 #include "PitOfSaron/Strategy/PitOfSaronStrategy.h"
 #include "TrialOfTheChampion/Strategy/TrialOfTheChampionStrategy.h"
+#include "../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsStrategy.h"
+#include "../../strategy/dungeons/tbc/auchenaicrypts/AuchenaiCryptsStrategy.h"
+#include "../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeStrategy.h"
+#include "../../strategy/dungeons/tbc/blackmorass/BlackMorassStrategy.h"
+#include "../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceStrategy.h"
+#include "../../strategy/dungeons/tbc/steamvault/SteamvaultStrategy.h"
+#include "../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsStrategy.h"
+#include "../../strategy/dungeons/tbc/slavepens/SlavePensStrategy.h"
+#include "../../strategy/dungeons/tbc/underbog/UnderbogStrategy.h"
+#include "../../strategy/dungeons/tbc/manatombs/ManaTombsStrategy.h"
+#include "../../strategy/dungeons/tbc/bloodfurnace/BloodFurnaceStrategy.h"
+#include "../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsStrategy.h"
+#include "../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthStrategy.h"
+#include "../../strategy/dungeons/tbc/arcatraz/ArcatrazStrategy.h"
+#include "../../strategy/dungeons/tbc/botanica/BotanicaStrategy.h"
+#include "../../strategy/dungeons/tbc/mechanar/MechanarStrategy.h"
 
 /*
 Full list/TODO:
@@ -44,7 +60,22 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             // ...
 
             // Burning Crusade
-            // ...
+            creators["tbc-sh"] = &DungeonStrategyContext::tbc_sh;       // Sethekk Halls
+            creators["tbc-ac"] = &DungeonStrategyContext::tbc_ac;       // Auchenai Crypts
+            creators["tbc-efd"] = &DungeonStrategyContext::tbc_efd;     // Escape from Durnholde
+            creators["tbc-bm"] = &DungeonStrategyContext::tbc_bm;       // Black Morass
+            creators["tbc-mt"] = &DungeonStrategyContext::tbc_mt;       // Magisters' Terrace
+            creators["tbc-sv"] = &DungeonStrategyContext::tbc_sv;       // The Steamvault
+            creators["tbc-hr"] = &DungeonStrategyContext::tbc_hr;       // Hellfire Ramparts
+            creators["tbc-bf"] = &DungeonStrategyContext::tbc_bf;       // The Blood Furnace
+            creators["tbc-sp"] = &DungeonStrategyContext::tbc_sp;       // The Slave Pens
+            creators["tbc-ub"] = &DungeonStrategyContext::tbc_ub;       // The Underbog
+            creators["tbc-mato"] = &DungeonStrategyContext::tbc_mt_tombs; // Mana-Tombs
+            creators["tbc-shh"] = &DungeonStrategyContext::tbc_shh;      // The Shattered Halls
+            creators["tbc-sl"] = &DungeonStrategyContext::tbc_sl;        // Shadow Labyrinth
+            creators["tbc-arc"] = &DungeonStrategyContext::tbc_arc;      // The Arcatraz
+            creators["tbc-bot"] = &DungeonStrategyContext::tbc_bot;      // The Botanica
+            creators["tbc-mech"] = &DungeonStrategyContext::tbc_mech;    // The Mechanar
 
             // Wrath of the Lich King
             creators["wotlk-uk"] = &DungeonStrategyContext::wotlk_uk;       // Utgarde Keep
@@ -65,6 +96,23 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             creators["wotlk-fos"] = &DungeonStrategyContext::wotlk_fos;     // The Forge of Souls
         }
     private:
+        static Strategy* tbc_sh(PlayerbotAI* botAI) { return new TbcDungeonSHStrategy(botAI); }
+        static Strategy* tbc_ac(PlayerbotAI* botAI) { return new TbcDungeonACStrategy(botAI); }
+        static Strategy* tbc_efd(PlayerbotAI* botAI) { return new EscapeFromDurnholdeStrategy(botAI); }
+        static Strategy* tbc_bm(PlayerbotAI* botAI) { return new BlackMorassStrategy(botAI); }
+        static Strategy* tbc_mt(PlayerbotAI* botAI) { return new MagistersTerraceStrategy(botAI); }
+        static Strategy* tbc_sv(PlayerbotAI* botAI) { return new SteamvaultStrategy(botAI); }
+        static Strategy* tbc_hr(PlayerbotAI* botAI) { return new TbcDungeonHRStrategy(botAI); }
+        static Strategy* tbc_bf(PlayerbotAI* botAI) { return new BloodFurnaceStrategy(botAI); }
+        static Strategy* tbc_sp(PlayerbotAI* botAI) { return new SlavePensStrategy(botAI); }
+        static Strategy* tbc_ub(PlayerbotAI* botAI) { return new UnderbogStrategy(botAI); }
+        static Strategy* tbc_mt_tombs(PlayerbotAI* botAI) { return new ManaTombsStrategy(botAI); }
+        static Strategy* tbc_shh(PlayerbotAI* botAI) { return new ShatteredHallsStrategy(botAI); }
+        static Strategy* tbc_sl(PlayerbotAI* botAI) { return new ShadowLabyrinthStrategy(botAI); }
+        static Strategy* tbc_arc(PlayerbotAI* botAI) { return new ArcatrazStrategy(botAI); }
+        static Strategy* tbc_bot(PlayerbotAI* botAI) { return new BotanicaStrategy(botAI); }
+        static Strategy* tbc_mech(PlayerbotAI* botAI) { return new MechanarStrategy(botAI); }
+
         static Strategy* wotlk_uk(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
         static Strategy* wotlk_nex(PlayerbotAI* botAI) { return new WotlkDungeonNexStrategy(botAI); }
         static Strategy* wotlk_an(PlayerbotAI* botAI) { return new WotlkDungeonANStrategy(botAI); }

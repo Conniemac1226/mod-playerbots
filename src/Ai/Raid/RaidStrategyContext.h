@@ -18,6 +18,8 @@
 #include "RaidUlduarStrategy.h"
 #include "RaidOnyxiaStrategy.h"
 #include "RaidIccStrategy.h"
+#include "../../strategy/raids/blacktemple/BlackTempleStrategy.h"
+#include "../../strategy/raids/zulaman/ZulAmanStrategy.h"
 
 class RaidStrategyContext : public NamedObjectContext<Strategy>
 {
@@ -40,6 +42,24 @@ public:
         creators["ulduar"] = &RaidStrategyContext::ulduar;
         creators["onyxia"] = &RaidStrategyContext::onyxia;
         creators["icc"] = &RaidStrategyContext::icc;
+
+        // Custom
+        creators["blacktemple"] = &RaidStrategyContext::blacktemple;
+        creators["najentus"] = &RaidStrategyContext::najentus;
+        creators["supremus"] = &RaidStrategyContext::supremus;
+        creators["shade of akama"] = &RaidStrategyContext::shade_of_akama;
+        creators["teron gorefiend"] = &RaidStrategyContext::teron_gorefiend;
+        creators["gurtogg bloodboil"] = &RaidStrategyContext::gurtogg_bloodboil;
+        creators["reliquary of souls"] = &RaidStrategyContext::reliquary_of_souls;
+        creators["mother shahraz"] = &RaidStrategyContext::mother_shahraz;
+        creators["illidari council"] = &RaidStrategyContext::illidari_council;
+        creators["illidan stormrage"] = &RaidStrategyContext::illidan_stormrage;
+        creators["nalorakk"] = &RaidStrategyContext::nalorakk;
+        creators["akilzon"] = &RaidStrategyContext::akilzon;
+        creators["janalai"] = &RaidStrategyContext::janalai;
+        creators["halazzi"] = &RaidStrategyContext::halazzi;
+        creators["hex lord malacrass"] = &RaidStrategyContext::hex_lord_malacrass;
+        creators["zuljin"] = &RaidStrategyContext::zuljin;
     }
 
 private:
@@ -59,6 +79,23 @@ private:
     static Strategy* onyxia(PlayerbotAI* botAI) { return new RaidOnyxiaStrategy(botAI); }
     static Strategy* ulduar(PlayerbotAI* botAI) { return new RaidUlduarStrategy(botAI); }
     static Strategy* icc(PlayerbotAI* botAI) { return new RaidIccStrategy(botAI); }
+
+    static Strategy* blacktemple(PlayerbotAI* botAI) { return new RaidBtStrategy(botAI); }
+    static Strategy* najentus(PlayerbotAI* botAI) { return new RaidBtNajentusStrategy(botAI); }
+    static Strategy* supremus(PlayerbotAI* botAI) { return new RaidBtSupremusStrategy(botAI); }
+    static Strategy* shade_of_akama(PlayerbotAI* botAI) { return new RaidBtShadeOfAkamaStrategy(botAI); }
+    static Strategy* teron_gorefiend(PlayerbotAI* botAI) { return new RaidBtTeronGorefiendStrategy(botAI); }
+    static Strategy* gurtogg_bloodboil(PlayerbotAI* botAI) { return new RaidBtGurtoggBloodboilStrategy(botAI); }
+    static Strategy* reliquary_of_souls(PlayerbotAI* botAI) { return new RaidBtReliquaryOfSoulsStrategy(botAI); }
+    static Strategy* mother_shahraz(PlayerbotAI* botAI) { return new RaidBtMotherShahrazStrategy(botAI); }
+    static Strategy* illidari_council(PlayerbotAI* botAI) { return new RaidBtIllidariCouncilStrategy(botAI); }
+    static Strategy* illidan_stormrage(PlayerbotAI* botAI) { return new RaidBtIllidanStormrageStrategy(botAI); }
+    static Strategy* nalorakk(PlayerbotAI* botAI) { return new RaidZaNalorakkStrategy(botAI); }
+    static Strategy* akilzon(PlayerbotAI* botAI) { return new RaidZaAkilzonStrategy(botAI); }
+    static Strategy* janalai(PlayerbotAI* botAI) { return new RaidZaJanalaiStrategy(botAI); }
+    static Strategy* halazzi(PlayerbotAI* botAI) { return new RaidZaHalazziStrategy(botAI); }
+    static Strategy* hex_lord_malacrass(PlayerbotAI* botAI) { return new RaidZaHexLordStrategy(botAI); }
+    static Strategy* zuljin(PlayerbotAI* botAI) { return new RaidZaZuljinStrategy(botAI); }
 };
 
 #endif
