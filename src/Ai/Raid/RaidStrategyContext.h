@@ -19,9 +19,6 @@
 #include "RaidOnyxiaStrategy.h"
 #include "RaidIccStrategy.h"
 #include "../../strategy/raids/blacktemple/BlackTempleStrategy.h"
-#include "../../strategy/raids/zulaman/ZulAmanStrategy.h"
-#include "../../strategy/raids/serpentshrine/SerpentshrineStrategy.h"
-#include "../../strategy/raids/tempestkeep/TempestKeepStrategy.h"
 
 class RaidStrategyContext : public NamedObjectContext<Strategy>
 {
@@ -46,7 +43,7 @@ public:
         creators["onyxia"] = &RaidStrategyContext::onyxia;
         creators["icc"] = &RaidStrategyContext::icc;
 
-        // Custom / Enhanced
+        // Custom / Unique to this branch
         creators["blacktemple"] = &RaidStrategyContext::blacktemple;
         creators["najentus"] = &RaidStrategyContext::najentus;
         creators["supremus"] = &RaidStrategyContext::supremus;
@@ -57,19 +54,6 @@ public:
         creators["mother shahraz"] = &RaidStrategyContext::mother_shahraz;
         creators["illidari council"] = &RaidStrategyContext::illidari_council;
         creators["illidan stormrage"] = &RaidStrategyContext::illidan_stormrage;
-        
-        // Use 'custom-' prefix to avoid clashing with official 'ssc', 'tempestkeep', 'zulaman'
-        creators["custom-ssc"] = &RaidStrategyContext::custom_ssc;
-        creators["custom-tempestkeep"] = &RaidStrategyContext::custom_tempestkeep;
-        creators["custom-zulaman"] = &RaidStrategyContext::custom_zulaman;
-
-        // Boss-specific ZA
-        creators["nalorakk"] = &RaidStrategyContext::nalorakk;
-        creators["akilzon"] = &RaidStrategyContext::akilzon;
-        creators["janalai"] = &RaidStrategyContext::janalai;
-        creators["halazzi"] = &RaidStrategyContext::halazzi;
-        creators["hex lord malacrass"] = &RaidStrategyContext::hex_lord_malacrass;
-        creators["zuljin"] = &RaidStrategyContext::zuljin;
     }
 
 private:
@@ -101,17 +85,6 @@ private:
     static Strategy* mother_shahraz(PlayerbotAI* botAI) { return new RaidBtMotherShahrazStrategy(botAI); }
     static Strategy* illidari_council(PlayerbotAI* botAI) { return new RaidBtIllidariCouncilStrategy(botAI); }
     static Strategy* illidan_stormrage(PlayerbotAI* botAI) { return new RaidBtIllidanStormrageStrategy(botAI); }
-
-    static Strategy* custom_ssc(PlayerbotAI* botAI) { return new SerpentshrineStrategy(botAI); }
-    static Strategy* custom_tempestkeep(PlayerbotAI* botAI) { return new TempestKeepStrategy(botAI); }
-    static Strategy* custom_zulaman(PlayerbotAI* botAI) { return new RaidZaStrategy(botAI); }
-
-    static Strategy* nalorakk(PlayerbotAI* botAI) { return new RaidZaNalorakkStrategy(botAI); }
-    static Strategy* akilzon(PlayerbotAI* botAI) { return new RaidZaAkilzonStrategy(botAI); }
-    static Strategy* janalai(PlayerbotAI* botAI) { return new RaidZaJanalaiStrategy(botAI); }
-    static Strategy* halazzi(PlayerbotAI* botAI) { return new RaidZaHalazziStrategy(botAI); }
-    static Strategy* hex_lord_malacrass(PlayerbotAI* botAI) { return new RaidZaHexLordStrategy(botAI); }
-    static Strategy* zuljin(PlayerbotAI* botAI) { return new RaidZaZuljinStrategy(botAI); }
 };
 
 #endif

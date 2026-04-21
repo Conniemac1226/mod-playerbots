@@ -20,8 +20,6 @@
 #include "Ai/Raid/Icecrown/RaidIccTriggerContext.h"
 #include "Ai/Dungeon/WotlkDungeonTriggerContext.h"
 #include "../../../strategy/raids/blacktemple/BlackTempleTriggerContext.h"
-#include "../../../strategy/raids/serpentshrine/SerpentshrineTriggerContext.h"
-#include "../../../strategy/raids/tempestkeep/TempestKeepTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/auchenaicrypts/AuchenaiCryptsTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassTriggerContext.h"
@@ -76,10 +74,8 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new WotlkDungeonPoSTriggerContext());
     triggerContexts.Add(new WotlkDungeonToCTriggerContext());
 
-    // Custom
+    // Custom / Unique
     triggerContexts.Add(new RaidBtTriggerContext());
-    triggerContexts.Add(new SerpentshrineTriggerContext());
-    triggerContexts.Add(new TempestKeepTriggerContext());
     triggerContexts.Add(new EscapeFromDurnholdeTriggerContext());
     triggerContexts.Add(new TbcDungeonSHTriggerContext());
     triggerContexts.Add(new TbcDungeonACTriggerContext());
