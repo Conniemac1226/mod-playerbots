@@ -1,14 +1,16 @@
 #pragma once
 
-#include "Multiplier.h"
 #include "AiObjectContext.h"
+#include "Multiplier.h"
 #include "Strategy.h"
 
-class MagistersTerraceStrategy : public Strategy
+class RaidOsStrategy : public Strategy
 {
 public:
-    MagistersTerraceStrategy(PlayerbotAI* ai) : Strategy(ai) {}
-    virtual std::string const getName() override { return "magisters terrace"; }
-    virtual void InitTriggers(std::vector<TriggerNode*> &triggers) override;
-    virtual void InitMultipliers(std::vector<Multiplier*> &multipliers) override;
+    RaidOsStrategy(PlayerbotAI* ai) : Strategy(ai) {}
+
+    std::string const getName() override { return "obsidian sanctum"; }
+
+    void InitTriggers(std::vector<TriggerNode*>& triggers) override;
+    void InitMultipliers(std::vector<Multiplier*>& multipliers) override;
 };

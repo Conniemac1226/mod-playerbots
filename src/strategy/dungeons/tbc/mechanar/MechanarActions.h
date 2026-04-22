@@ -3,7 +3,7 @@
 
 #include "Action.h"
 #include "AttackAction.h"
-#include "../actions/ChangeTargetAction.h"
+#include "ChangeTargetAction.h"
 #include "MovementActions.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
