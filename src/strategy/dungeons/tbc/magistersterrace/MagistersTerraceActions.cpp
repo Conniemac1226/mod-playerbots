@@ -517,7 +517,7 @@ bool AvoidGravityLapseAction::Execute(Event event)
                     if (speed <= 0.0f)
                         speed = bot->GetSpeed(MOVE_RUN);
                     float delay = speed > 0.0f ? 1000.0f * (distance / speed) : 0.0f;
-                    delay = std::min(delay, static_cast<float>(sPlayerbotAIConfig->maxWaitForMove));
+                    delay = std::min(delay, static_cast<float>(sPlayerbotAIConfig.maxWaitForMove));
                     AI_VALUE(LastMovement&, "last movement").Set(bot->GetMapId(), copy.GetPositionX(), copy.GetPositionY(), copy.GetPositionZ(),
                                                                  bot->GetOrientation(), delay, MovementPriority::MOVEMENT_FORCED);
                     g_kaelthas_lastMoveTime[botGuid] = currentTime;

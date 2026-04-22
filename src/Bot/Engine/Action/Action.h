@@ -5,6 +5,8 @@
 
 #pragma once
 
+#include <cstdarg>
+
 #include "AiObject.h"
 #include "Event.h"
 #include "Value.h"
@@ -38,6 +40,25 @@ public:
 
         return result;
     };
+
+    // Compatibility helper used by older strategy code that still builds
+    // trigger handler lists from a null-terminated sequence of NextAction*.
+    static std::vector<NextAction> array([[maybe_unused]] int dummy, ...)
+    {
+        std::vector<NextAction> result = {};
+
+        va_list args;
+        va_start(args, dummy);
+
+        while (NextAction* action = va_arg(args, NextAction*))
+        {
+            result.push_back(*action);
+            delete action;
+        }
+
+        va_end(args);
+        return result;
+    }
 
 private:
     float relevance;

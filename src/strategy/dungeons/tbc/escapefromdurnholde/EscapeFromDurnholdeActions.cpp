@@ -20,6 +20,10 @@
 #define M_PI_F 3.14159265f
 #endif
 
+#ifndef TBC_MODE
+#define TBC_MODE(bot, normalSpell, heroicSpell) (((bot) && (bot)->GetMap() && (bot)->GetMap()->IsHeroic()) ? (heroicSpell) : (normalSpell))
+#endif
+
 // Per-bot state management for whirlwind avoidance
 static std::map<ObjectGuid, uint32> g_drake_lastMoveTime;
 static std::map<ObjectGuid, bool> g_drake_inSafePosition;
