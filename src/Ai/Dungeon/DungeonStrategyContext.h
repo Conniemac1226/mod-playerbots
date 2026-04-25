@@ -2,6 +2,7 @@
 #define _PLAYERBOT_DUNGEONSTRATEGYCONTEXT_H
 
 #include "Strategy.h"
+#include "AuchenaiCrypts/Strategy/AuchenaiCryptsStrategy.h"
 #include "UtgardeKeep/Strategy/UtgardeKeepStrategy.h"
 #include "Nexus/Strategy/NexusStrategy.h"
 #include "AzjolNerub/Strategy/AzjolNerubStrategy.h"
@@ -18,7 +19,6 @@
 #include "PitOfSaron/Strategy/PitOfSaronStrategy.h"
 #include "TrialOfTheChampion/Strategy/TrialOfTheChampionStrategy.h"
 #include "../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsStrategy.h"
-#include "../../strategy/dungeons/tbc/auchenaicrypts/AuchenaiCryptsStrategy.h"
 #include "../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeStrategy.h"
 #include "../../strategy/dungeons/tbc/blackmorass/BlackMorassStrategy.h"
 #include "../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceStrategy.h"
@@ -61,7 +61,7 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
 
             // Burning Crusade
             creators["tbc-sh"] = &DungeonStrategyContext::tbc_sh;       // Sethekk Halls
-            creators["tbc-ac"] = &DungeonStrategyContext::tbc_ac;       // Auchenai Crypts
+            creators["tbc-ac"] = &DungeonStrategyContext::tbc_ac;       // Auchindoun: Auchenai Crypts
             creators["tbc-efd"] = &DungeonStrategyContext::tbc_efd;     // Escape from Durnholde
             creators["tbc-bm"] = &DungeonStrategyContext::tbc_bm;       // Black Morass
             creators["tbc-mt"] = &DungeonStrategyContext::tbc_mt;       // Magisters' Terrace
@@ -97,7 +97,7 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         }
     private:
         static Strategy* tbc_sh(PlayerbotAI* botAI) { return new TbcDungeonSHStrategy(botAI); }
-        static Strategy* tbc_ac(PlayerbotAI* botAI) { return new TbcDungeonACStrategy(botAI); }
+        static Strategy* tbc_ac(PlayerbotAI* botAI) { return new TbcDungeonAuchenaiCryptsStrategy(botAI); }
         static Strategy* tbc_efd(PlayerbotAI* botAI) { return new EscapeFromDurnholdeStrategy(botAI); }
         static Strategy* tbc_bm(PlayerbotAI* botAI) { return new BlackMorassStrategy(botAI); }
         static Strategy* tbc_mt(PlayerbotAI* botAI) { return new MagistersTerraceStrategy(botAI); }

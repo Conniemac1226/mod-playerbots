@@ -18,10 +18,10 @@
 #include "Ai/Raid/Ulduar/RaidUlduarActionContext.h"
 #include "Ai/Raid/Onyxia/RaidOnyxiaActionContext.h"
 #include "Ai/Raid/Icecrown/RaidIccActionContext.h"
+#include "Ai/Dungeon/TbcDungeonActionContext.h"
 #include "Ai/Dungeon/WotlkDungeonActionContext.h"
 #include "../../../strategy/raids/blacktemple/BlackTempleActionContext.h"
 #include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsActionContext.h"
-#include "../../../strategy/dungeons/tbc/auchenaicrypts/AuchenaiCryptsActionContext.h"
 #include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassActionContext.h"
 #include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeActionContext.h"
 #include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceActionContext.h"
@@ -58,6 +58,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidUlduarActionContext());
     actionContexts.Add(new RaidOnyxiaActionContext());
     actionContexts.Add(new RaidIccActionContext());
+    actionContexts.Add(new TbcDungeonAuchenaiCryptsActionContext());
     actionContexts.Add(new WotlkDungeonUKActionContext());
     actionContexts.Add(new WotlkDungeonNexActionContext());
     actionContexts.Add(new WotlkDungeonANActionContext());
@@ -78,7 +79,6 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidBtActionContext());
     actionContexts.Add(new EscapeFromDurnholdeActionContext());
     actionContexts.Add(new TbcDungeonSHActionContext());
-    actionContexts.Add(new TbcDungeonACActionContext());
     actionContexts.Add(new BlackMorassActionContext());
     actionContexts.Add(new MagistersTerraceActionContext());
     actionContexts.Add(new SteamvaultActionContext());

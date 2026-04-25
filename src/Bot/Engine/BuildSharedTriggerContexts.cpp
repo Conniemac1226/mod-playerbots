@@ -18,10 +18,10 @@
 #include "Ai/Raid/Ulduar/RaidUlduarTriggerContext.h"
 #include "Ai/Raid/Onyxia/RaidOnyxiaTriggerContext.h"
 #include "Ai/Raid/Icecrown/RaidIccTriggerContext.h"
+#include "Ai/Dungeon/TbcDungeonTriggerContext.h"
 #include "Ai/Dungeon/WotlkDungeonTriggerContext.h"
 #include "../../../strategy/raids/blacktemple/BlackTempleTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/auchenaicrypts/AuchenaiCryptsTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceTriggerContext.h"
@@ -58,6 +58,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidUlduarTriggerContext());
     triggerContexts.Add(new RaidOnyxiaTriggerContext());
     triggerContexts.Add(new RaidIccTriggerContext());
+    triggerContexts.Add(new TbcDungeonAuchenaiCryptsTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());
@@ -78,7 +79,6 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidBtTriggerContext());
     triggerContexts.Add(new EscapeFromDurnholdeTriggerContext());
     triggerContexts.Add(new TbcDungeonSHTriggerContext());
-    triggerContexts.Add(new TbcDungeonACTriggerContext());
     triggerContexts.Add(new BlackMorassTriggerContext());
     triggerContexts.Add(new MagistersTerraceTriggerContext());
     triggerContexts.Add(new SteamvaultTriggerContext());
