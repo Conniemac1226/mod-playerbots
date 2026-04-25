@@ -24,4 +24,11 @@ public:
     float GetValue(Action* action) override;
 };
 
+class MagtheridonChannelerTargetMultiplier : public Multiplier
+{
+public:
+    MagtheridonChannelerTargetMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "magtheridon channeler target multiplier") {}
+    float GetValue(Action* action) override;
+};
+
 #endif

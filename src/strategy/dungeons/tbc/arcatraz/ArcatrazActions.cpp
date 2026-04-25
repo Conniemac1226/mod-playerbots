@@ -504,13 +504,19 @@ bool SkyrissIllusionAction::Execute(Event event)
     for (auto& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
-        if (!unit || unit->GetEntry() != NPC_HARBINGER_ILLUSION || !unit->IsAlive())
+        if (!unit || unit->GetEntry() != NPC_HARBINGER_ILLUSION || !unit->IsAlive() || !bot->IsValidAttackTarget(unit))
             continue;
 
         FocusPriorityTarget(botAI, unit);
 
-        if (bot->IsValidAttackTarget(unit) && Attack(unit))
+        if (Attack(unit))
             return true;
+    }
+
+    if (boss->IsAlive() && bot->IsValidAttackTarget(boss))
+    {
+        FocusPriorityTarget(botAI, boss);
+        return Attack(boss);
     }
 
     return false;

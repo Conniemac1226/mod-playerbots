@@ -218,8 +218,7 @@ float MellicharAddMultiplier::GetValue(Action* action)
     const uint32 mellicharAdds[] = {
         NPC_TRICKSTER, NPC_PH_HUNTER,      // Wave 1: Random
         NPC_AKKIRIS, NPC_SULFURON,         // Wave 3: Random  
-        NPC_TW_DRAK, NPC_BL_DRAK,          // Wave 4: Random
-        NPC_HARBINGER_SKYRISS               // Wave 5: Final boss
+        NPC_TW_DRAK, NPC_BL_DRAK           // Wave 4: Random
     };
     
     GuidVector targets = AI_VALUE(GuidVector, "possible targets");

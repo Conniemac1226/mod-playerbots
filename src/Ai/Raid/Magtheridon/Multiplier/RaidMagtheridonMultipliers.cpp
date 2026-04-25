@@ -73,3 +73,23 @@ float MagtheridonDisableOffTankAssistMultiplier::GetValue(Action* action)
 
     return 1.0f;
 }
+
+float MagtheridonChannelerTargetMultiplier::GetValue(Action* action)
+{
+    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    if (!magtheridon || botAI->IsHeal(bot))
+        return 1.0f;
+
+    bool channelerAlive =
+        GetChanneler(bot, SOUTH_CHANNELER) ||
+        GetChanneler(bot, WEST_CHANNELER) ||
+        GetChanneler(bot, EAST_CHANNELER) ||
+        GetChanneler(bot, NORTHWEST_CHANNELER) ||
+        GetChanneler(bot, NORTHEAST_CHANNELER);
+
+    if (channelerAlive &&
+        (dynamic_cast<DpsAssistAction*>(action) || dynamic_cast<TankAssistAction*>(action)))
+        return 0.0f;
+
+    return 1.0f;
+}

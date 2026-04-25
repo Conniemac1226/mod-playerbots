@@ -220,7 +220,7 @@ bool SkyrissIllusionTrigger::IsActive()
             continue;
         }
         
-        if (unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive())
+        if (unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive() && bot->IsValidAttackTarget(unit))
         {
             return true;
         }

@@ -39,4 +39,5 @@ void RaidMagtheridonStrategy::InitMultipliers(std::vector<Multiplier*>& multipli
     multipliers.push_back(new MagtheridonUseManticronCubeMultiplier(botAI));
     multipliers.push_back(new MagtheridonWaitToAttackMultiplier(botAI));
     multipliers.push_back(new MagtheridonDisableOffTankAssistMultiplier(botAI));
+    multipliers.push_back(new MagtheridonChannelerTargetMultiplier(botAI));
 }
