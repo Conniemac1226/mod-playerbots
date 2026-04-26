@@ -1,8 +1,11 @@
 #include "OldKingdomStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "OldKingdomMultipliers.h"
 
 void WotlkDungeonOKStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Elder Nadox
     triggers.push_back(new TriggerNode("nadox guardian",
         { NextAction("attack nadox guardian", ACTION_RAID + 5) }));

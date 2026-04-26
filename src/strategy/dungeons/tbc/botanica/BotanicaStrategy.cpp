@@ -1,8 +1,11 @@
 #include "BotanicaStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "BotanicaMultipliers.h"
 
 void BotanicaStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Commander Sarannis
     triggers.push_back(new TriggerNode("sarannis resonance",
         NextAction::array(0, new NextAction("sarannis resonance dispel", ACTION_DISPEL + 2), nullptr)));

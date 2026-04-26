@@ -1,8 +1,11 @@
 #include "SteamvaultStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "SteamvaultMultipliers.h"
 
 void SteamvaultStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Hydromancer Thespia
     triggers.push_back(new TriggerNode(
         "thespia lightning cloud",

@@ -1,8 +1,11 @@
 #include "UtgardePinnacleStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "UtgardePinnacleMultipliers.h"
 
 void WotlkDungeonUPStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Svala Sorrowgrave
 
     // Gortok Palehoof

@@ -1,11 +1,18 @@
 #include "SethekkHallsStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "SethekkHallsMultipliers.h"
 
 void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Trash: Sethekk Spirit - Flee from ghost spawned when Sethekk Prophets die
     triggers.push_back(new TriggerNode("sethekk spirit nearby",
              NextAction::array(0, new NextAction("flee sethekk spirit", ACTION_EMERGENCY + 3), nullptr)));
+
+    // Darkweaver Syth: keep non-tanks near melee range between elemental waves.
+    triggers.push_back(new TriggerNode("syth no elementals",
+             NextAction::array(0, new NextAction("stack for syth", ACTION_MOVE + 2), nullptr)));
     
     // Trash: Time-Lost Controller - ICC Pattern: Skull mark Charming Totem
     // RESEARCHED: RaidIccActions.cpp:1276-1297 (UpdateSkullMarker pattern)
@@ -27,7 +34,7 @@ void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // Boss: Anzu - Priority add targeting (banish phases at 66% and 33%)
     triggers.push_back(new TriggerNode("brood of anzu nearby",
              NextAction::array(0, new NextAction("attack brood of anzu", ACTION_NORMAL + 5), nullptr)));
-    
+
 }
 
 void TbcDungeonSHStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)

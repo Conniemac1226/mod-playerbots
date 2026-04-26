@@ -1,8 +1,11 @@
 #include "MagistersTerraceStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "MagistersTerraceMultipliers.h"
 
 void MagistersTerraceStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Selin Fireheart
     triggers.push_back(new TriggerNode(
         "selin fireheart fel explosion",

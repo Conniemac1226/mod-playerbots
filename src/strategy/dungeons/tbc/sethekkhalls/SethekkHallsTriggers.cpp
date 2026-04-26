@@ -3,6 +3,96 @@
 #include "Playerbots.h"
 #include "AttackersValue.h"
 #include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
+#include <cmath>
+
+namespace
+{
+bool IsSythElemental(uint32 entry)
+{
+    return entry == NPC_SYTH_FIRE_ELEMENTAL ||
+           entry == NPC_SYTH_FROST_ELEMENTAL ||
+           entry == NPC_SYTH_ARCANE_ELEMENTAL ||
+           entry == NPC_SYTH_SHADOW_ELEMENTAL;
+}
+
+bool IsGroupReadyForAdvancePull(PlayerbotAI* botAI, Player* bot)
+{
+    if (!botAI || !bot || !bot->GetMap() || !bot->GetMap()->IsDungeon())
+        return false;
+
+    if (!bot->GetGroup() || !bot->IsAlive() || bot->IsInCombat() || !botAI->IsMainTank(bot))
+        return false;
+
+    AiObjectContext* context = botAI->GetAiObjectContext();
+    if (!context)
+        return false;
+
+    if (context->GetValue<uint8>("attacker count")->Get() != 0)
+        return false;
+
+    if (Unit* currentTarget = context->GetValue<Unit*>("current target")->Get())
+    {
+        if (currentTarget->IsAlive() && currentTarget->IsInWorld() && currentTarget->GetMapId() == bot->GetMapId())
+            return false;
+    }
+
+    if (bot->HealthBelowPct(AUTO_PULL_TANK_HP_PCT))
+        return false;
+
+    bool foundHealer = false;
+    bool healerReady = false;
+
+    Group* group = bot->GetGroup();
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (!member || member == bot)
+            continue;
+
+        if (!member->IsAlive() || member->IsBeingTeleported() || member->IsInCombat())
+            return false;
+
+        if (bot->GetMapId() != member->GetMapId() || bot->GetDistance(member) > AUTO_PULL_GROUP_RANGE)
+            return false;
+
+        if (member->HealthBelowPct(AUTO_PULL_MEMBER_HP_PCT))
+            return false;
+
+        if (!foundHealer && botAI->IsHeal(member))
+        {
+            foundHealer = true;
+            healerReady = member->getPowerType() != POWER_MANA ||
+                member->GetPowerPct(POWER_MANA) >= AUTO_PULL_HEALER_MANA_PCT;
+        }
+    }
+
+    return !foundHealer || healerReady;
+}
+
+bool HasAutoPullCandidate(PlayerbotAI* botAI, Player* bot)
+{
+    bool hasCandidate = false;
+
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, AUTO_PULL_SEARCH_RANGE, [&](Unit* unit)
+    {
+        if (hasCandidate || !unit || !unit->IsAlive() || unit->IsInCombat())
+            return;
+
+        if (!AttackersValue::IsPossibleTarget(unit, bot))
+            return;
+
+        if (!bot->IsWithinLOSInMap(unit))
+            return;
+
+        if (!bot->HasInArc(static_cast<float>(M_PI) * 0.75f, unit))
+            return;
+
+        hasCandidate = true;
+    });
+
+    return hasCandidate;
+}
+}
 
 bool CharmingTotemSpawnedTrigger::IsActive()
 {
@@ -150,11 +240,58 @@ bool SethekkSpiritNearbyTrigger::IsActive()
     bool spiritNearby = false;
     TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_SMALL, [&](Unit* unit)
     {
-        if (unit->GetEntry() == 18703)
+        if (spiritNearby || unit->GetEntry() != NPC_SETHEKK_SPIRIT || !unit->IsAlive())
+            return;
+
+        if (unit->GetVictim() == bot || unit->GetTarget() == bot->GetGUID())
             spiritNearby = true;
     });
 
     return spiritNearby;
+}
+
+bool SythNoElementalsTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !bot->IsAlive())
+        return false;
+
+    Unit* syth = nullptr;
+    AiObjectContext* context = botAI->GetAiObjectContext();
+    if (context)
+        syth = context->GetValue<Unit*>("find target", "darkweaver syth")->Get();
+
+    if (!syth)
+    {
+        if (context)
+        {
+            if (Value<ObjectGuid>* targetValue = context->GetValue<ObjectGuid>("current target"))
+            {
+                ObjectGuid targetGuid = targetValue->Get();
+                if (targetGuid)
+                {
+                    Unit* target = botAI->GetUnit(targetGuid);
+                    if (target && target->GetEntry() == NPC_DARKWEAVER_SYTH)
+                        syth = target;
+                }
+            }
+        }
+    }
+
+    if (!syth || !syth->IsAlive() || !syth->IsInCombat())
+        return false;
+
+    bool hasElementals = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_LARGE, [&](Unit* unit)
+    {
+        if (hasElementals || !unit->IsAlive())
+            return;
+
+        if (IsSythElemental(unit->GetEntry()))
+            hasElementals = true;
+    });
+
+    return !hasElementals;
 }
 
 bool BroodOfAnzuNearbyTrigger::IsActive()
@@ -172,4 +309,13 @@ bool BroodOfAnzuNearbyTrigger::IsActive()
         }
     }
     return false;
+}
+
+bool SethekkTankAdvanceReadyTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!IsGroupReadyForAdvancePull(botAI, bot))
+        return false;
+
+    return HasAutoPullCandidate(botAI, bot);
 }

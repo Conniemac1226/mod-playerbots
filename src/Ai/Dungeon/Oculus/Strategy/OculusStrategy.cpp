@@ -1,8 +1,11 @@
 #include "OculusStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "OculusMultipliers.h"
 
 void WotlkDungeonOccStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Drakos the Interrogator
     // TODO: May need work, TBA.
     triggers.push_back(new TriggerNode("unstable sphere",

@@ -11,6 +11,7 @@
 // NPC IDs
 #define NPC_CHARMING_TOTEM       20343
 #define NPC_TIME_LOST_CONTROLLER 20691
+#define NPC_DARKWEAVER_SYTH      18472
 #define NPC_TALON_KING_IKISS     18473
 #define NPC_SETHEKK_SPIRIT       18703
 #define NPC_ANZU                 23035
@@ -37,6 +38,14 @@
 #define SEARCH_RANGE_LARGE          50.0f  // General enemy search
 #define SEARCH_RANGE_MEDIUM         30.0f  // Controller interrupt range
 #define SEARCH_RANGE_SMALL          20.0f  // Spirit danger range
+#define SETHEKK_SPIRIT_SAFE_RANGE    8.5f
+#define SETHEKK_SPIRIT_FLEE_STEP     5.0f
+#define SYTH_STACK_RANGE             6.0f
+#define AUTO_PULL_SEARCH_RANGE      45.0f
+#define AUTO_PULL_GROUP_RANGE       35.0f
+#define AUTO_PULL_HEALER_MANA_PCT   45.0f
+#define AUTO_PULL_MEMBER_HP_PCT     60.0f
+#define AUTO_PULL_TANK_HP_PCT       75.0f
 
 const Position IKISS_LOS_SAFE_POSITIONS[4] =
 {
@@ -89,6 +98,9 @@ public:
     FleeSpiritAction(PlayerbotAI* ai) : MovementAction(ai, "flee sethekk spirit") {}
     bool Execute(Event event) override;
     bool isUseful() override;
+
+private:
+    Unit* FindThreateningSpirit(Player* bot) const;
 };
 
 class AttackBroodOfAnzuAction : public AttackAction
@@ -111,6 +123,22 @@ class AttackSythElementalsAction : public AttackAction
 {
 public:
     AttackSythElementalsAction(PlayerbotAI* ai) : AttackAction(ai, "attack syth elementals") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class StackForSythAction : public MovementAction
+{
+public:
+    StackForSythAction(PlayerbotAI* ai) : MovementAction(ai, "stack for syth") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class SethekkTankAdvancePullAction : public AttackAction
+{
+public:
+    SethekkTankAdvancePullAction(PlayerbotAI* ai) : AttackAction(ai, "sethekk tank advance pull") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

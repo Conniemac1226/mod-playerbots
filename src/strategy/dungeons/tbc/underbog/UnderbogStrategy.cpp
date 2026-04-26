@@ -1,9 +1,12 @@
 #include "UnderbogStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "UnderbogTriggers.h"
 #include "UnderbogMultipliers.h"
 
 void UnderbogStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Hungarfen
     triggers.push_back(new TriggerNode(
         "mushroom nearby",

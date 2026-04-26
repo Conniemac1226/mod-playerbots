@@ -1,8 +1,11 @@
 #include "ForgeOfSoulsStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "ForgeOfSoulsMultipliers.h"
 
 void WotlkDungeonFoSStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     triggers.push_back(new TriggerNode("move from bronjahm",
         { NextAction("move from bronjahm", ACTION_MOVE + 5) }));
     triggers.push_back(new TriggerNode("switch to soul fragment",

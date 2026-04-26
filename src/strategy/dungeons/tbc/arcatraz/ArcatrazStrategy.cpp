@@ -1,8 +1,11 @@
 #include "ArcatrazStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "ArcatrazMultipliers.h"
 
 void ArcatrazStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Zereketh the Unbound
     triggers.push_back(new TriggerNode("zereketh void zone",
         NextAction::array(0, new NextAction("avoid void zone", ACTION_MOVE + 5), nullptr)));

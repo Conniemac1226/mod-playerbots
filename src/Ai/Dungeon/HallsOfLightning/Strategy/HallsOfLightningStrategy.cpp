@@ -1,8 +1,11 @@
 #include "HallsOfLightningStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "HallsOfLightningMultipliers.h"
 
 void WotlkDungeonHoLStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // General Bjarngrim
     triggers.push_back(new TriggerNode("stormforged lieutenant",
         { NextAction("bjarngrim target", ACTION_RAID + 5) }));

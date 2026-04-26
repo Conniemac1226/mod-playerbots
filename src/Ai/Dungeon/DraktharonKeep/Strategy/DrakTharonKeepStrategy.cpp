@@ -1,8 +1,11 @@
 #include "DrakTharonKeepStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "DrakTharonKeepMultipliers.h"
 
 void WotlkDungeonDTKStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Trollgore
     triggers.push_back(new TriggerNode("corpse explode",
         { NextAction("corpse explode spread", ACTION_MOVE + 5) }));

@@ -1,8 +1,11 @@
 #include "CullingOfStratholmeStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "CullingOfStratholmeMultipliers.h"
 
 void WotlkDungeonCoSStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Meathook
     // Can tank this in a fixed position to allow healer to LoS the stun, probably not necessary
 

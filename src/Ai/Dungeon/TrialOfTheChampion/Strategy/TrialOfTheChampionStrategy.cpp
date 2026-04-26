@@ -1,7 +1,10 @@
 #include "TrialOfTheChampionStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 
 void WotlkDungeonToCStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     triggers.push_back(new TriggerNode("toc lance",
         { NextAction("toc lance", ACTION_RAID + 5) }));
     triggers.push_back(new TriggerNode("toc ue lance",

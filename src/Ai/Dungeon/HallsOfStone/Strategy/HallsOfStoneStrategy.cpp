@@ -1,8 +1,11 @@
 #include "HallsOfStoneStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "HallsOfStoneMultipliers.h"
 
 void WotlkDungeonHoSStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Maiden of Grief
     // TODO: Jump into damage during shock of sorrow?
 

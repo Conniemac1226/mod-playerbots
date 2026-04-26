@@ -1,9 +1,12 @@
 #include "ManaTombsStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "ManaTombsTriggers.h"
 #include "ManaTombsMultipliers.h"
 
 void ManaTombsStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Pandemonius
     triggers.push_back(new TriggerNode(
         "dark shell active",

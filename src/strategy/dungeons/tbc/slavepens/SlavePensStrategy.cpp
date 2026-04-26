@@ -1,9 +1,12 @@
 #include "SlavePensStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "SlavePensTriggers.h"
 #include "SlavePensMultipliers.h"
 
 void SlavePensStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Mennu the Betrayer
     triggers.push_back(new TriggerNode(
         "mennu totem active",

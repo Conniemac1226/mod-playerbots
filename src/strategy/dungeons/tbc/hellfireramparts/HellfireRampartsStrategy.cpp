@@ -1,8 +1,11 @@
 #include "HellfireRampartsStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "HellfireRampartsMultipliers.h"
 
 void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Boss: Watchkeeper Gargolmar
     // Hellfire Watchers join at 50% health - high priority target switch
     triggers.push_back(new TriggerNode("hellfire watcher active",

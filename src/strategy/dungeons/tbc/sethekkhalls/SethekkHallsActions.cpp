@@ -4,9 +4,171 @@
 #include "Playerbots.h"
 #include "AttackersValue.h"
 #include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
+#include <cmath>
 
 std::map<ObjectGuid, uint32> g_ikiss_lastMoveTime;
 std::map<ObjectGuid, bool> g_ikiss_inSafePosition;
+
+namespace
+{
+bool IsSythElemental(uint32 entry)
+{
+    return entry == NPC_SYTH_FIRE_ELEMENTAL ||
+           entry == NPC_SYTH_FROST_ELEMENTAL ||
+           entry == NPC_SYTH_ARCANE_ELEMENTAL ||
+           entry == NPC_SYTH_SHADOW_ELEMENTAL;
+}
+
+Unit* FindDarkweaverSyth(PlayerbotAI* botAI, Player* bot)
+{
+    if (!botAI || !bot)
+        return nullptr;
+
+    AiObjectContext* context = botAI->GetAiObjectContext();
+    if (context)
+    {
+        if (Unit* syth = context->GetValue<Unit*>("find target", "darkweaver syth")->Get())
+        {
+            if (syth->GetEntry() == NPC_DARKWEAVER_SYTH && syth->IsAlive())
+                return syth;
+        }
+    }
+
+    if (context)
+    {
+        if (Value<ObjectGuid>* targetValue = context->GetValue<ObjectGuid>("current target"))
+        {
+            ObjectGuid targetGuid = targetValue->Get();
+            if (targetGuid)
+            {
+                if (Unit* target = botAI->GetUnit(targetGuid))
+                {
+                    if (target->GetEntry() == NPC_DARKWEAVER_SYTH && target->IsAlive())
+                        return target;
+                }
+            }
+        }
+    }
+
+    Unit* syth = nullptr;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_LARGE, [&](Unit* unit)
+    {
+        if (!syth && unit->GetEntry() == NPC_DARKWEAVER_SYTH && unit->IsAlive())
+            syth = unit;
+    });
+
+    return syth;
+}
+
+bool HasActiveSythElementals(PlayerbotAI* botAI, Player* bot)
+{
+    bool hasElementals = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_LARGE, [&](Unit* unit)
+    {
+        if (hasElementals || !unit->IsAlive())
+            return;
+
+        if (IsSythElemental(unit->GetEntry()))
+            hasElementals = true;
+    });
+
+    return hasElementals;
+}
+
+bool IsGroupReadyForAdvancePull(PlayerbotAI* botAI, Player* bot)
+{
+    if (!botAI || !bot || !bot->GetMap() || !bot->GetMap()->IsDungeon())
+        return false;
+
+    if (!bot->GetGroup() || !bot->IsAlive() || bot->IsInCombat() || !botAI->IsMainTank(bot))
+        return false;
+
+    AiObjectContext* context = botAI->GetAiObjectContext();
+    if (!context)
+        return false;
+
+    if (context->GetValue<uint8>("attacker count")->Get() != 0)
+        return false;
+
+    if (Unit* currentTarget = context->GetValue<Unit*>("current target")->Get())
+    {
+        if (currentTarget->IsAlive() && currentTarget->IsInWorld() && currentTarget->GetMapId() == bot->GetMapId())
+            return false;
+    }
+
+    if (bot->HealthBelowPct(AUTO_PULL_TANK_HP_PCT))
+        return false;
+
+    bool foundHealer = false;
+    bool healerReady = false;
+
+    Group* group = bot->GetGroup();
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (!member || member == bot)
+            continue;
+
+        if (!member->IsAlive() || member->IsBeingTeleported() || member->IsInCombat())
+            return false;
+
+        if (bot->GetMapId() != member->GetMapId() || bot->GetDistance(member) > AUTO_PULL_GROUP_RANGE)
+            return false;
+
+        if (member->HealthBelowPct(AUTO_PULL_MEMBER_HP_PCT))
+            return false;
+
+        if (!foundHealer && botAI->IsHeal(member))
+        {
+            foundHealer = true;
+            healerReady = member->getPowerType() != POWER_MANA ||
+                member->GetPowerPct(POWER_MANA) >= AUTO_PULL_HEALER_MANA_PCT;
+        }
+    }
+
+    return !foundHealer || healerReady;
+}
+
+Unit* SelectAdvancePullTarget(PlayerbotAI* botAI, Player* bot)
+{
+    if (!botAI || !bot)
+        return nullptr;
+
+    Unit* bestForwardTarget = nullptr;
+    float bestForwardDistance = AUTO_PULL_SEARCH_RANGE;
+    Unit* bestFallbackTarget = nullptr;
+    float bestFallbackDistance = AUTO_PULL_SEARCH_RANGE;
+
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, AUTO_PULL_SEARCH_RANGE, [&](Unit* unit)
+    {
+        if (!unit || !unit->IsAlive() || unit->IsInCombat())
+            return;
+
+        if (!AttackersValue::IsPossibleTarget(unit, bot))
+            return;
+
+        if (!bot->IsWithinLOSInMap(unit))
+            return;
+
+        float const distance = bot->GetDistance(unit);
+        if (bot->HasInArc(static_cast<float>(M_PI) * 0.75f, unit))
+        {
+            if (distance < bestForwardDistance)
+            {
+                bestForwardDistance = distance;
+                bestForwardTarget = unit;
+            }
+        }
+        else if (distance < bestFallbackDistance)
+        {
+            bestFallbackDistance = distance;
+            bestFallbackTarget = unit;
+        }
+    });
+
+    return bestForwardTarget ? bestForwardTarget : bestFallbackTarget;
+}
+}
 
 bool MarkCharmingTotemAction::Execute(Event event)
 {
@@ -331,11 +493,42 @@ bool FleeSpiritAction::Execute(Event event)
     if (!bot)
         return false;
 
+    Unit* closestSpirit = FindThreateningSpirit(bot);
+    if (!closestSpirit)
+        return false;
+
+    if (bot->GetExactDist2d(closestSpirit) >= SETHEKK_SPIRIT_SAFE_RANGE)
+        return false;
+
+    if (MoveAway(closestSpirit, SETHEKK_SPIRIT_FLEE_STEP))
+        return true;
+
+    return FleePosition(closestSpirit->GetPosition(), SETHEKK_SPIRIT_FLEE_STEP, 400U);
+}
+
+bool FleeSpiritAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* spirit = FindThreateningSpirit(bot);
+    return spirit && bot->GetExactDist2d(spirit) < SETHEKK_SPIRIT_SAFE_RANGE;
+}
+
+Unit* FleeSpiritAction::FindThreateningSpirit(Player* bot) const
+{
+    if (!bot)
+        return nullptr;
+
     Unit* closestSpirit = nullptr;
     float closestDistance = SEARCH_RANGE_SMALL;
     TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_SMALL, [&](Unit* unit)
     {
-        if (unit->GetEntry() != NPC_SETHEKK_SPIRIT)
+        if (unit->GetEntry() != NPC_SETHEKK_SPIRIT || !unit->IsAlive())
+            return;
+
+        if (unit->GetVictim() != bot && unit->GetTarget() != bot->GetGUID())
             return;
 
         float distance = bot->GetDistance(unit);
@@ -346,33 +539,7 @@ bool FleeSpiritAction::Execute(Event event)
         }
     });
 
-    if (!closestSpirit)
-        return false;
-
-    // Prefer collision-aware flee helpers to avoid cutting through walls/objects
-    // Try a short, safe step away using MoveAway (checks LOS/collision and picks side angles)
-    const float fleeStep = 12.0f; // shorter controlled step within the corridor/room
-    if (MoveAway(closestSpirit, fleeStep))
-        return true;
-
-    // Fallback: use FleeManager-based positioning from the spirit’s location
-    return FleePosition(closestSpirit->GetPosition(), fleeStep, 600U);
-}
-
-bool FleeSpiritAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    bool spiritNearby = false;
-    TbcDungeon::ForEachNearbyNpc(botAI, bot, SEARCH_RANGE_SMALL, [&](Unit* unit)
-    {
-        if (unit->GetEntry() == NPC_SETHEKK_SPIRIT)
-            spiritNearby = true;
-    });
-
-    return spiritNearby;
+    return closestSpirit;
 }
 
 bool AttackBroodOfAnzuAction::Execute(Event event)
@@ -557,4 +724,103 @@ bool AttackSythElementalsAction::isUseful()
     });
 
     return elementalPresent;
+}
+
+bool StackForSythAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !bot->IsAlive() || botAI->IsTank(bot))
+        return false;
+
+    Unit* syth = FindDarkweaverSyth(botAI, bot);
+    if (!syth || !syth->IsInCombat() || HasActiveSythElementals(botAI, bot))
+        return false;
+
+    float stackRange = botAI->IsRanged(bot) || botAI->IsHeal(bot) ? SYTH_STACK_RANGE : 4.0f;
+    if (bot->GetExactDist2d(syth) <= stackRange + 1.0f)
+        return false;
+
+    Group* group = bot->GetGroup();
+    uint32 groupIndex = 0;
+    if (group)
+    {
+        uint32 currentIndex = 0;
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || !member->IsAlive() || botAI->IsTank(member))
+                continue;
+
+            if (member == bot)
+            {
+                groupIndex = currentIndex;
+                break;
+            }
+
+            ++currentIndex;
+        }
+    }
+
+    float angle = syth->GetAngle(bot) + (groupIndex % 6) * (static_cast<float>(M_PI) / 6.0f);
+    float x = syth->GetPositionX() + std::cos(angle) * stackRange;
+    float y = syth->GetPositionY() + std::sin(angle) * stackRange;
+    float z = syth->GetPositionZ();
+    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+}
+
+bool StackForSythAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !bot->IsAlive() || botAI->IsTank(bot))
+        return false;
+
+    Unit* syth = FindDarkweaverSyth(botAI, bot);
+    if (!syth || !syth->IsInCombat() || HasActiveSythElementals(botAI, bot))
+        return false;
+
+    float stackRange = botAI->IsRanged(bot) || botAI->IsHeal(bot) ? SYTH_STACK_RANGE : 4.0f;
+    return bot->GetExactDist2d(syth) > stackRange + 1.0f;
+}
+
+bool SethekkTankAdvancePullAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!IsGroupReadyForAdvancePull(botAI, bot))
+        return false;
+
+    Unit* target = SelectAdvancePullTarget(botAI, bot);
+    if (!target)
+        return false;
+
+    context->GetValue<Unit*>("current target")->Set(target);
+    bot->SetSelection(target->GetGUID());
+
+    bool usedRangedOpener = false;
+    if (botAI->IsTank(bot))
+    {
+        if (bot->getClass() == CLASS_PALADIN)
+        {
+            usedRangedOpener = botAI->DoSpecificAction("avenger's shield", event, true) ||
+                               botAI->DoSpecificAction("hand of reckoning", event, true);
+        }
+        else if (bot->getClass() == CLASS_WARRIOR)
+        {
+            usedRangedOpener = botAI->DoSpecificAction("heroic throw", event, true);
+        }
+    }
+
+    bool attackStarted = Attack(target);
+    if (usedRangedOpener || attackStarted)
+    {
+        botAI->SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
+        return true;
+    }
+
+    return false;
+}
+
+bool SethekkTankAdvancePullAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    return IsGroupReadyForAdvancePull(botAI, bot) && SelectAdvancePullTarget(botAI, bot);
 }

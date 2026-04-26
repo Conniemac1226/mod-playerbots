@@ -2,6 +2,7 @@
 #define _PLAYERBOT_DUNGEONSTRATEGYCONTEXT_H
 
 #include "Strategy.h"
+#include "ClassicDungeonStrategy.h"
 #include "AuchenaiCrypts/Strategy/AuchenaiCryptsStrategy.h"
 #include "UtgardeKeep/Strategy/UtgardeKeepStrategy.h"
 #include "Nexus/Strategy/NexusStrategy.h"
@@ -57,7 +58,7 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         DungeonStrategyContext() : NamedObjectContext<Strategy>(false, true)
         {
             // Vanilla
-            // ...
+            creators["classic-dungeon"] = &DungeonStrategyContext::classic_dungeon;
 
             // Burning Crusade
             creators["tbc-sh"] = &DungeonStrategyContext::tbc_sh;       // Sethekk Halls
@@ -96,6 +97,7 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             creators["wotlk-fos"] = &DungeonStrategyContext::wotlk_fos;     // The Forge of Souls
         }
     private:
+        static Strategy* classic_dungeon(PlayerbotAI* botAI) { return new ClassicDungeonStrategy(botAI); }
         static Strategy* tbc_sh(PlayerbotAI* botAI) { return new TbcDungeonSHStrategy(botAI); }
         static Strategy* tbc_ac(PlayerbotAI* botAI) { return new TbcDungeonAuchenaiCryptsStrategy(botAI); }
         static Strategy* tbc_efd(PlayerbotAI* botAI) { return new EscapeFromDurnholdeStrategy(botAI); }

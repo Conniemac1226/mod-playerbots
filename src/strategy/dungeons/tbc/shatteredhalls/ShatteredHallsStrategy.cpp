@@ -1,8 +1,11 @@
 #include "ShatteredHallsStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "ShatteredHallsMultipliers.h"
 
 void ShatteredHallsStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Gauntlet flame arrow avoidance - High priority
     triggers.push_back(new TriggerNode("flame arrow gauntlet",
         NextAction::array(0, new NextAction("avoid flame arrow fire", ACTION_EMERGENCY - 5), nullptr)));

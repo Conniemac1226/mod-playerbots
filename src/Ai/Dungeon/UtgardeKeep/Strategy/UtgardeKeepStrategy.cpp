@@ -1,8 +1,11 @@
 #include "UtgardeKeepStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "UtgardeKeepMultipliers.h"
 
 void WotlkDungeonUKStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Prince Keleseth
     triggers.push_back(new TriggerNode("keleseth frost tomb",
              { NextAction("attack frost tomb", ACTION_RAID + 1) }));

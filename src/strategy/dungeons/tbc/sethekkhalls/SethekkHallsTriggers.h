@@ -75,10 +75,24 @@ public:
     bool IsActive() override;
 };
 
+class SythNoElementalsTrigger : public Trigger
+{
+public:
+    SythNoElementalsTrigger(PlayerbotAI* ai) : Trigger(ai, "syth no elementals") {}
+    bool IsActive() override;
+};
+
 class BroodOfAnzuNearbyTrigger : public Trigger
 {
 public:
     BroodOfAnzuNearbyTrigger(PlayerbotAI* ai) : Trigger(ai, "brood of anzu nearby") {}
+    bool IsActive() override;
+};
+
+class SethekkTankAdvanceReadyTrigger : public Trigger
+{
+public:
+    SethekkTankAdvanceReadyTrigger(PlayerbotAI* ai) : Trigger(ai, "sethekk tank advance ready", 3) {}
     bool IsActive() override;
 };
 

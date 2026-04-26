@@ -1584,7 +1584,7 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
 {
     static const std::vector<std::string> allInstanceStrategies =
     {
-        "aq20", "bwl", "karazhan", "gruulslair", "icc", "magtheridon", "moltencore",
+        "aq20", "bwl", "classic-dungeon", "karazhan", "gruulslair", "icc", "magtheridon", "moltencore",
         "naxx", "onyxia", "ssc", "tbc-ac", "tempestkeep", "ulduar", "voa", "wotlk-an", "wotlk-cos",
         "wotlk-dtk", "wotlk-eoe", "wotlk-fos", "wotlk-gd", "wotlk-hol", "wotlk-hor",
         "wotlk-hos", "wotlk-nex", "wotlk-occ", "wotlk-ok", "wotlk-os", "wotlk-pos",
@@ -1602,6 +1602,27 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
     std::string strategyName;
     switch (mapId)
     {
+        case 33:
+        case 34:
+        case 36:
+        case 43:
+        case 47:
+        case 48:
+        case 70:
+        case 90:
+        case 109:
+        case 129:
+        case 189:
+        case 209:
+        case 229:
+        case 230:
+        case 289:
+        case 329:
+        case 349:
+        case 389:
+        case 429:
+            strategyName = "classic-dungeon";
+            break;
         case 249:
             strategyName = "onyxia";  // Onyxia's Lair
             break;

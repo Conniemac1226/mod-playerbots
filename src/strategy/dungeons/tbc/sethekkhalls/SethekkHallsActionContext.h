@@ -14,8 +14,10 @@ class TbcDungeonSHActionContext : public NamedObjectContext<Action>
             creators["ikiss move away"] = &TbcDungeonSHActionContext::ikiss_move_away;
             creators["ikiss return position"] = &TbcDungeonSHActionContext::ikiss_return_position;
             creators["flee sethekk spirit"] = &TbcDungeonSHActionContext::flee_sethekk_spirit;
+            creators["stack for syth"] = &TbcDungeonSHActionContext::stack_for_syth;
             creators["attack brood of anzu"] = &TbcDungeonSHActionContext::attack_brood_of_anzu;
             creators["continue fight with charmed ally"] = &TbcDungeonSHActionContext::continue_fight_with_charmed_ally;
+            creators["sethekk tank advance pull"] = &TbcDungeonSHActionContext::sethekk_tank_advance_pull;
         }
     private:
         static Action* mark_charming_totem(PlayerbotAI* ai) { return new MarkCharmingTotemAction(ai); }
@@ -23,8 +25,10 @@ class TbcDungeonSHActionContext : public NamedObjectContext<Action>
         static Action* ikiss_move_away(PlayerbotAI* ai) { return new IkissMoveAwayAction(ai); }
         static Action* ikiss_return_position(PlayerbotAI* ai) { return new IkissReturnPositionAction(ai); }
         static Action* flee_sethekk_spirit(PlayerbotAI* ai) { return new FleeSpiritAction(ai); }
+        static Action* stack_for_syth(PlayerbotAI* ai) { return new StackForSythAction(ai); }
         static Action* attack_brood_of_anzu(PlayerbotAI* ai) { return new AttackBroodOfAnzuAction(ai); }
         static Action* continue_fight_with_charmed_ally(PlayerbotAI* ai) { return new ContinueFightWithCharmedAllyAction(ai); }
+        static Action* sethekk_tank_advance_pull(PlayerbotAI* ai) { return new SethekkTankAdvancePullAction(ai); }
 };
 
 #endif

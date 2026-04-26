@@ -1,4 +1,5 @@
 #include "BlackMorassStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "BlackMorassActions.h"
 #include "BlackMorassTriggers.h"
 #include "PlayerbotAI.h"
@@ -10,6 +11,8 @@ BlackMorassStrategy::BlackMorassStrategy(PlayerbotAI* botAI) : Strategy(botAI)
 
 void BlackMorassStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // ===== PORTAL/ADD MANAGEMENT (HIGHEST PRIORITY) =====
     triggers.push_back(new TriggerNode(
         "portal add active",

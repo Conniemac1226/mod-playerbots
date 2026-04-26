@@ -1,10 +1,13 @@
 #include "BloodFurnaceStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "BloodFurnaceMultipliers.h"
 #include "BloodFurnaceTriggers.h"
 #include "BloodFurnaceActions.h"
 
 void BloodFurnaceStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // The Maker triggers - First boss mechanics
     triggers.push_back(new TriggerNode(
         "the maker exploding beaker",

@@ -1,8 +1,11 @@
 #include "NexusStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "NexusMultipliers.h"
 
 void WotlkDungeonNexStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Horde Commander (Alliance N)/Commander Kolurg (Alliance H)
     // or
     // Alliance Commander (Horde N)/Commander Stoutbeard (Horde H)

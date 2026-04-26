@@ -1,8 +1,11 @@
 #include "AzjolNerubStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "AzjolNerubMultipliers.h"
 
 void WotlkDungeonANStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Krik'thir the Gatewatcher
     // TODO: Add CC trigger while web wraps are casting?
     // TODO: Bring healer closer than ranged dps to avoid fixates?

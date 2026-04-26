@@ -1,8 +1,11 @@
 #include "GundrakStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "GundrakMultipliers.h"
 
 void WotlkDungeonGDStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Moorabi
 
     // Drakkari Colossus

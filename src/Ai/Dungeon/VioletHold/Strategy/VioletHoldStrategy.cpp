@@ -1,8 +1,11 @@
 #include "VioletHoldStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "VioletHoldMultipliers.h"
 
 void WotlkDungeonVHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Erekem
     // This boss has many purgable buffs, purging/dispels could be merged into generic strats though
     triggers.push_back(new TriggerNode("erekem target",

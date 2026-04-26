@@ -1,4 +1,5 @@
 #include "MechanarStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "MechanarActions.h"
 #include "MechanarTriggers.h"
 #include "MechanarMultipliers.h"
@@ -11,6 +12,8 @@ MechanarStrategy::MechanarStrategy(PlayerbotAI* botAI) : Strategy(botAI)
 
 void MechanarStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // ========== MECHANO LORD CAPACITUS ==========
     
     // Reflective shields (Normal mode)

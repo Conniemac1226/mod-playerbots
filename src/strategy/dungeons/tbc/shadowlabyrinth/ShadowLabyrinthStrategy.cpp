@@ -1,8 +1,11 @@
 #include "ShadowLabyrinthStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "ShadowLabyrinthMultipliers.h"
 
 void ShadowLabyrinthStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Ambassador Hellmaw
     triggers.push_back(new TriggerNode("hellmaw corrosive acid",
         NextAction::array(0, new NextAction("avoid corrosive acid", ACTION_MOVE + 4), nullptr)));

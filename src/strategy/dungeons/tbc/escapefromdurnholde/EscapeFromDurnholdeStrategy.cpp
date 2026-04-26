@@ -1,4 +1,5 @@
 #include "EscapeFromDurnholdeStrategy.h"
+#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "EscapeFromDurnholdeTriggers.h"
 #include "EscapeFromDurnholdeActions.h"
 #include "SharedDefines.h"
@@ -6,6 +7,8 @@
 
 void EscapeFromDurnholdeStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 {
+    DungeonAutoPull::AddDefaultPullTrigger(triggers);
+
     // Thrall NPC healing triggers (highest priority)
     triggers.push_back(new TriggerNode(
         "thrall critical health",
