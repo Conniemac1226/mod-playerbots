@@ -7,6 +7,7 @@
 #include "Playerbots.h"
 #include "Value.h"
 #include <algorithm>
+#include <cmath>
 #include <limits>
 
 namespace MagtheridonHelpers
@@ -20,6 +21,47 @@ namespace MagtheridonHelpers
         constexpr float AUTO_PULL_MEMBER_HP_PCT = 60.0f;
         constexpr float AUTO_PULL_TANK_HP_PCT = 75.0f;
         constexpr float TRASH_PHASE_SEARCH_RADIUS = 120.0f;
+        constexpr float AUTO_PULL_FORWARD_ARC = static_cast<float>(M_PI) * 0.75f;
+        constexpr float AUTO_PULL_IDEAL_MIN_RANGE = 18.0f;
+        constexpr float AUTO_PULL_IDEAL_MAX_RANGE = 38.0f;
+        constexpr float AUTO_PULL_TOO_CLOSE_RANGE = 12.0f;
+        constexpr float AUTO_PULL_VERTICAL_PENALTY_STEP = 2.5f;
+        constexpr float AUTO_PULL_PACK_RADIUS = 12.0f;
+        constexpr float AUTO_PULL_SIDE_PACK_RADIUS = 20.0f;
+
+        struct PullCandidateScore
+        {
+            Unit* unit = nullptr;
+            float score = -std::numeric_limits<float>::max();
+        };
+
+        float GetFacingDelta(Player* bot, Unit* unit)
+        {
+            float delta = Position::NormalizeOrientation(
+                bot->GetAngle(unit) - bot->GetOrientation());
+            return std::min(delta, static_cast<float>((2.0 * M_PI) - delta));
+        }
+
+        float ScorePullDistance(float distance)
+        {
+            if (distance > AUTO_PULL_SEARCH_RANGE)
+                return -1000.0f;
+
+            if (distance < AUTO_PULL_TOO_CLOSE_RANGE)
+                return -55.0f - (AUTO_PULL_TOO_CLOSE_RANGE - distance) * 3.0f;
+
+            if (distance < AUTO_PULL_IDEAL_MIN_RANGE)
+                return 8.0f + (distance - AUTO_PULL_TOO_CLOSE_RANGE) * 2.0f;
+
+            if (distance <= AUTO_PULL_IDEAL_MAX_RANGE)
+            {
+                float const mid =
+                    (AUTO_PULL_IDEAL_MIN_RANGE + AUTO_PULL_IDEAL_MAX_RANGE) * 0.5f;
+                return 34.0f - std::abs(distance - mid) * 1.15f;
+            }
+
+            return 14.0f - (distance - AUTO_PULL_IDEAL_MAX_RANGE) * 1.35f;
+        }
     }
 
     const Position WAITING_FOR_MAGTHERIDON_POSITION = {   1.359f,   2.048f, -0.406f, 3.135f };
@@ -88,8 +130,7 @@ namespace MagtheridonHelpers
                 excludedGuids.push_back(channeler->GetGUID());
         }
 
-        Unit* bestTarget = nullptr;
-        float bestDistance = std::numeric_limits<float>::max();
+        std::vector<Unit*> candidates;
 
         auto scan = [&](std::string const& valueName)
         {
@@ -113,21 +154,94 @@ namespace MagtheridonHelpers
                     if (!bot->IsWithinLOSInMap(unit))
                         continue;
 
-                    float const distance = bot->GetDistance(unit);
-                    if (distance > AUTO_PULL_SEARCH_RANGE || distance >= bestDistance)
+                    if (bot->GetDistance(unit) > AUTO_PULL_SEARCH_RANGE)
                         continue;
 
-                    bestTarget = unit;
-                    bestDistance = distance;
+                    candidates.push_back(unit);
                 }
             }
         };
 
         scan("nearest hostile npcs");
-        if (!bestTarget)
+        if (candidates.empty())
             scan("nearest npcs");
 
-        return bestTarget;
+        PullCandidateScore bestCandidate;
+        for (Unit* candidate : candidates)
+        {
+            if (!candidate)
+                continue;
+
+            PullCandidateScore score;
+            score.unit = candidate;
+
+            float const distance3d = bot->GetDistance(candidate);
+            float const distance2d = bot->GetExactDist2d(candidate);
+            float const heightDelta =
+                std::abs(bot->GetPositionZ() - candidate->GetPositionZ());
+            float const facingDelta = GetFacingDelta(bot, candidate);
+
+            float value = 0.0f;
+            value += ScorePullDistance(distance3d);
+
+            float const forwardRatio =
+                1.0f - std::min(facingDelta, static_cast<float>(M_PI)) /
+                static_cast<float>(M_PI);
+            value += forwardRatio * 28.0f;
+            if (bot->HasInArc(AUTO_PULL_FORWARD_ARC, candidate))
+                value += 10.0f;
+            else
+                value -= 12.0f;
+
+            value -= std::min(heightDelta, 15.0f) * AUTO_PULL_VERTICAL_PENALTY_STEP;
+
+            if (distance3d - distance2d > 6.0f)
+                value -= (distance3d - distance2d) * 2.0f;
+
+            uint32 tightNeighbors = 0;
+            uint32 sidePackNeighbors = 0;
+            uint32 verticalSplitNeighbors = 0;
+            float const candidateAngle = bot->GetAngle(candidate);
+
+            for (Unit* other : candidates)
+            {
+                if (!other || other == candidate)
+                    continue;
+
+                float const separation2d = candidate->GetExactDist2d(other);
+                float const relativeHeight =
+                    std::abs(candidate->GetPositionZ() - other->GetPositionZ());
+
+                if (separation2d <= AUTO_PULL_PACK_RADIUS && relativeHeight <= 4.0f)
+                    ++tightNeighbors;
+
+                if (separation2d <= AUTO_PULL_SIDE_PACK_RADIUS)
+                {
+                    float angleSeparation =
+                        Position::NormalizeOrientation(candidateAngle - bot->GetAngle(other));
+                    angleSeparation = std::min(
+                        angleSeparation,
+                        static_cast<float>((2.0 * M_PI) - angleSeparation));
+
+                    if (separation2d > AUTO_PULL_PACK_RADIUS &&
+                        angleSeparation > static_cast<float>(M_PI) / 5.0f)
+                        ++sidePackNeighbors;
+
+                    if (relativeHeight > 6.0f)
+                        ++verticalSplitNeighbors;
+                }
+            }
+
+            value += std::min<uint32>(tightNeighbors, 4) * 6.0f;
+            value -= std::min<uint32>(sidePackNeighbors, 5) * 7.0f;
+            value -= std::min<uint32>(verticalSplitNeighbors, 4) * 5.0f;
+
+            score.score = value;
+            if (score.score > bestCandidate.score)
+                bestCandidate = score;
+        }
+
+        return bestCandidate.unit;
     }
 
     bool HasRemainingMagtheridonTrash(PlayerbotAI* botAI, Player* bot)
