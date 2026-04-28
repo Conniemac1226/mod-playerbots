@@ -38,6 +38,13 @@ public:
     float GetValue(Action* action) override;
 };
 
+class GruulTheDragonkillerDpsWaitMultiplier : public Multiplier
+{
+public:
+    GruulTheDragonkillerDpsWaitMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "gruul the dragonkiller dps wait multiplier") {}
+    float GetValue(Action* action) override;
+};
+
 class GruulTheDragonkillerGroundSlamMultiplier : public Multiplier
 {
 public:

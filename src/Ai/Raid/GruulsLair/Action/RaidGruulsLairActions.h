@@ -61,6 +61,14 @@ public:
     bool Execute(Event event) override;
 };
 
+class HighKingMaulgarInterruptBlindeyeAction : public Action
+{
+public:
+    HighKingMaulgarInterruptBlindeyeAction(PlayerbotAI* botAI, std::string const name = "high king maulgar interrupt blindeye") : Action(botAI, name) {};
+
+    bool Execute(Event event) override;
+};
+
 class HighKingMaulgarRunAwayFromWhirlwindAction : public MovementAction
 {
 public:
@@ -81,6 +89,23 @@ class HighKingMaulgarMisdirectOlmAndBlindeyeAction : public AttackAction
 {
 public:
     HighKingMaulgarMisdirectOlmAndBlindeyeAction(PlayerbotAI* botAI, std::string const name = "high king maulgar misdirect olm and blindeye") : AttackAction(botAI, name) {};
+
+    bool Execute(Event event) override;
+};
+
+class GruulsLairAutoPullTrashAction : public AttackAction
+{
+public:
+    GruulsLairAutoPullTrashAction(PlayerbotAI* botAI, std::string const name = "gruuls lair auto pull trash") : AttackAction(botAI, name) {};
+
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class GruulsLairMarkBossPullReadyAction : public Action
+{
+public:
+    GruulsLairMarkBossPullReadyAction(PlayerbotAI* botAI, std::string const name = "gruuls lair mark boss pull ready") : Action(botAI, name) {};
 
     bool Execute(Event event) override;
 };

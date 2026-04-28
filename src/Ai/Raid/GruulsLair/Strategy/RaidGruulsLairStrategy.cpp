@@ -3,6 +3,12 @@
 
 void RaidGruulsLairStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    triggers.push_back(new TriggerNode("gruuls lair auto pull ready", {
+        NextAction("gruuls lair auto pull trash", ACTION_MOVE + 3) }));
+
+    triggers.push_back(new TriggerNode("ready check finished", {
+        NextAction("gruuls lair mark boss pull ready", ACTION_RAID + 10) }));
+
     // High King Maulgar
     triggers.push_back(new TriggerNode("high king maulgar is main tank", {
         NextAction("high king maulgar main tank attack maulgar", ACTION_RAID + 1) }));
@@ -25,6 +31,9 @@ void RaidGruulsLairStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode("high king maulgar healer in danger", {
         NextAction("high king maulgar healer find safe position", ACTION_RAID + 1) }));
 
+    triggers.push_back(new TriggerNode("high king maulgar blindeye casting", {
+        NextAction("high king maulgar interrupt blindeye", ACTION_INTERRUPT + 2) }));
+
     triggers.push_back(new TriggerNode("high king maulgar boss channeling whirlwind", {
         NextAction("high king maulgar run away from whirlwind", ACTION_EMERGENCY + 6) }));
 
@@ -41,6 +50,9 @@ void RaidGruulsLairStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode("gruul the dragonkiller boss engaged by ranged", {
         NextAction("gruul the dragonkiller spread ranged", ACTION_RAID + 1) }));
 
+    triggers.push_back(new TriggerNode("gruul the dragonkiller cave in", {
+        NextAction("avoid aoe", ACTION_EMERGENCY + 5) }));
+
     triggers.push_back(new TriggerNode("gruul the dragonkiller incoming shatter", {
         NextAction("gruul the dragonkiller shatter spread", ACTION_EMERGENCY + 6) }));
 }
@@ -52,5 +64,6 @@ void RaidGruulsLairStrategy::InitMultipliers(std::vector<Multiplier*>& multiplie
     multipliers.push_back(new HighKingMaulgarDisableArcaneShotOnKroshMultiplier(botAI));
     multipliers.push_back(new HighKingMaulgarDisableMageTankAOEMultiplier(botAI));
     multipliers.push_back(new GruulTheDragonkillerMainTankMovementMultiplier(botAI));
+    multipliers.push_back(new GruulTheDragonkillerDpsWaitMultiplier(botAI));
     multipliers.push_back(new GruulTheDragonkillerGroundSlamMultiplier(botAI));
 }

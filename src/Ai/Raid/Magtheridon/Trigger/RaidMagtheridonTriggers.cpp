@@ -4,52 +4,67 @@
 
 using namespace MagtheridonHelpers;
 
+bool MagtheridonAutoPullReadyTrigger::IsActive()
+{
+    return IsMagtheridonAutoPullReady(botAI, bot);
+}
+
 bool MagtheridonFirstThreeChannelersEngagedByMainTankTrigger::IsActive()
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
 
     return magtheridon && botAI->IsMainTank(bot) &&
+           IsMagtheridonChannelerPhaseActive(botAI, bot) &&
+           IsMagtheridonEncounterPullAllowed(botAI, bot) &&
            magtheridon->HasAura(SPELL_SHADOW_CAGE);
 }
 
 bool MagtheridonNWChannelerEngagedByFirstAssistTankTrigger::IsActive()
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     Creature* channelerDiamond = GetChanneler(bot, NORTHWEST_CHANNELER);
 
     return magtheridon && botAI->IsAssistTankOfIndex(bot, 0) &&
+           IsMagtheridonChannelerPhaseActive(botAI, bot) &&
+           IsMagtheridonEncounterPullAllowed(botAI, bot) &&
            channelerDiamond;
 }
 
 bool MagtheridonNEChannelerEngagedBySecondAssistTankTrigger::IsActive()
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     Creature* channelerTriangle = GetChanneler(bot, NORTHEAST_CHANNELER);
 
     return magtheridon && botAI->IsAssistTankOfIndex(bot, 1) &&
+           IsMagtheridonChannelerPhaseActive(botAI, bot) &&
+           IsMagtheridonEncounterPullAllowed(botAI, bot) &&
            channelerTriangle;
 }
 
 bool MagtheridonPullingWestAndEastChannelersTrigger::IsActive()
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
 
     Creature* channelerStar = GetChanneler(bot, WEST_CHANNELER);
     Creature* channelerCircle = GetChanneler(bot, EAST_CHANNELER);
 
     return magtheridon && bot->getClass() == CLASS_HUNTER &&
+           IsMagtheridonChannelerPhaseActive(botAI, bot) &&
+           IsMagtheridonEncounterPullAllowed(botAI, bot) &&
            (channelerStar || channelerCircle);
 }
 
 bool MagtheridonDeterminingKillOrderTrigger::IsActive()
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     Unit* channeler = AI_VALUE2(Unit*, "find target", "hellfire channeler");
 
     Creature* channelerDiamond  = GetChanneler(bot, NORTHWEST_CHANNELER);
     Creature* channelerTriangle = GetChanneler(bot, NORTHEAST_CHANNELER);
 
     if (!magtheridon || botAI->IsHeal(bot) || botAI->IsMainTank(bot) ||
+        !IsMagtheridonChannelerPhaseActive(botAI, bot) ||
+        !IsMagtheridonEncounterPullAllowed(botAI, bot) ||
         (botAI->IsAssistTankOfIndex(bot, 0) && channelerDiamond) ||
         (botAI->IsAssistTankOfIndex(bot, 1) && channelerTriangle))
         return false;
@@ -59,7 +74,7 @@ bool MagtheridonDeterminingKillOrderTrigger::IsActive()
 
 bool MagtheridonBurningAbyssalSpawnedTrigger::IsActive()
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     if (!magtheridon || bot->getClass() != CLASS_WARLOCK)
         return false;
 
@@ -73,22 +88,24 @@ bool MagtheridonBurningAbyssalSpawnedTrigger::IsActive()
 
 bool MagtheridonBossEngagedByMainTankTrigger::IsActive()
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
 
     return magtheridon && botAI->IsMainTank(bot) &&
+           IsMagtheridonEncounterPullAllowed(botAI, bot) &&
            !magtheridon->HasAura(SPELL_SHADOW_CAGE);
 }
 
 bool MagtheridonBossEngagedByRangedTrigger::IsActive()
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
 
-    return magtheridon && !magtheridon->HasAura(SPELL_SHADOW_CAGE) && botAI->IsRanged(bot);
+    return magtheridon && !magtheridon->HasAura(SPELL_SHADOW_CAGE) &&
+           IsMagtheridonEncounterPullAllowed(botAI, bot) && botAI->IsRanged(bot);
 }
 
 bool MagtheridonIncomingBlastNovaTrigger::IsActive()
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     Group* group = bot->GetGroup();
     if (!group || !magtheridon || magtheridon->HasAura(SPELL_SHADOW_CAGE))
         return false;
@@ -118,5 +135,5 @@ bool MagtheridonIncomingBlastNovaTrigger::IsActive()
 
 bool MagtheridonNeedToManageTimersAndAssignmentsTrigger::IsActive()
 {
-    return AI_VALUE2(Unit*, "find target", "magtheridon");
+    return FindMagtheridon(botAI, bot);
 }

@@ -34,6 +34,178 @@ const float MECHANAR_PATHALEON_MAX_Y = 3.0f;
 const float MECHANAR_PATHALEON_MIN_Z = 25.0f;
 const float MECHANAR_PATHALEON_MAX_Z = 28.0f;
 
+bool IsPositionSafe(const Position& pos, PlayerbotAI* botAI);
+bool IsPathClear(const Position& from, const Position& to, PlayerbotAI* botAI);
+bool IsPathSafeFromFlames(const Position& from, const Position& to, PlayerbotAI* botAI, float minDistance);
+Position ConstrainToRoom(const Position& pos, PlayerbotAI* botAI);
+
+namespace
+{
+bool UseAvailableTankTaunt(PlayerbotAI* botAI, Player* bot, Unit* target, Event event)
+{
+    if (!botAI || !bot || !target)
+        return false;
+
+    switch (bot->getClass())
+    {
+        case CLASS_PALADIN:
+            return botAI->DoSpecificAction("hand of reckoning", event, true);
+        case CLASS_DRUID:
+            return botAI->DoSpecificAction("growl", event, true);
+        case CLASS_DEATH_KNIGHT:
+            return botAI->DoSpecificAction("dark command", event, true);
+        case CLASS_WARRIOR:
+            return botAI->DoSpecificAction("taunt", event, true);
+        default:
+            return botAI->CastSpell("taunt", target);
+    }
+}
+
+float GetMinimumFlameDistance(PlayerbotAI* botAI, Position const& candidate)
+{
+    if (!botAI)
+        return 1000.0f;
+
+    float minFlameDistance = 1000.0f;
+    GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs")->Get();
+    for (ObjectGuid const& guid : npcs)
+    {
+        Unit* flame = botAI->GetUnit(guid);
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
+            continue;
+
+        minFlameDistance = std::min(minFlameDistance, candidate.GetExactDist2d(flame));
+    }
+
+    return minFlameDistance;
+}
+
+std::vector<Unit*> GetActiveRagingFlames(PlayerbotAI* botAI)
+{
+    std::vector<Unit*> flames;
+    if (!botAI)
+        return flames;
+
+    GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs")->Get();
+    flames.reserve(8);
+    for (ObjectGuid const& guid : npcs)
+    {
+        Unit* flame = botAI->GetUnit(guid);
+        if (flame && flame->IsAlive() && flame->GetEntry() == NPC_RAGING_FLAMES)
+            flames.push_back(flame);
+    }
+
+    return flames;
+}
+
+bool SelectSepethreaEscapePosition(PlayerbotAI* botAI, Player* bot, float preferredDistance,
+                                   float minimumFlameDistance, Position& bestPos,
+                                   Unit* priorityFlame = nullptr)
+{
+    if (!botAI || !bot)
+        return false;
+
+    std::vector<Unit*> flames = GetActiveRagingFlames(botAI);
+    if (flames.empty())
+        return false;
+
+    Position const from = bot->GetPosition();
+    Position const center = MECHANAR_SEPETHREA_CENTER;
+    float bestScore = -100000.0f;
+
+    auto scoreCandidate = [&](Position const& candidate) -> float
+    {
+        float minDist = 1000.0f;
+        float totalDist = 0.0f;
+        float infernoBonus = 0.0f;
+
+        for (Unit* flame : flames)
+        {
+            float dist = candidate.GetExactDist2d(flame);
+            minDist = std::min(minDist, dist);
+            totalDist += dist;
+
+            if (flame->FindCurrentSpellBySpellId(SPELL_INFERNO) || flame->HasAura(SPELL_INFERNO))
+                infernoBonus += std::min(dist, 24.0f) * 0.6f;
+        }
+
+        if (minDist < minimumFlameDistance)
+            return -100000.0f;
+
+        float score = minDist * 3.0f + totalDist * 0.25f + infernoBonus;
+
+        float centerDist = candidate.GetExactDist2d(&center);
+        if (centerDist < 10.0f)
+            score -= (10.0f - centerDist) * 1.5f;
+        if (centerDist > 24.0f)
+            score -= (centerDist - 24.0f) * 1.2f;
+
+        if (priorityFlame)
+            score += std::min(candidate.GetExactDist2d(priorityFlame), 30.0f) * 1.5f;
+
+        if (botAI->IsHeal(bot))
+        {
+            float closestTank = 1000.0f;
+            GuidVector const members = botAI->GetAiObjectContext()->GetValue<GuidVector>("group members")->Get();
+            for (ObjectGuid const& memberGuid : members)
+            {
+                Player* member = botAI->GetPlayer(memberGuid);
+                if (member && member->IsAlive() && botAI->IsTank(member))
+                    closestTank = std::min(closestTank, candidate.GetExactDist2d(member));
+            }
+
+            if (closestTank > 34.0f)
+                score -= (closestTank - 34.0f) * 1.4f;
+        }
+
+        return score;
+    };
+
+    float baseAngle = atan2f(from.GetPositionY() - center.GetPositionY(),
+                             from.GetPositionX() - center.GetPositionX());
+    std::vector<float> angles = { baseAngle, baseAngle + 0.45f, baseAngle - 0.45f, baseAngle + 0.9f,
+                                  baseAngle - 0.9f, baseAngle + 1.35f, baseAngle - 1.35f,
+                                  baseAngle + static_cast<float>(M_PI), baseAngle + 2.2f,
+                                  baseAngle - 2.2f };
+
+    if (priorityFlame)
+    {
+        float away = bot->GetAngle(priorityFlame) + static_cast<float>(M_PI);
+        angles.insert(angles.begin(), away);
+        angles.insert(angles.begin() + 1, away + 0.65f);
+        angles.insert(angles.begin() + 2, away - 0.65f);
+    }
+
+    for (float angle : angles)
+    {
+        for (float dist = preferredDistance; dist >= 10.0f; dist -= 2.0f)
+        {
+            Position candidate;
+            candidate.m_positionX = from.GetPositionX() + cosf(angle) * dist;
+            candidate.m_positionY = from.GetPositionY() + sinf(angle) * dist;
+            candidate.m_positionZ = from.GetPositionZ();
+            candidate = ConstrainToRoom(candidate, botAI);
+
+            if (!IsPositionSafe(candidate, botAI))
+                continue;
+            if (!IsPathClear(from, candidate, botAI))
+                continue;
+            if (!IsPathSafeFromFlames(from, candidate, botAI, minimumFlameDistance - 2.0f))
+                continue;
+
+            float score = scoreCandidate(candidate);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestPos = candidate;
+            }
+        }
+    }
+
+    return bestScore > -1000.0f;
+}
+}
+
 // Boundary validation to prevent out-of-bounds movement with buffer
 bool IsPositionSafe(const Position& pos, PlayerbotAI* botAI = nullptr)
 {
@@ -698,30 +870,45 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
         // Check if in frontal cone
         if (boss->HasInArc(M_PI / 2, bot) && !botAI->IsTank(bot))
         {
-            // Calculate side escape direction
             float bossOrientation = boss->GetOrientation();
-            float botAngleToBoss = boss->GetAngle(bot);
-            
-            // Choose left or right side
-            float leftAngle = bossOrientation - (M_PI / 2);
-            float rightAngle = bossOrientation + (M_PI / 2);
-            
-            // Choose closer side
-            float angleDiffLeft = fabs(botAngleToBoss - leftAngle);
-            float angleDiffRight = fabs(botAngleToBoss - rightAngle);
-            
-            float escapeAngle = (angleDiffLeft < angleDiffRight) ? leftAngle : rightAngle;
-            
-            // Move to safe position at boss side
-            float escapeDistance = 15.0f;
-            Position safePos;
-            safePos.m_positionX = boss->GetPositionX() + cos(escapeAngle) * escapeDistance;
-            safePos.m_positionY = boss->GetPositionY() + sin(escapeAngle) * escapeDistance;
-            safePos.m_positionZ = boss->GetPositionZ();
-            
-            return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
-                         safePos.m_positionZ, false, false, false, true,
-                         MovementPriority::MOVEMENT_NORMAL);
+            float const sideAngles[2] = { bossOrientation - (M_PI / 2), bossOrientation + (M_PI / 2) };
+            float bestScore = -1.0f;
+            Position bestPos;
+
+            for (float sideAngle : sideAngles)
+            {
+                for (float escapeDistance : {12.0f, 15.0f, 18.0f})
+                {
+                    Position safePos;
+                    safePos.m_positionX = boss->GetPositionX() + cosf(sideAngle) * escapeDistance;
+                    safePos.m_positionY = boss->GetPositionY() + sinf(sideAngle) * escapeDistance;
+                    safePos.m_positionZ = bot->GetPositionZ();
+                    safePos = ConstrainToRoom(safePos, botAI);
+
+                    if (!IsPositionSafe(safePos, botAI))
+                        continue;
+                    if (!IsPathClear(bot->GetPosition(), safePos, botAI))
+                        continue;
+                    if (!IsPathSafeFromFlames(bot->GetPosition(), safePos, botAI, 10.0f))
+                        continue;
+
+                    float score = GetMinimumFlameDistance(botAI, safePos);
+                    if (score > bestScore)
+                    {
+                        bestScore = score;
+                        bestPos = safePos;
+                    }
+                }
+            }
+
+            if (bestScore > 0.0f)
+            {
+                return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY,
+                             bestPos.m_positionZ, false, false, false, true,
+                             MovementPriority::MOVEMENT_COMBAT);
+            }
+
+            return FleePosition(boss->GetPosition(), 14.0f, 800U);
         }
     }
 
@@ -755,15 +942,14 @@ bool SepethreaArcaneBlastAction::Execute(Event event)
     // Arcane Blast - threat reduction, tanks need to taunt back
     if (botAI->IsTank(bot))
     {
-        if (boss->GetVictim() && boss->GetVictim() != bot)
+        Unit* victim = boss->GetVictim();
+        if (victim && victim != bot)
         {
-            // Check for Arcane Blast cast
-            if (boss->HasUnitState(UNIT_STATE_CASTING) && 
+            if (boss->HasUnitState(UNIT_STATE_CASTING) &&
                 boss->FindCurrentSpellBySpellId(MECH_SPELL_ARCANE_BLAST))
-            {
-                // Taunt after cast
-                return botAI->CastSpell("taunt", boss);
-            }
+                return false;
+
+            return UseAvailableTankTaunt(botAI, bot, boss, event);
         }
     }
 
@@ -794,9 +980,20 @@ bool SepethreaTargetElementalAction::Execute(Event event)
         return false;
 
     // FORCE target back to boss (don't waste time on flames - focus burn boss)
-    if (bot->GetSelectedUnit() != boss)
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (bot->GetSelectedUnit() != boss || currentTarget != boss)
     {
+        AiObjectContext* botContext = botAI->GetAiObjectContext();
+        if (botContext)
+        {
+            if (auto* dpsTarget = botContext->GetValue<Unit*>("dps target"))
+                dpsTarget->Set(boss);
+            if (auto* current = botContext->GetValue<Unit*>("current target"))
+                current->Set(boss);
+        }
+
         bot->SetSelection(boss->GetGUID());
+        bot->SetTarget(boss->GetGUID());
         return true;
     }
 
@@ -845,17 +1042,17 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Find nearest Raging Flames in the area
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    std::vector<Unit*> flames = GetActiveRagingFlames(botAI);
+    if (flames.empty())
+        return false;
+
+    const bool heroic = bot->GetMap()->IsHeroic();
+    float const minimumFlameDistance = heroic ? 18.0f : 15.0f;
     Unit* nearestFlame = nullptr;
     float closestDistance = 100.0f;
-    
-    for (auto& npc : npcs)
+
+    for (Unit* flame : flames)
     {
-        Unit* flame = botAI->GetUnit(npc);
-        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
-            continue;
-            
         float distance = bot->GetDistance(flame);
         if (distance < closestDistance)
         {
@@ -863,36 +1060,20 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
             closestDistance = distance;
         }
     }
-    
-    if (!nearestFlame)
+
+    if (!nearestFlame || closestDistance >= minimumFlameDistance)
         return false;
 
-    const bool heroic = bot->GetMap()->IsHeroic();
-    const float MIN_SAFE_DISTANCE = heroic ? 22.0f : 20.0f; // Larger bubble on heroic (3 flames)
-    
-    // If too close to ANY Raging Flames, move away (like ICC gas cloud)
-    if (closestDistance < MIN_SAFE_DISTANCE)
+    Position escapePos;
+    if (SelectSepethreaEscapePosition(botAI, bot, heroic ? 20.0f : 17.0f,
+                                      heroic ? 14.0f : 12.0f, escapePos, nearestFlame))
     {
-        // Calculate angle away from flame
-        float angle = bot->GetAngle(nearestFlame);
-        float x = bot->GetPositionX() + cos(angle) * -MIN_SAFE_DISTANCE;
-        float y = bot->GetPositionY() + sin(angle) * -MIN_SAFE_DISTANCE;
-        
-        Position targetPos(x, y, bot->GetPositionZ(), 0.0f);
-        targetPos = ConstrainToRoom(targetPos, botAI); // Keep in bounds
-        
-        if (IsPositionSafe(targetPos, botAI))
-        {
-            return MoveTo(bot->GetMapId(), targetPos.m_positionX, targetPos.m_positionY, 
-                         targetPos.m_positionZ, false, false, false, true, 
-                         MovementPriority::MOVEMENT_COMBAT);
-        }
-        
-        // Fallback: simple flee with proper priority
-        return FleePosition(nearestFlame->GetPosition(), heroic ? 22.0f : 18.0f, 1500U);
+        return MoveTo(bot->GetMapId(), escapePos.m_positionX, escapePos.m_positionY,
+                     escapePos.m_positionZ, false, false, false, true,
+                     MovementPriority::MOVEMENT_COMBAT);
     }
-    
-    return false;
+
+    return FleePosition(nearestFlame->GetPosition(), heroic ? 22.0f : 18.0f, 1500U);
 }
 
 bool SepethreaAvoidRagingFlamesAction::isUseful()
@@ -914,7 +1095,7 @@ bool SepethreaAvoidRagingFlamesAction::isUseful()
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
             
-        if (bot->GetDistance(flame) < 16.0f) // Too close to area aura + inferno range
+        if (bot->GetDistance(flame) < (bot->GetMap()->IsHeroic() ? 18.0f : 16.0f))
             return true;
     }
     
@@ -952,50 +1133,15 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
     if (!infernoFlame)
         return false;
 
-    // Flee from the flame casting inferno
-    float fleeDistance = 22.0f;
-    float angle = bot->GetAngle(infernoFlame) + M_PI;
-
-    Position botPos = bot->GetPosition();
-    Position targetPos;
-    targetPos.m_positionX = botPos.m_positionX + cos(angle) * fleeDistance;
-    targetPos.m_positionY = botPos.m_positionY + sin(angle) * fleeDistance;
-    targetPos.m_positionZ = botPos.m_positionZ;
-
-    Position safePos = ConstrainToRoom(targetPos, botAI);
-
-    if (IsPathClear(botPos, safePos, botAI) && IsPathSafeFromFlames(botPos, safePos, botAI, 10.0f))
+    Position safePos;
+    if (SelectSepethreaEscapePosition(botAI, bot, 22.0f, 16.0f, safePos, infernoFlame))
     {
         return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY, 
                      safePos.m_positionZ, false, false, false, true, 
-                     MovementPriority::MOVEMENT_NORMAL);
-    }
-    else
-    {
-        // If path is not clear, find a better escape route
-        for (int i = 0; i < 8; ++i)
-        {
-            float current_angle = i * (M_PI / 4);
-            Position checkPos;
-            checkPos.m_positionX = botPos.m_positionX + cos(current_angle) * 15.0f;
-            checkPos.m_positionY = botPos.m_positionY + sin(current_angle) * 15.0f;
-            checkPos.m_positionZ = botPos.m_positionZ;
-
-            if (IsPathClear(botPos, checkPos, botAI) && IsPathSafeFromFlames(botPos, checkPos, botAI, 10.0f))
-            {
-                Position newPos = ConstrainToRoom(checkPos);
-                return MoveTo(bot->GetMapId(), newPos.m_positionX, newPos.m_positionY,
-                             newPos.m_positionZ, false, false, false, true,
-                             MovementPriority::MOVEMENT_NORMAL);
-            }
-        }
+                     MovementPriority::MOVEMENT_COMBAT);
     }
 
-    // Absolute fallback: move to center if no path found
-    Position centerPos = MECHANAR_SEPETHREA_CENTER;
-    return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
-                    centerPos.m_positionZ, false, false, false, true,
-                    MovementPriority::MOVEMENT_FORCED);
+    return FleePosition(infernoFlame->GetPosition(), 22.0f, 1000U);
 }
 
 bool SepethreaInfernoAvoidanceAction::isUseful()
@@ -1055,20 +1201,11 @@ bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
         }
     }
     
-    // ENHANCED FIRE ESCAPE: Use FleePosition instead of complex manual pathfinding
-    // FleePosition automatically handles room boundaries and collision detection
-    
-    // Find all nearby Raging Flames to flee from
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    std::vector<Unit*> flames = GetActiveRagingFlames(botAI);
     Unit* nearestFlame = nullptr;
     float closestDistance = 100.0f;
-    
-    for (auto& npc : npcs)
+    for (Unit* flame : flames)
     {
-        Unit* flame = botAI->GetUnit(npc);
-        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
-            continue;
-            
         float distance = bot->GetDistance(flame);
         if (distance < closestDistance)
         {
@@ -1076,31 +1213,20 @@ bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
             closestDistance = distance;
         }
     }
-    
+
     if (nearestFlame)
     {
-        // SMART ESCAPE: Flee from nearest flame with emergency priority
-        float escapeDistance = 18.0f; // Increased from area aura range
-        uint32 minTime = 1000; // Quick escape time
-        
-        // Try a few angular offsets to avoid fleeing through a flame path
-        Position from = bot->GetPosition();
-        for (int i = 0; i < 8; ++i)
+        Position safePos;
+        float preferredDistance = bot->GetMap()->IsHeroic() ? 20.0f : 17.0f;
+        float minimumFlameDistance = bot->GetMap()->IsHeroic() ? 14.0f : 12.0f;
+        if (SelectSepethreaEscapePosition(botAI, bot, preferredDistance, minimumFlameDistance,
+                                          safePos, nearestFlame))
         {
-            float ang = bot->GetAngle(nearestFlame) + M_PI + (i % 2 == 0 ? 1 : -1) * (i * 0.2f);
-            Position candidate;
-            candidate.m_positionX = from.m_positionX + cosf(ang) * escapeDistance;
-            candidate.m_positionY = from.m_positionY + sinf(ang) * escapeDistance;
-            candidate.m_positionZ = from.m_positionZ;
-            candidate = ConstrainToRoom(candidate, botAI);
-            if (IsPathClear(from, candidate, botAI) && IsPathSafeFromFlames(from, candidate, botAI, 10.0f))
-            {
-                return MoveTo(bot->GetMapId(), candidate.m_positionX, candidate.m_positionY,
-                              candidate.m_positionZ, false, false, false, true,
-                              MovementPriority::MOVEMENT_COMBAT);
-            }
+            return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
+                          safePos.m_positionZ, false, false, false, true,
+                          MovementPriority::MOVEMENT_COMBAT);
         }
-        return FleePosition(nearestFlame->GetPosition(), escapeDistance, minTime);
+        return FleePosition(nearestFlame->GetPosition(), 18.0f, 1000U);
     }
     
     // FALLBACK: If no flames found but still in fire aura, move to room center

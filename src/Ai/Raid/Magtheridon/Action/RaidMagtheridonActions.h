@@ -14,6 +14,15 @@ public:
     bool Execute(Event event) override;
 };
 
+class MagtheridonAutoPullTrashAction : public AttackAction
+{
+public:
+    MagtheridonAutoPullTrashAction(PlayerbotAI* botAI, std::string const name = "magtheridon auto pull trash") : AttackAction(botAI, name) {};
+
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 class MagtheridonFirstAssistTankAttackNWChannelerAction : public AttackAction
 {
 public:

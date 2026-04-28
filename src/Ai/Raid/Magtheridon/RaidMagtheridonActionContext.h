@@ -9,6 +9,7 @@ class RaidMagtheridonActionContext : public NamedObjectContext<Action>
 public:
     RaidMagtheridonActionContext()
     {
+        creators["magtheridon auto pull trash"] = &RaidMagtheridonActionContext::magtheridon_auto_pull_trash;
         creators["magtheridon main tank attack first three channelers"] = &RaidMagtheridonActionContext::magtheridon_main_tank_attack_first_three_channelers;
         creators["magtheridon first assist tank attack nw channeler"] = &RaidMagtheridonActionContext::magtheridon_first_assist_tank_attack_nw_channeler;
         creators["magtheridon second assist tank attack ne channeler"] = &RaidMagtheridonActionContext::magtheridon_second_assist_tank_attack_ne_channeler;
@@ -22,6 +23,7 @@ public:
     }
 
 private:
+    static Action* magtheridon_auto_pull_trash(PlayerbotAI* botAI) { return new MagtheridonAutoPullTrashAction(botAI); }
     static Action* magtheridon_main_tank_attack_first_three_channelers(PlayerbotAI* botAI) { return new MagtheridonMainTankAttackFirstThreeChannelersAction(botAI); }
     static Action* magtheridon_first_assist_tank_attack_nw_channeler(PlayerbotAI* botAI) { return new MagtheridonFirstAssistTankAttackNWChannelerAction(botAI); }
     static Action* magtheridon_second_assist_tank_attack_ne_channeler(PlayerbotAI* botAI) { return new MagtheridonSecondAssistTankAttackNEChannelerAction(botAI); }

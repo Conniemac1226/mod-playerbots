@@ -15,7 +15,7 @@ using namespace MagtheridonHelpers;
 // Don't do anything other than clicking cubes when Magtheridon is casting Blast Nova
 float MagtheridonUseManticronCubeMultiplier::GetValue(Action* action)
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     if (!magtheridon)
         return 1.0f;
 
@@ -38,7 +38,7 @@ float MagtheridonUseManticronCubeMultiplier::GetValue(Action* action)
 // Bots will wait for 6 seconds after Magtheridon becomes attackable before engaging
 float MagtheridonWaitToAttackMultiplier::GetValue(Action* action)
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     if (!magtheridon || magtheridon->HasAura(SPELL_SHADOW_CAGE))
         return 1.0f;
 
@@ -60,8 +60,8 @@ float MagtheridonWaitToAttackMultiplier::GetValue(Action* action)
 
 float MagtheridonDisableOffTankAssistMultiplier::GetValue(Action* action)
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
-    if (!magtheridon)
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
+    if (!magtheridon || !IsMagtheridonChannelerPhaseActive(botAI, bot))
         return 1.0f;
 
     if (bot->GetVictim() == nullptr)
@@ -76,8 +76,9 @@ float MagtheridonDisableOffTankAssistMultiplier::GetValue(Action* action)
 
 float MagtheridonChannelerTargetMultiplier::GetValue(Action* action)
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
-    if (!magtheridon || botAI->IsHeal(bot))
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
+    if (!magtheridon || botAI->IsHeal(bot) ||
+        !IsMagtheridonChannelerPhaseActive(botAI, bot))
         return 1.0f;
 
     bool channelerAlive =

@@ -3,6 +3,9 @@
 
 void RaidMagtheridonStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
+    triggers.push_back(new TriggerNode("magtheridon auto pull ready", {
+        NextAction("magtheridon auto pull trash", ACTION_MOVE + 3) }));
+
     triggers.push_back(new TriggerNode("magtheridon incoming blast nova", {
         NextAction("magtheridon use manticron cube", ACTION_EMERGENCY + 10) }));
 

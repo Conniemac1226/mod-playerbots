@@ -68,7 +68,7 @@ float HighKingMaulgarDisableMageTankAOEMultiplier::GetValue(Action* action)
 
 float GruulTheDragonkillerMainTankMovementMultiplier::GetValue(Action* action)
 {
-    Unit* gruul = AI_VALUE2(Unit*, "find target", "gruul the dragonkiller");
+    Unit* gruul = FindGruulTheDragonkiller(botAI, bot);
     if (!gruul)
         return 1.0f;
 
@@ -84,9 +84,35 @@ float GruulTheDragonkillerMainTankMovementMultiplier::GetValue(Action* action)
     return 1.0f;
 }
 
+float GruulTheDragonkillerDpsWaitMultiplier::GetValue(Action* action)
+{
+    Unit* gruul = FindGruulTheDragonkiller(botAI, bot);
+    if (!gruul || botAI->IsTank(bot))
+        return 1.0f;
+
+    if (!gruul->IsInCombat())
+    {
+        if (gruul->GetHealth() == gruul->GetMaxHealth() && gruul->GetMap())
+            gruulDpsWaitTimer.erase(gruul->GetMap()->GetInstanceId());
+        return 1.0f;
+    }
+
+    const uint8 dpsWaitSeconds = 6;
+    auto it = gruulDpsWaitTimer.find(gruul->GetMap()->GetInstanceId());
+    if (it == gruulDpsWaitTimer.end() ||
+        (time(nullptr) - it->second) < dpsWaitSeconds)
+    {
+        if (dynamic_cast<AttackAction*>(action) ||
+            (botAI->IsDps(bot) && dynamic_cast<CastSpellAction*>(action)))
+            return 0.0f;
+    }
+
+    return 1.0f;
+}
+
 float GruulTheDragonkillerGroundSlamMultiplier::GetValue(Action* action)
 {
-    Unit* gruul = AI_VALUE2(Unit*, "find target", "gruul the dragonkiller");
+    Unit* gruul = FindGruulTheDragonkiller(botAI, bot);
     if (!gruul)
         return 1.0f;
 

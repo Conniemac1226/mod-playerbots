@@ -8,10 +8,64 @@
 
 using namespace MagtheridonHelpers;
 
+bool MagtheridonAutoPullTrashAction::Execute(Event event)
+{
+    if (!IsMagtheridonAutoPullReady(botAI, bot))
+        return false;
+
+    Unit* target = SelectMagtheridonTrashPullTarget(botAI, bot);
+    if (!target)
+        return false;
+
+    context->GetValue<Unit*>("current target")->Set(target);
+    bot->SetSelection(target->GetGUID());
+
+    bool usedRangedOpener = false;
+    if (botAI->IsTank(bot))
+    {
+        switch (bot->getClass())
+        {
+            case CLASS_PALADIN:
+                usedRangedOpener = botAI->DoSpecificAction("avenger's shield", event, true) ||
+                    botAI->DoSpecificAction("hand of reckoning", event, true);
+                break;
+            case CLASS_WARRIOR:
+                usedRangedOpener = botAI->DoSpecificAction("heroic throw", event, true);
+                break;
+            case CLASS_DRUID:
+                usedRangedOpener = botAI->DoSpecificAction("faerie fire (feral)", event, true) ||
+                    botAI->DoSpecificAction("growl", event, true);
+                break;
+            case CLASS_DEATH_KNIGHT:
+                usedRangedOpener = botAI->DoSpecificAction("death grip", event, true) ||
+                    botAI->DoSpecificAction("icy touch", event, true) ||
+                    botAI->DoSpecificAction("dark command", event, true);
+                break;
+            default:
+                break;
+        }
+    }
+
+    bool attackStarted = Attack(target);
+    if (usedRangedOpener || attackStarted)
+    {
+        botAI->SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
+        return true;
+    }
+
+    return false;
+}
+
+bool MagtheridonAutoPullTrashAction::isUseful()
+{
+    return IsMagtheridonAutoPullReady(botAI, bot) &&
+           SelectMagtheridonTrashPullTarget(botAI, bot);
+}
+
 bool MagtheridonMainTankAttackFirstThreeChannelersAction::Execute(Event /*event*/)
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
-    if (!magtheridon)
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
+    if (!magtheridon || !IsMagtheridonChannelerPhaseActive(botAI, bot))
         return false;
 
     Creature* channelerSquare = GetChanneler(bot, SOUTH_CHANNELER);
@@ -69,6 +123,9 @@ bool MagtheridonMainTankAttackFirstThreeChannelersAction::Execute(Event /*event*
 
 bool MagtheridonFirstAssistTankAttackNWChannelerAction::Execute(Event /*event*/)
 {
+    if (!IsMagtheridonChannelerPhaseActive(botAI, bot))
+        return false;
+
     Creature* channelerDiamond = GetChanneler(bot, NORTHWEST_CHANNELER);
     if (!channelerDiamond)
         return false;
@@ -102,6 +159,9 @@ bool MagtheridonFirstAssistTankAttackNWChannelerAction::Execute(Event /*event*/)
 
 bool MagtheridonSecondAssistTankAttackNEChannelerAction::Execute(Event /*event*/)
 {
+    if (!IsMagtheridonChannelerPhaseActive(botAI, bot))
+        return false;
+
     Creature* channelerTriangle = GetChanneler(bot, NORTHEAST_CHANNELER);
     if (!channelerTriangle)
         return false;
@@ -136,6 +196,9 @@ bool MagtheridonSecondAssistTankAttackNEChannelerAction::Execute(Event /*event*/
 // Misdirect West & East Channelers to Main Tank
 bool MagtheridonMisdirectHellfireChannelers::Execute(Event /*event*/)
 {
+    if (!IsMagtheridonChannelerPhaseActive(botAI, bot))
+        return false;
+
     Group* group = bot->GetGroup();
     if (!group)
         return false;
@@ -213,6 +276,9 @@ bool MagtheridonMisdirectHellfireChannelers::Execute(Event /*event*/)
 
 bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
 {
+    if (!IsMagtheridonChannelerPhaseActive(botAI, bot))
+        return false;
+
     // Listed in order of priority
     Creature* channelerSquare   = GetChanneler(bot, SOUTH_CHANNELER);
     if (channelerSquare)
@@ -269,7 +335,7 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
         return false;
     }
 
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     if (magtheridon && !magtheridon->HasAura(SPELL_SHADOW_CAGE) &&
         !channelerSquare && !channelerStar && !channelerCircle &&
         !channelerDiamond && !channelerTriangle)
@@ -340,7 +406,7 @@ bool MagtheridonWarlockCCBurningAbyssalAction::Execute(Event /*event*/)
 // Main tank will back up to the Northern point of the room
 bool MagtheridonMainTankPositionBossAction::Execute(Event /*event*/)
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     if (!magtheridon)
         return false;
 
@@ -378,7 +444,7 @@ std::unordered_map<ObjectGuid, bool> MagtheridonSpreadRangedAction::hasReachedIn
 
 bool MagtheridonSpreadRangedAction::Execute(Event /*event*/)
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     if (!magtheridon)
         return false;
 
@@ -488,7 +554,7 @@ bool MagtheridonSpreadRangedAction::Execute(Event /*event*/)
 // Magtheridon casts Blast Nova every 54.35 to 55.40s, with a 2s cast time
 bool MagtheridonUseManticronCubeAction::Execute(Event /*event*/)
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     if (!magtheridon)
         return false;
 
@@ -629,7 +695,7 @@ bool MagtheridonUseManticronCubeAction::HandleCubeInteraction(const CubeInfo& cu
 // and view the current solution as sufficient since in TBC a missed Blast Nova would be a guaranteed wipe anyway.
 bool MagtheridonManageTimersAndAssignmentsAction::Execute(Event /*event*/)
 {
-    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
     if (!magtheridon)
         return false;
 

@@ -52,6 +52,13 @@ public:
     bool IsActive() override;
 };
 
+class HighKingMaulgarBlindeyeCastingTrigger : public Trigger
+{
+public:
+    HighKingMaulgarBlindeyeCastingTrigger(PlayerbotAI* botAI) : Trigger(botAI, "high king maulgar blindeye casting") {}
+    bool IsActive() override;
+};
+
 class HighKingMaulgarBossChannelingWhirlwindTrigger : public Trigger
 {
 public:
@@ -73,6 +80,13 @@ public:
     bool IsActive() override;
 };
 
+class GruulsLairAutoPullReadyTrigger : public Trigger
+{
+public:
+    GruulsLairAutoPullReadyTrigger(PlayerbotAI* botAI) : Trigger(botAI, "gruuls lair auto pull ready") {}
+    bool IsActive() override;
+};
+
 class GruulTheDragonkillerBossEngagedByTanksTrigger : public Trigger
 {
 public:
@@ -84,6 +98,13 @@ class GruulTheDragonkillerBossEngagedByRangedTrigger : public Trigger
 {
 public:
     GruulTheDragonkillerBossEngagedByRangedTrigger(PlayerbotAI* botAI) : Trigger(botAI, "gruul the dragonkiller boss engaged by ranged") {}
+    bool IsActive() override;
+};
+
+class GruulTheDragonkillerCaveInTrigger : public Trigger
+{
+public:
+    GruulTheDragonkillerCaveInTrigger(PlayerbotAI* botAI) : Trigger(botAI, "gruul the dragonkiller cave in") {}
     bool IsActive() override;
 };
 

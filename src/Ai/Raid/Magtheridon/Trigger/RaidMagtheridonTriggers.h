@@ -11,6 +11,13 @@ public:
     bool IsActive() override;
 };
 
+class MagtheridonAutoPullReadyTrigger : public Trigger
+{
+public:
+    MagtheridonAutoPullReadyTrigger(PlayerbotAI* botAI) : Trigger(botAI, "magtheridon auto pull ready") {};
+    bool IsActive() override;
+};
+
 class MagtheridonNWChannelerEngagedByFirstAssistTankTrigger : public Trigger
 {
 public:

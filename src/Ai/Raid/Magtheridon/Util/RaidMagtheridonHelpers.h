@@ -24,6 +24,8 @@ namespace MagtheridonHelpers
 
     enum MagtheridonNPCs
     {
+        NPC_MAGTHERIDON     = 17257,
+        NPC_HELLFIRE_CHANNELER = 17256,
         NPC_BURNING_ABYSSAL = 17454,
         NPC_TARGET_TRIGGER  = 17474,
     };
@@ -40,9 +42,14 @@ namespace MagtheridonHelpers
     constexpr uint32 EAST_CHANNELER      = 90982;
     constexpr uint32 NORTHEAST_CHANNELER = 90981;
 
+    Unit* FindMagtheridon(PlayerbotAI* botAI, Player* bot);
+    bool IsMagtheridonAutoPullReady(PlayerbotAI* botAI, Player* bot);
+    bool IsMagtheridonEncounterPullAllowed(PlayerbotAI* botAI, Player* bot);
+    bool IsMagtheridonChannelerPhaseActive(PlayerbotAI* botAI, Player* bot);
+    bool HasRemainingMagtheridonTrash(PlayerbotAI* botAI, Player* bot);
+    Unit* SelectMagtheridonTrashPullTarget(PlayerbotAI* botAI, Player* bot);
     Creature* GetChanneler(Player* bot, uint32 dbGuid);
     bool IsSafeFromMagtheridonHazards(PlayerbotAI* botAI, Player* bot, float x, float y, float z);
-
     extern const Position WAITING_FOR_MAGTHERIDON_POSITION;
     extern const Position MAGTHERIDON_TANK_POSITION;
     extern const Position NW_CHANNELER_TANK_POSITION;
