@@ -57,8 +57,10 @@ bool MagtheridonPullingWestAndEastChannelersTrigger::IsActive()
 bool MagtheridonDeterminingKillOrderTrigger::IsActive()
 {
     Unit* magtheridon = FindMagtheridon(botAI, bot);
-    Unit* channeler = AI_VALUE2(Unit*, "find target", "hellfire channeler");
 
+    Creature* channelerSquare   = GetChanneler(bot, SOUTH_CHANNELER);
+    Creature* channelerStar     = GetChanneler(bot, WEST_CHANNELER);
+    Creature* channelerCircle   = GetChanneler(bot, EAST_CHANNELER);
     Creature* channelerDiamond  = GetChanneler(bot, NORTHWEST_CHANNELER);
     Creature* channelerTriangle = GetChanneler(bot, NORTHEAST_CHANNELER);
 
@@ -69,7 +71,9 @@ bool MagtheridonDeterminingKillOrderTrigger::IsActive()
         (botAI->IsAssistTankOfIndex(bot, 1) && channelerTriangle))
         return false;
 
-    return channeler || (magtheridon && !magtheridon->HasAura(SPELL_SHADOW_CAGE));
+    return channelerSquare || channelerStar || channelerCircle ||
+           channelerDiamond || channelerTriangle ||
+           (magtheridon && !magtheridon->HasAura(SPELL_SHADOW_CAGE));
 }
 
 bool MagtheridonBurningAbyssalSpawnedTrigger::IsActive()

@@ -8,6 +8,25 @@
 
 using namespace MagtheridonHelpers;
 
+namespace
+{
+    bool HasLivingHunterBotSupport(Group* group)
+    {
+        if (!group)
+            return false;
+
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (member && member->IsAlive() && member->getClass() == CLASS_HUNTER &&
+                GET_PLAYERBOT_AI(member))
+                return true;
+        }
+
+        return false;
+    }
+}
+
 bool MagtheridonAutoPullTrashAction::Execute(Event event)
 {
     if (!IsMagtheridonAutoPullReady(botAI, bot))
@@ -115,6 +134,23 @@ bool MagtheridonMainTankAttackFirstThreeChannelersAction::Execute(Event /*event*
 
     SetRtiTarget(botAI, rtiName, currentTarget);
 
+    Group* group = bot->GetGroup();
+    bool hasHunterSupport = HasLivingHunterBotSupport(group);
+    if (currentTarget && !hasHunterSupport &&
+        (currentTarget == channelerStar || currentTarget == channelerCircle))
+    {
+        float const directPickupRange = 9.0f;
+        if (bot->GetDistance(currentTarget) > directPickupRange)
+        {
+            return MoveTo(MAGTHERIDON_MAP_ID,
+                          currentTarget->GetPositionX(),
+                          currentTarget->GetPositionY(),
+                          currentTarget->GetPositionZ(),
+                          false, false, false, false,
+                          MovementPriority::MOVEMENT_COMBAT, true, false);
+        }
+    }
+
     if (currentTarget && bot->GetVictim() != currentTarget)
         return Attack(currentTarget);
 
@@ -133,26 +169,24 @@ bool MagtheridonFirstAssistTankAttackNWChannelerAction::Execute(Event /*event*/)
     MarkTargetWithDiamond(bot, channelerDiamond);
     SetRtiTarget(botAI, "diamond", channelerDiamond);
 
+    const Position& position = NW_CHANNELER_TANK_POSITION;
+    const float maxDistance = 3.0f;
+    float distanceToPosition =
+        bot->GetExactDist2d(position.GetPositionX(), position.GetPositionY());
+
+    if (distanceToPosition > maxDistance)
+    {
+        float dX = position.GetPositionX() - bot->GetPositionX();
+        float dY = position.GetPositionY() - bot->GetPositionY();
+        float moveX = bot->GetPositionX() + (dX / distanceToPosition) * maxDistance;
+        float moveY = bot->GetPositionY() + (dY / distanceToPosition) * maxDistance;
+
+        return MoveTo(MAGTHERIDON_MAP_ID, moveX, moveY, position.GetPositionZ(), false, false, false, false,
+                      MovementPriority::MOVEMENT_COMBAT, true, false);
+    }
+
     if (bot->GetVictim() != channelerDiamond)
         return Attack(channelerDiamond);
-
-    if (channelerDiamond->GetVictim() == bot)
-    {
-        const Position& position = NW_CHANNELER_TANK_POSITION;
-        const float maxDistance = 3.0f;
-        float distanceToPosition = bot->GetExactDist2d(position.GetPositionX(), position.GetPositionY());
-
-        if (distanceToPosition > maxDistance)
-        {
-            float dX = position.GetPositionX() - bot->GetPositionX();
-            float dY = position.GetPositionY() - bot->GetPositionY();
-            float moveX = bot->GetPositionX() + (dX / distanceToPosition) * maxDistance;
-            float moveY = bot->GetPositionY() + (dY / distanceToPosition) * maxDistance;
-
-            return MoveTo(MAGTHERIDON_MAP_ID, moveX, moveY, position.GetPositionZ(), false, false, false, false,
-                          MovementPriority::MOVEMENT_COMBAT, true, false);
-        }
-    }
 
     return false;
 }
@@ -169,26 +203,24 @@ bool MagtheridonSecondAssistTankAttackNEChannelerAction::Execute(Event /*event*/
     MarkTargetWithTriangle(bot, channelerTriangle);
     SetRtiTarget(botAI, "triangle", channelerTriangle);
 
+    const Position& position = NE_CHANNELER_TANK_POSITION;
+    const float maxDistance = 3.0f;
+    float distanceToPosition =
+        bot->GetExactDist2d(position.GetPositionX(), position.GetPositionY());
+
+    if (distanceToPosition > maxDistance)
+    {
+        float dX = position.GetPositionX() - bot->GetPositionX();
+        float dY = position.GetPositionY() - bot->GetPositionY();
+        float moveX = bot->GetPositionX() + (dX / distanceToPosition) * maxDistance;
+        float moveY = bot->GetPositionY() + (dY / distanceToPosition) * maxDistance;
+
+        return MoveTo(MAGTHERIDON_MAP_ID, moveX, moveY, position.GetPositionZ(), false, false, false, false,
+                      MovementPriority::MOVEMENT_COMBAT, true, false);
+    }
+
     if (bot->GetVictim() != channelerTriangle)
         return Attack(channelerTriangle);
-
-    if (channelerTriangle->GetVictim() == bot)
-    {
-        const Position& position = NE_CHANNELER_TANK_POSITION;
-        const float maxDistance = 3.0f;
-        float distanceToPosition = bot->GetExactDist2d(position.GetPositionX(), position.GetPositionY());
-
-        if (distanceToPosition > maxDistance)
-        {
-            float dX = position.GetPositionX() - bot->GetPositionX();
-            float dY = position.GetPositionY() - bot->GetPositionY();
-            float moveX = bot->GetPositionX() + (dX / distanceToPosition) * maxDistance;
-            float moveY = bot->GetPositionY() + (dY / distanceToPosition) * maxDistance;
-
-            return MoveTo(MAGTHERIDON_MAP_ID, moveX, moveY, position.GetPositionZ(), false, false, false, false,
-                          MovementPriority::MOVEMENT_COMBAT, true, false);
-        }
-    }
 
     return false;
 }
@@ -279,6 +311,9 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
     if (!IsMagtheridonChannelerPhaseActive(botAI, bot))
         return false;
 
+    Group* group = bot->GetGroup();
+    bool hasHunterSupport = HasLivingHunterBotSupport(group);
+
     // Listed in order of priority
     Creature* channelerSquare   = GetChanneler(bot, SOUTH_CHANNELER);
     if (channelerSquare)
@@ -294,6 +329,9 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
     Creature* channelerStar = GetChanneler(bot, WEST_CHANNELER);
     if (channelerStar)
     {
+        if (!hasHunterSupport && !channelerStar->IsInCombat())
+            return false;
+
         SetRtiTarget(botAI, "star", channelerStar);
 
         if (bot->GetTarget() != channelerStar->GetGUID())
@@ -305,6 +343,9 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
     Creature* channelerCircle = GetChanneler(bot, EAST_CHANNELER);
     if (channelerCircle)
     {
+        if (!hasHunterSupport && !channelerCircle->IsInCombat())
+            return false;
+
         SetRtiTarget(botAI, "circle", channelerCircle);
 
         if (bot->GetTarget() != channelerCircle->GetGUID())
@@ -492,6 +533,26 @@ bool MagtheridonSpreadRangedAction::Execute(Event /*event*/)
     float centerZ = center.GetPositionZ();
     const float radiusBuffer = 3.0f;
 
+    if (isHealer)
+    {
+        auto urgentHealingNeeded = [&]() -> bool
+        {
+            for (Player* member : members)
+            {
+                if (!member || !member->IsAlive())
+                    continue;
+
+                if (member->GetHealthPct() < 85.0f)
+                    return true;
+            }
+
+            return false;
+        };
+
+        if (urgentHealingNeeded())
+            return false;
+    }
+
     if (!initialPositions.count(bot->GetGUID()))
     {
         auto it = std::find(members.begin(), members.end(), bot);
@@ -520,8 +581,11 @@ bool MagtheridonSpreadRangedAction::Execute(Event /*event*/)
                 bot->GetPositionY(), bot->GetPositionZ(), destX, destY, destZ))
                 return false;
 
-            bot->AttackStop();
-            bot->InterruptNonMeleeSpells(false);
+            if (!isHealer)
+            {
+                bot->AttackStop();
+                bot->InterruptNonMeleeSpells(false);
+            }
             return MoveTo(MAGTHERIDON_MAP_ID, destX, destY, destZ, false, false, false, false,
                           MovementPriority::MOVEMENT_COMBAT, true, false);
         }
@@ -540,8 +604,11 @@ bool MagtheridonSpreadRangedAction::Execute(Event /*event*/)
         if (bot->GetMap()->CheckCollisionAndGetValidCoords(bot, bot->GetPositionX(), bot->GetPositionY(),
             bot->GetPositionZ(), targetX, targetY, centerZ))
         {
-            bot->AttackStop();
-            bot->InterruptNonMeleeSpells(false);
+            if (!isHealer)
+            {
+                bot->AttackStop();
+                bot->InterruptNonMeleeSpells(false);
+            }
             return MoveTo(MAGTHERIDON_MAP_ID, targetX, targetY, centerZ, false, false, false, false,
                           MovementPriority::MOVEMENT_COMBAT, true, false);
         }
