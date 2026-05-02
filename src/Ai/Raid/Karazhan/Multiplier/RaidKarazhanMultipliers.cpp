@@ -187,6 +187,38 @@ float ShadeOfAranFlameWreathDisableMovementMultiplier::GetValue(Action* action)
     return 1.0f;
 }
 
+float KarazhanChessDisableCombatActionsMultiplier::GetValue(Action* action)
+{
+    if (!IsChessEventActive(botAI, bot))
+        return 1.0f;
+
+    Creature* charm = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    bool activeController = (charm && IsChessPieceEntry(charm->GetEntry())) || GetAssignedChessPiece(bot) != nullptr;
+    if (!activeController)
+        return 1.0f;
+
+    if (dynamic_cast<KarazhanChessPassiveHelperAction*>(action) ||
+        dynamic_cast<KarazhanChessClaimPieceAction*>(action) ||
+        dynamic_cast<KarazhanChessMovePieceAction*>(action) ||
+        dynamic_cast<KarazhanChessMoveOutOfFireAction*>(action) ||
+        dynamic_cast<KarazhanChessUseAbilityAction*>(action) ||
+        dynamic_cast<KarazhanChessHealFriendlyAction*>(action) ||
+        dynamic_cast<KarazhanChessAttackEnemyKingAction*>(action) ||
+        dynamic_cast<KarazhanChessBlockEnemyPathAction*>(action) ||
+        dynamic_cast<KarazhanChessReleaseOrReassignAction*>(action))
+        return 1.0f;
+
+    if (dynamic_cast<AttackAction*>(action) ||
+        (dynamic_cast<CastSpellAction*>(action) && !dynamic_cast<CastHealingSpellAction*>(action)) ||
+        dynamic_cast<ReachTargetAction*>(action) ||
+        dynamic_cast<TankAssistAction*>(action) ||
+        dynamic_cast<CombatFormationMoveAction*>(action) ||
+        dynamic_cast<FollowAction*>(action))
+        return 0.0f;
+
+    return 1.0f;
+}
+
 // Try to rid of the jittering when blocking beams
 float NetherspiteKeepBlockingBeamMultiplier::GetValue(Action* action)
 {
@@ -303,6 +335,9 @@ float PrinceMalchezaarDelayBloodlustAndHeroismMultiplier::GetValue(Action* actio
 // Hunter and Warlock pets are addressed in ControlPetAggressionAction
 float NightbaneDisablePetsMultiplier::GetValue(Action* action)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return 1.0f;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return 1.0f;
@@ -327,6 +362,9 @@ float NightbaneDisablePetsMultiplier::GetValue(Action* action)
 // Give the main tank 8 seconds to get aggro during phase transitions
 float NightbaneWaitForDpsMultiplier::GetValue(Action* action)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return 1.0f;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
         return 1.0f;
@@ -354,6 +392,9 @@ float NightbaneWaitForDpsMultiplier::GetValue(Action* action)
 // It is also disabled for all bots during the flight phase
 float NightbaneDisableAvoidAoeMultiplier::GetValue(Action* action)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return 1.0f;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return 1.0f;
@@ -370,6 +411,9 @@ float NightbaneDisableAvoidAoeMultiplier::GetValue(Action* action)
 // Disable some movement actions that conflict with the strategies
 float NightbaneDisableMovementMultiplier::GetValue(Action* action)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return 1.0f;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return 1.0f;

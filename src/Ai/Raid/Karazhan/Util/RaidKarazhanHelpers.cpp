@@ -1,8 +1,29 @@
 #include "RaidKarazhanHelpers.h"
 #include "Playerbots.h"
+#include "Config.h"
+#include "InstanceScript.h"
+#include "Log.h"
 
 namespace KarazhanHelpers
 {
+    namespace
+    {
+        bool HasChessSessionAura(Group* group)
+        {
+            if (!group)
+                return false;
+
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (member && member->IsAlive() && member->HasAura(SPELL_GAME_IN_SESSION))
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
     // Attumen the Huntsman
     std::unordered_map<uint32, time_t> attumenDpsWaitTimer;
     // Big Bad Wolf
@@ -17,6 +38,9 @@ namespace KarazhanHelpers
     std::unordered_map<ObjectGuid, uint8> nightbaneRangedStep;
     std::unordered_map<uint32, time_t> nightbaneFlightPhaseStartTimer;
     std::unordered_map<ObjectGuid, bool> nightbaneRainOfBonesHit;
+    std::unordered_map<ObjectGuid, ObjectGuid> chessAssignedPieceByBot;
+    std::unordered_map<ObjectGuid, ObjectGuid> chessAssignedBotByPiece;
+    std::unordered_map<ObjectGuid, time_t> chessAssignmentLockUntil;
 
     const Position MAIDEN_OF_VIRTUE_BOSS_POSITION = { -10945.881f, -2103.782f, 92.712f };
     const Position MAIDEN_OF_VIRTUE_RANGED_POSITION[8] =
@@ -296,6 +320,264 @@ namespace KarazhanHelpers
         }
 
         return infernals;
+    }
+
+    bool IsKarazhanChessEnabled()
+    {
+        return sConfigMgr->GetOption<bool>("PlayerbotAI.Karazhan.Chess.Enable", true);
+    }
+
+    bool IsKarazhanChessDebugEnabled()
+    {
+        return sConfigMgr->GetOption<bool>("PlayerbotAI.Karazhan.Chess.Debug", false);
+    }
+
+    bool IsKarazhanNightbaneEnabled()
+    {
+        return sConfigMgr->GetOption<bool>("PlayerbotAI.Karazhan.Nightbane.Enable", true);
+    }
+
+    bool IsKarazhanNightbaneDebugEnabled()
+    {
+        return sConfigMgr->GetOption<bool>("PlayerbotAI.Karazhan.Nightbane.Debug", false);
+    }
+
+    bool IsChessPieceEntry(uint32 entry)
+    {
+        switch (entry)
+        {
+            case NPC_PAWN_H:
+            case NPC_PAWN_A:
+            case NPC_KNIGHT_H:
+            case NPC_KNIGHT_A:
+            case NPC_QUEEN_H:
+            case NPC_QUEEN_A:
+            case NPC_BISHOP_H:
+            case NPC_BISHOP_A:
+            case NPC_ROOK_H:
+            case NPC_ROOK_A:
+            case NPC_KING_H:
+            case NPC_KING_A:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    bool IsHealerChessPieceEntry(uint32 entry)
+    {
+        return entry == NPC_BISHOP_A || entry == NPC_BISHOP_H;
+    }
+
+    bool IsKingChessPieceEntry(uint32 entry)
+    {
+        return entry == NPC_KING_A || entry == NPC_KING_H;
+    }
+
+    bool IsDamageChessPieceEntry(uint32 entry)
+    {
+        return entry == NPC_QUEEN_A || entry == NPC_QUEEN_H || entry == NPC_ROOK_A || entry == NPC_ROOK_H;
+    }
+
+    bool IsChessPhaseInProgress(Player* bot)
+    {
+        if (!bot)
+            return false;
+
+        InstanceMap* map = bot->GetMap() ? bot->GetMap()->ToInstanceMap() : nullptr;
+        InstanceScript* instance = map ? map->GetInstanceScript() : nullptr;
+        if (!instance)
+            return false;
+
+        uint32 phase = instance->GetData(DATA_CHESS_GAME_PHASE);
+        return phase == CHESS_PHASE_INPROGRESS_PVE || phase == CHESS_PHASE_INPROGRESS_PVP;
+    }
+
+    bool IsChessEventActive(PlayerbotAI* botAI, Player* bot)
+    {
+        if (!botAI || !bot || bot->GetMapId() != KARAZHAN_MAP_ID || !IsKarazhanChessEnabled())
+            return false;
+
+        bool hasChessUnitNearby = false;
+        bool hasCombatPieceNearby = false;
+        bool hasMedivhHazardNearby = false;
+
+        GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+        for (ObjectGuid const& npcGuid : npcs)
+        {
+            Unit* unit = botAI->GetUnit(npcGuid);
+            if (!unit)
+                continue;
+
+            if (unit->GetExactDist2d(bot) > 100.0f)
+                continue;
+
+            if (unit->GetEntry() == NPC_CHESS_EVENT_MEDIVH_CHEAT_FIRES)
+                hasMedivhHazardNearby = true;
+
+            if (!IsChessPieceEntry(unit->GetEntry()))
+                continue;
+
+            hasChessUnitNearby = true;
+            if (unit->IsInCombat() || unit->GetVictim())
+                hasCombatPieceNearby = true;
+        }
+
+        if (hasMedivhHazardNearby)
+            return true;
+
+        if (HasChessSessionAura(bot->GetGroup()))
+            return true;
+
+        return IsChessPhaseInProgress(bot) || (hasChessUnitNearby && hasCombatPieceNearby);
+    }
+
+    Creature* GetAssignedChessPiece(Player* bot)
+    {
+        if (!bot)
+            return nullptr;
+
+        auto it = chessAssignedPieceByBot.find(bot->GetGUID());
+        if (it == chessAssignedPieceByBot.end())
+            return nullptr;
+
+        Unit* unit = ObjectAccessor::GetUnit(*bot, it->second);
+        Creature* piece = unit ? unit->ToCreature() : nullptr;
+        if (!piece || !piece->IsAlive() || !IsChessPieceEntry(piece->GetEntry()))
+            return nullptr;
+
+        return piece;
+    }
+
+    bool SetAssignedChessPiece(Player* bot, Creature* piece, time_t lockSeconds)
+    {
+        if (!bot || !piece)
+            return false;
+
+        if (IsPieceAssignedToOtherBot(bot, piece))
+            return false;
+
+        ClearAssignedChessPiece(bot);
+        chessAssignedPieceByBot[bot->GetGUID()] = piece->GetGUID();
+        chessAssignedBotByPiece[piece->GetGUID()] = bot->GetGUID();
+        chessAssignmentLockUntil[bot->GetGUID()] = std::time(nullptr) + lockSeconds;
+        return true;
+    }
+
+    void ClearAssignedChessPiece(Player* bot)
+    {
+        if (!bot)
+            return;
+
+        auto it = chessAssignedPieceByBot.find(bot->GetGUID());
+        if (it != chessAssignedPieceByBot.end())
+        {
+            chessAssignedBotByPiece.erase(it->second);
+            chessAssignedPieceByBot.erase(it);
+        }
+        chessAssignmentLockUntil.erase(bot->GetGUID());
+    }
+
+    bool IsPieceAssignedToOtherBot(Player* bot, Creature* piece)
+    {
+        if (!bot || !piece)
+            return false;
+
+        auto it = chessAssignedBotByPiece.find(piece->GetGUID());
+        return it != chessAssignedBotByPiece.end() && it->second != bot->GetGUID();
+    }
+
+    std::vector<Creature*> GetNearbyChessPieces(PlayerbotAI* botAI, Player* bot, bool friendlyOnly)
+    {
+        std::vector<Creature*> pieces;
+        if (!botAI || !bot)
+            return pieces;
+
+        GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+        for (ObjectGuid const& npcGuid : npcs)
+        {
+            Creature* creature = botAI->GetCreature(npcGuid);
+            if (!creature || !creature->IsAlive() || !IsChessPieceEntry(creature->GetEntry()))
+                continue;
+
+            if (creature->GetExactDist2d(bot) > 120.0f)
+                continue;
+
+            if (friendlyOnly && !bot->IsFriendlyTo(creature))
+                continue;
+
+            pieces.push_back(creature);
+        }
+
+        return pieces;
+    }
+
+    Creature* GetFriendlyChessKing(PlayerbotAI* botAI, Player* bot)
+    {
+        for (Creature* piece : GetNearbyChessPieces(botAI, bot, true))
+        {
+            if (IsKingChessPieceEntry(piece->GetEntry()))
+                return piece;
+        }
+        return nullptr;
+    }
+
+    Creature* GetEnemyChessKing(PlayerbotAI* botAI, Player* bot)
+    {
+        if (!botAI || !bot)
+            return nullptr;
+
+        GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+        for (ObjectGuid const& npcGuid : npcs)
+        {
+            Creature* creature = botAI->GetCreature(npcGuid);
+            if (!creature || !creature->IsAlive() || !IsKingChessPieceEntry(creature->GetEntry()))
+                continue;
+
+            if (bot->IsFriendlyTo(creature))
+                continue;
+
+            if (creature->GetExactDist2d(bot) <= 120.0f)
+                return creature;
+        }
+
+        return nullptr;
+    }
+
+    std::vector<Creature*> GetNearbyChessMoveTriggers(PlayerbotAI* botAI, Player* bot)
+    {
+        std::vector<Creature*> triggers;
+        if (!botAI || !bot)
+            return triggers;
+
+        GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+        for (ObjectGuid const& npcGuid : npcs)
+        {
+            Creature* creature = botAI->GetCreature(npcGuid);
+            if (!creature || creature->GetEntry() != 22519)
+                continue;
+
+            if (creature->GetExactDist2d(bot) <= 140.0f)
+                triggers.push_back(creature);
+        }
+
+        return triggers;
+    }
+
+    void LogKarazhanChessDebug(Player* bot, std::string const& reason)
+    {
+        if (!bot || !IsKarazhanChessDebugEnabled())
+            return;
+
+        LOG_INFO("playerbots", "KZ-CHESS bot={} reason={}", bot->GetName(), reason);
+    }
+
+    void LogKarazhanNightbaneDebug(Player* bot, std::string const& reason)
+    {
+        if (!bot || !IsKarazhanNightbaneDebugEnabled())
+            return;
+
+        LOG_INFO("playerbots", "KZ-NIGHTBANE bot={} reason={}", bot->GetName(), reason);
     }
 
     bool IsStraightPathSafe(const Position& start, const Position& target, const std::vector<Unit*>& hazards,

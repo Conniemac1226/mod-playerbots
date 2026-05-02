@@ -89,6 +89,30 @@ void RaidKarazhanStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         { NextAction("shade of aran ranged maintain distance", ACTION_RAID + 2) }
     ));
 
+    // Chess Event
+    triggers.push_back(new TriggerNode("karazhan chess event active",
+        { NextAction("karazhan chess release or reassign", ACTION_EMERGENCY + 11),
+          NextAction("karazhan chess claim piece", ACTION_EMERGENCY + 10),
+          NextAction("karazhan chess passive helper", ACTION_EMERGENCY + 9) }
+    ));
+    triggers.push_back(new TriggerNode("karazhan chess piece needs controller",
+        { NextAction("karazhan chess claim piece", ACTION_EMERGENCY + 10) }
+    ));
+    triggers.push_back(new TriggerNode("karazhan controlled chess piece in fire",
+        { NextAction("karazhan chess move out of fire", ACTION_EMERGENCY + 11) }
+    ));
+    triggers.push_back(new TriggerNode("karazhan friendly king under threat",
+        { NextAction("karazhan chess heal friendly piece", ACTION_RAID + 6),
+          NextAction("karazhan chess block enemy path", ACTION_RAID + 5) }
+    ));
+    triggers.push_back(new TriggerNode("karazhan enemy king vulnerable",
+        { NextAction("karazhan chess attack enemy king", ACTION_RAID + 5),
+          NextAction("karazhan chess move piece", ACTION_RAID + 4) }
+    ));
+    triggers.push_back(new TriggerNode("karazhan controlled chess piece ability ready",
+        { NextAction("karazhan chess use ability", ACTION_RAID + 5) }
+    ));
+
     // Netherspite
     triggers.push_back(new TriggerNode("netherspite red beam is active",
         { NextAction("netherspite block red beam", ACTION_EMERGENCY + 8) }
@@ -152,6 +176,7 @@ void RaidKarazhanStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers
     multipliers.push_back(new TheCuratorDelayBloodlustAndHeroismMultiplier(botAI));
     multipliers.push_back(new ShadeOfAranArcaneExplosionDisableChargeMultiplier(botAI));
     multipliers.push_back(new ShadeOfAranFlameWreathDisableMovementMultiplier(botAI));
+    multipliers.push_back(new KarazhanChessDisableCombatActionsMultiplier(botAI));
     multipliers.push_back(new NetherspiteKeepBlockingBeamMultiplier(botAI));
     multipliers.push_back(new NetherspiteWaitForDpsMultiplier(botAI));
     multipliers.push_back(new PrinceMalchezaarDisableAvoidAoeMultiplier(botAI));

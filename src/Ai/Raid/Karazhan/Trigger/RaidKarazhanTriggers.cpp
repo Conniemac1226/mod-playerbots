@@ -312,6 +312,9 @@ bool PrinceMalchezaarBossEngagedByMainTankTrigger::IsActive()
 
 bool NightbaneBossEngagedByMainTankTrigger::IsActive()
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     if (!botAI->IsMainTank(bot))
         return false;
 
@@ -321,6 +324,9 @@ bool NightbaneBossEngagedByMainTankTrigger::IsActive()
 
 bool NightbaneRangedBotsAreInCharredEarthTrigger::IsActive()
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     if (!botAI->IsRanged(bot))
         return false;
 
@@ -330,6 +336,9 @@ bool NightbaneRangedBotsAreInCharredEarthTrigger::IsActive()
 
 bool NightbaneMainTankIsSusceptibleToFearTrigger::IsActive()
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     if (bot->getClass() != CLASS_PRIEST)
         return false;
 
@@ -357,6 +366,9 @@ bool NightbaneMainTankIsSusceptibleToFearTrigger::IsActive()
 
 bool NightbanePetsIgnoreCollisionToChaseFlyingBossTrigger::IsActive()
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return false;
@@ -367,6 +379,9 @@ bool NightbanePetsIgnoreCollisionToChaseFlyingBossTrigger::IsActive()
 
 bool NightbaneBossIsFlyingTrigger::IsActive()
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane || nightbane->GetPositionZ() <= NIGHTBANE_FLIGHT_Z)
         return false;
@@ -381,6 +396,97 @@ bool NightbaneBossIsFlyingTrigger::IsActive()
 
 bool NightbaneNeedToManageTimersAndTrackersTrigger::IsActive()
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     return nightbane != nullptr;
+}
+
+bool KarazhanChessEventActiveTrigger::IsActive()
+{
+    return IsChessEventActive(botAI, bot);
+}
+
+bool KarazhanChessPieceNeedsControllerTrigger::IsActive()
+{
+    if (!IsChessEventActive(botAI, bot))
+        return false;
+
+    Creature* charm = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (charm && IsChessPieceEntry(charm->GetEntry()))
+        return false;
+
+    Creature* assigned = GetAssignedChessPiece(bot);
+    if (!assigned || assigned->IsCharmed())
+        return true;
+
+    return false;
+}
+
+bool KarazhanControlledChessPieceInFireTrigger::IsActive()
+{
+    if (!IsChessEventActive(botAI, bot))
+        return false;
+
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece || !IsChessPieceEntry(piece->GetEntry()))
+        return false;
+
+    GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+    for (ObjectGuid const& npcGuid : npcs)
+    {
+        Creature* unit = botAI->GetCreature(npcGuid);
+        if (unit && unit->GetEntry() == NPC_CHESS_EVENT_MEDIVH_CHEAT_FIRES && unit->GetExactDist2d(piece) < 4.0f)
+            return true;
+    }
+
+    return false;
+}
+
+bool KarazhanFriendlyKingUnderThreatTrigger::IsActive()
+{
+    if (!IsChessEventActive(botAI, bot))
+        return false;
+
+    Creature* king = GetFriendlyChessKing(botAI, bot);
+    if (!king)
+        return false;
+
+    return king->GetHealthPct() < 75.0f || king->IsInCombat();
+}
+
+bool KarazhanEnemyKingVulnerableTrigger::IsActive()
+{
+    if (!IsChessEventActive(botAI, bot))
+        return false;
+
+    Creature* enemyKing = GetEnemyChessKing(botAI, bot);
+    if (!enemyKing)
+        return false;
+
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece)
+        return false;
+
+    return piece->GetDistance(enemyKing) < 30.0f || enemyKing->GetHealthPct() < 60.0f;
+}
+
+bool KarazhanControlledChessPieceAbilityReadyTrigger::IsActive()
+{
+    if (!IsChessEventActive(botAI, bot))
+        return false;
+
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece || !IsChessPieceEntry(piece->GetEntry()))
+        return false;
+
+    for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+    {
+        uint32 spellId = piece->m_spells[i];
+        if (spellId && !piece->HasSpellCooldown(spellId))
+            return true;
+    }
+
+    return !piece->HasAura(SPELL_MOVE_COOLDOWN);
 }

@@ -85,6 +85,26 @@ public:
         creators["shade of aran ranged maintain distance"] =
             &RaidKarazhanActionContext::shade_of_aran_ranged_maintain_distance;
 
+        // Chess Event
+        creators["karazhan chess passive helper"] =
+            &RaidKarazhanActionContext::karazhan_chess_passive_helper;
+        creators["karazhan chess claim piece"] =
+            &RaidKarazhanActionContext::karazhan_chess_claim_piece;
+        creators["karazhan chess move piece"] =
+            &RaidKarazhanActionContext::karazhan_chess_move_piece;
+        creators["karazhan chess move out of fire"] =
+            &RaidKarazhanActionContext::karazhan_chess_move_out_of_fire;
+        creators["karazhan chess use ability"] =
+            &RaidKarazhanActionContext::karazhan_chess_use_ability;
+        creators["karazhan chess heal friendly piece"] =
+            &RaidKarazhanActionContext::karazhan_chess_heal_friendly_piece;
+        creators["karazhan chess attack enemy king"] =
+            &RaidKarazhanActionContext::karazhan_chess_attack_enemy_king;
+        creators["karazhan chess block enemy path"] =
+            &RaidKarazhanActionContext::karazhan_chess_block_enemy_path;
+        creators["karazhan chess release or reassign"] =
+            &RaidKarazhanActionContext::karazhan_chess_release_or_reassign;
+
         // Netherspite
         creators["netherspite block red beam"] =
             &RaidKarazhanActionContext::netherspite_block_red_beam;
@@ -210,6 +230,26 @@ private:
 
     static Action* shade_of_aran_ranged_maintain_distance(
         PlayerbotAI* botAI) { return new ShadeOfAranRangedMaintainDistanceAction(botAI); }
+
+    // Chess Event
+    static Action* karazhan_chess_passive_helper(
+        PlayerbotAI* botAI) { return new KarazhanChessPassiveHelperAction(botAI); }
+    static Action* karazhan_chess_claim_piece(
+        PlayerbotAI* botAI) { return new KarazhanChessClaimPieceAction(botAI); }
+    static Action* karazhan_chess_move_piece(
+        PlayerbotAI* botAI) { return new KarazhanChessMovePieceAction(botAI); }
+    static Action* karazhan_chess_move_out_of_fire(
+        PlayerbotAI* botAI) { return new KarazhanChessMoveOutOfFireAction(botAI); }
+    static Action* karazhan_chess_use_ability(
+        PlayerbotAI* botAI) { return new KarazhanChessUseAbilityAction(botAI); }
+    static Action* karazhan_chess_heal_friendly_piece(
+        PlayerbotAI* botAI) { return new KarazhanChessHealFriendlyAction(botAI); }
+    static Action* karazhan_chess_attack_enemy_king(
+        PlayerbotAI* botAI) { return new KarazhanChessAttackEnemyKingAction(botAI); }
+    static Action* karazhan_chess_block_enemy_path(
+        PlayerbotAI* botAI) { return new KarazhanChessBlockEnemyPathAction(botAI); }
+    static Action* karazhan_chess_release_or_reassign(
+        PlayerbotAI* botAI) { return new KarazhanChessReleaseOrReassignAction(botAI); }
 
     // Netherspite
     static Action* netherspite_block_red_beam(

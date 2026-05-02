@@ -178,6 +178,49 @@ public:
     bool IsActive() override;
 };
 
+class KarazhanChessEventActiveTrigger : public Trigger
+{
+public:
+    KarazhanChessEventActiveTrigger(
+        PlayerbotAI* botAI) : Trigger(botAI, "karazhan chess event active") {}
+    bool IsActive() override;
+};
+
+class KarazhanChessPieceNeedsControllerTrigger : public Trigger
+{
+public:
+    KarazhanChessPieceNeedsControllerTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karazhan chess piece needs controller") {}
+    bool IsActive() override;
+};
+
+class KarazhanControlledChessPieceInFireTrigger : public Trigger
+{
+public:
+    KarazhanControlledChessPieceInFireTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karazhan controlled chess piece in fire") {}
+    bool IsActive() override;
+};
+
+class KarazhanFriendlyKingUnderThreatTrigger : public Trigger
+{
+public:
+    KarazhanFriendlyKingUnderThreatTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karazhan friendly king under threat") {}
+    bool IsActive() override;
+};
+
+class KarazhanEnemyKingVulnerableTrigger : public Trigger
+{
+public:
+    KarazhanEnemyKingVulnerableTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karazhan enemy king vulnerable") {}
+    bool IsActive() override;
+};
+
+class KarazhanControlledChessPieceAbilityReadyTrigger : public Trigger
+{
+public:
+    KarazhanControlledChessPieceAbilityReadyTrigger(PlayerbotAI* botAI) : Trigger(botAI, "karazhan controlled chess piece ability ready") {}
+    bool IsActive() override;
+};
+
 class NetherspiteRedBeamIsActiveTrigger : public Trigger
 {
 public:

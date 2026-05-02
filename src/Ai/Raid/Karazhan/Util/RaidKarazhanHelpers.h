@@ -3,6 +3,7 @@
 
 #include <ctime>
 #include <unordered_map>
+#include <set>
 
 #include "AiObject.h"
 #include "Position.h"
@@ -35,6 +36,10 @@ namespace KarazhanHelpers
         SPELL_NETHER_EXHAUSTION_GREEN    = 38638,
         SPELL_NETHER_EXHAUSTION_BLUE     = 38639,
         SPELL_NETHERSPITE_BANISHED       = 39833, // "Vortex Shade Black"
+        SPELL_GAME_IN_SESSION            = 39331,
+        SPELL_CONTROL_PIECE              = 30019,
+        SPELL_MOVE_GENERIC               = 30012,
+        SPELL_MOVE_COOLDOWN              = 30543,
 
         // Prince Malchezaar
         SPELL_ENFEEBLE                   = 30843,
@@ -73,6 +78,20 @@ namespace KarazhanHelpers
         NPC_GREEN_PORTAL                 = 17367, // "Nether Portal - Serenity <Healing Portal>"
         NPC_BLUE_PORTAL                  = 17368, // "Nether Portal - Dominance <Damage Portal>"
         NPC_RED_PORTAL                   = 17369, // "Nether Portal - Perseverance <Tanking Portal>"
+        NPC_ECHO_OF_MEDIVH               = 16816,
+        NPC_CHESS_EVENT_MEDIVH_CHEAT_FIRES = 22521,
+        NPC_PAWN_H                       = 17469,
+        NPC_PAWN_A                       = 17211,
+        NPC_KNIGHT_H                     = 21748,
+        NPC_KNIGHT_A                     = 21664,
+        NPC_QUEEN_H                      = 21750,
+        NPC_QUEEN_A                      = 21683,
+        NPC_BISHOP_H                     = 21747,
+        NPC_BISHOP_A                     = 21682,
+        NPC_ROOK_H                       = 21726,
+        NPC_ROOK_A                       = 21160,
+        NPC_KING_H                       = 21752,
+        NPC_KING_A                       = 21684,
 
         // Prince Malchezaar
         NPC_NETHERSPITE_INFERNAL         = 17646,
@@ -80,6 +99,9 @@ namespace KarazhanHelpers
 
     constexpr uint32 KARAZHAN_MAP_ID = 532;
     constexpr float NIGHTBANE_FLIGHT_Z = 95.0f;
+    constexpr uint32 DATA_CHESS_GAME_PHASE = 35;
+    constexpr uint32 CHESS_PHASE_INPROGRESS_PVE = 2;
+    constexpr uint32 CHESS_PHASE_INPROGRESS_PVP = 6;
 
     // Attumen the Huntsman
     extern std::unordered_map<uint32, time_t> attumenDpsWaitTimer;
@@ -95,6 +117,9 @@ namespace KarazhanHelpers
     extern std::unordered_map<ObjectGuid, uint8> nightbaneRangedStep;
     extern std::unordered_map<uint32, time_t> nightbaneFlightPhaseStartTimer;
     extern std::unordered_map<ObjectGuid, bool> nightbaneRainOfBonesHit;
+    extern std::unordered_map<ObjectGuid, ObjectGuid> chessAssignedPieceByBot;
+    extern std::unordered_map<ObjectGuid, ObjectGuid> chessAssignedBotByPiece;
+    extern std::unordered_map<ObjectGuid, time_t> chessAssignmentLockUntil;
 
     extern const Position MAIDEN_OF_VIRTUE_BOSS_POSITION;
     extern const Position MAIDEN_OF_VIRTUE_RANGED_POSITION[8];
@@ -118,6 +143,26 @@ namespace KarazhanHelpers
     std::vector<Unit*> GetAllVoidZones(PlayerbotAI *botAI, Player* bot);
     bool IsSafePosition (float x, float y, const std::vector<Unit*>& hazards, float hazardRadius);
     std::vector<Unit*> GetSpawnedInfernals(PlayerbotAI* botAI);
+    bool IsKarazhanChessEnabled();
+    bool IsKarazhanChessDebugEnabled();
+    bool IsKarazhanNightbaneEnabled();
+    bool IsKarazhanNightbaneDebugEnabled();
+    bool IsChessPieceEntry(uint32 entry);
+    bool IsHealerChessPieceEntry(uint32 entry);
+    bool IsKingChessPieceEntry(uint32 entry);
+    bool IsDamageChessPieceEntry(uint32 entry);
+    bool IsChessEventActive(PlayerbotAI* botAI, Player* bot);
+    bool IsChessPhaseInProgress(Player* bot);
+    Creature* GetAssignedChessPiece(Player* bot);
+    bool SetAssignedChessPiece(Player* bot, Creature* piece, time_t lockSeconds = 8);
+    void ClearAssignedChessPiece(Player* bot);
+    bool IsPieceAssignedToOtherBot(Player* bot, Creature* piece);
+    std::vector<Creature*> GetNearbyChessPieces(PlayerbotAI* botAI, Player* bot, bool friendlyOnly);
+    Creature* GetFriendlyChessKing(PlayerbotAI* botAI, Player* bot);
+    Creature* GetEnemyChessKing(PlayerbotAI* botAI, Player* bot);
+    std::vector<Creature*> GetNearbyChessMoveTriggers(PlayerbotAI* botAI, Player* bot);
+    void LogKarazhanChessDebug(Player* bot, std::string const& reason);
+    void LogKarazhanNightbaneDebug(Player* bot, std::string const& reason);
     bool IsStraightPathSafe(
         const Position& start, const Position& target,
         const std::vector<Unit*>& hazards, float hazardRadius, float stepSize);

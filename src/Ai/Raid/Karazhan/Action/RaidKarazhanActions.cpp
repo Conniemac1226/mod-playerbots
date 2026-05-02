@@ -590,6 +590,319 @@ bool ShadeOfAranRangedMaintainDistanceAction::Execute(Event /*event*/)
     return false;
 }
 
+// Chess Event
+// Conservative helper mode: keep bots passive so they do not grief piece control or aggro patterns.
+bool KarazhanChessPassiveHelperAction::Execute(Event /*event*/)
+{
+    if (!IsChessEventActive(botAI, bot))
+        return false;
+
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece)
+        piece = GetAssignedChessPiece(bot);
+
+    if (piece)
+    {
+        Unit* target = botAI->GetUnit(bot->GetTarget());
+        if (target && IsChessPieceEntry(target->GetEntry()))
+            bot->SetTarget(ObjectGuid::Empty);
+
+        if (bot->IsInCombat())
+        {
+            bot->AttackStop();
+            bot->InterruptNonMeleeSpells(true);
+        }
+    }
+
+    return false;
+}
+
+bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
+{
+    if (!IsChessEventActive(botAI, bot))
+        return false;
+
+    Creature* charm = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (charm && IsChessPieceEntry(charm->GetEntry()))
+        return false;
+
+    Creature* assigned = GetAssignedChessPiece(bot);
+    if (assigned && assigned->IsAlive() && !assigned->IsCharmed())
+    {
+        bot->CastSpell(assigned, SPELL_CONTROL_PIECE, true);
+        LogKarazhanChessDebug(bot, "claim assigned piece=" + assigned->GetName());
+        return true;
+    }
+
+    std::vector<Creature*> friendly = GetNearbyChessPieces(botAI, bot, true);
+    if (friendly.empty())
+    {
+        LogKarazhanChessDebug(bot, "claim skipped: no friendly pieces");
+        return false;
+    }
+
+    Creature* best = nullptr;
+    uint32 bestScore = 0;
+    for (Creature* piece : friendly)
+    {
+        if (!piece || piece->IsCharmed() || piece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE) ||
+            IsPieceAssignedToOtherBot(bot, piece))
+            continue;
+
+        uint32 score = 10;
+        if (IsKingChessPieceEntry(piece->GetEntry()))
+            score += botAI->IsTank(bot) ? 200 : 120;
+        else if (IsHealerChessPieceEntry(piece->GetEntry()))
+            score += botAI->IsHeal(bot) ? 180 : 80;
+        else if (IsDamageChessPieceEntry(piece->GetEntry()))
+            score += botAI->IsRanged(bot) ? 120 : 70;
+        else
+            score += 40;
+
+        if (piece->GetHealthPct() < 50.0f)
+            score -= 30;
+
+        if (!best || score > bestScore)
+        {
+            best = piece;
+            bestScore = score;
+        }
+    }
+
+    if (!best || !SetAssignedChessPiece(bot, best, 10))
+        return false;
+
+    bot->CastSpell(best, SPELL_CONTROL_PIECE, true);
+    LogKarazhanChessDebug(bot, "claim piece=" + best->GetName() + " guid=" + best->GetGUID().ToString());
+    return true;
+}
+
+bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
+{
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece || !IsChessPieceEntry(piece->GetEntry()) || piece->HasAura(SPELL_MOVE_COOLDOWN))
+        return false;
+
+    Creature* enemyKing = GetEnemyChessKing(botAI, bot);
+    if (!enemyKing)
+        return false;
+
+    std::vector<Creature*> triggers = GetNearbyChessMoveTriggers(botAI, bot);
+    Creature* bestTrigger = nullptr;
+    float bestDist = std::numeric_limits<float>::max();
+    for (Creature* trigger : triggers)
+    {
+        float distPiece = piece->GetExactDist2d(trigger);
+        float distKing = trigger->GetExactDist2d(enemyKing);
+        if (distPiece > 30.0f)
+            continue;
+
+        if (distKing < bestDist)
+        {
+            bestDist = distKing;
+            bestTrigger = trigger;
+        }
+    }
+
+    if (!bestTrigger)
+        return false;
+
+    piece->CastSpell(bestTrigger, SPELL_MOVE_GENERIC, true);
+    LogKarazhanChessDebug(bot, "move piece to trigger guid=" + bestTrigger->GetGUID().ToString());
+    return true;
+}
+
+bool KarazhanChessMoveOutOfFireAction::Execute(Event /*event*/)
+{
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece || !IsChessPieceEntry(piece->GetEntry()) || piece->HasAura(SPELL_MOVE_COOLDOWN))
+        return false;
+
+    std::vector<Creature*> hazards;
+    GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+    for (ObjectGuid const& npcGuid : npcs)
+    {
+        Creature* creature = botAI->GetCreature(npcGuid);
+        if (creature && creature->GetEntry() == NPC_CHESS_EVENT_MEDIVH_CHEAT_FIRES)
+            hazards.push_back(creature);
+    }
+
+    std::vector<Creature*> triggers = GetNearbyChessMoveTriggers(botAI, bot);
+    Creature* safe = nullptr;
+    for (Creature* trigger : triggers)
+    {
+        if (piece->GetExactDist2d(trigger) > 30.0f)
+            continue;
+
+        bool bad = false;
+        for (Creature* hz : hazards)
+        {
+            if (trigger->GetExactDist2d(hz) < 3.5f)
+            {
+                bad = true;
+                break;
+            }
+        }
+        if (!bad)
+        {
+            safe = trigger;
+            break;
+        }
+    }
+
+    if (!safe)
+    {
+        LogKarazhanChessDebug(bot, "move-out-of-fire skipped: no safe tile");
+        return false;
+    }
+
+    piece->CastSpell(safe, SPELL_MOVE_GENERIC, true);
+    LogKarazhanChessDebug(bot, "move-out-of-fire trigger=" + safe->GetGUID().ToString());
+    return true;
+}
+
+bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
+{
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece || !IsChessPieceEntry(piece->GetEntry()))
+        return false;
+
+    Creature* friendlyKing = GetFriendlyChessKing(botAI, bot);
+    Creature* enemyKing = GetEnemyChessKing(botAI, bot);
+
+    for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+    {
+        uint32 spellId = piece->m_spells[i];
+        if (!spellId || piece->HasSpellCooldown(spellId))
+            continue;
+
+        if (IsHealerChessPieceEntry(piece->GetEntry()) && friendlyKing && friendlyKing->GetHealthPct() < 90.0f)
+        {
+            piece->CastSpell(friendlyKing, spellId, true);
+            LogKarazhanChessDebug(bot, "ability heal spell=" + std::to_string(spellId));
+            return true;
+        }
+
+        if (enemyKing)
+        {
+            piece->CastSpell(enemyKing, spellId, true);
+            LogKarazhanChessDebug(bot, "ability attack spell=" + std::to_string(spellId));
+            return true;
+        }
+
+        piece->CastSpell(piece, spellId, true);
+        LogKarazhanChessDebug(bot, "ability self spell=" + std::to_string(spellId));
+        return true;
+    }
+
+    return false;
+}
+
+bool KarazhanChessHealFriendlyAction::Execute(Event event)
+{
+    (void)event;
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    Creature* king = GetFriendlyChessKing(botAI, bot);
+    if (!piece || !king || !IsHealerChessPieceEntry(piece->GetEntry()))
+        return false;
+
+    for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+    {
+        uint32 spellId = piece->m_spells[i];
+        if (spellId && !piece->HasSpellCooldown(spellId))
+        {
+            piece->CastSpell(king, spellId, true);
+            LogKarazhanChessDebug(bot, "heal-friendly spell=" + std::to_string(spellId));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
+{
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    Creature* enemyKing = GetEnemyChessKing(botAI, bot);
+    if (!piece || !enemyKing)
+        return false;
+
+    for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+    {
+        uint32 spellId = piece->m_spells[i];
+        if (spellId && !piece->HasSpellCooldown(spellId))
+        {
+            piece->CastSpell(enemyKing, spellId, true);
+            LogKarazhanChessDebug(bot, "attack-king spell=" + std::to_string(spellId));
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
+{
+    Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece || !IsChessPieceEntry(piece->GetEntry()) || piece->HasAura(SPELL_MOVE_COOLDOWN))
+        return false;
+
+    Creature* king = GetFriendlyChessKing(botAI, bot);
+    Creature* enemyKing = GetEnemyChessKing(botAI, bot);
+    if (!king || !enemyKing)
+        return false;
+
+    float midX = (king->GetPositionX() + enemyKing->GetPositionX()) * 0.5f;
+    float midY = (king->GetPositionY() + enemyKing->GetPositionY()) * 0.5f;
+
+    std::vector<Creature*> triggers = GetNearbyChessMoveTriggers(botAI, bot);
+    Creature* best = nullptr;
+    float bestDist = std::numeric_limits<float>::max();
+    for (Creature* trigger : triggers)
+    {
+        if (piece->GetExactDist2d(trigger) > 30.0f)
+            continue;
+        float d = trigger->GetExactDist2d(midX, midY);
+        if (d < bestDist)
+        {
+            bestDist = d;
+            best = trigger;
+        }
+    }
+
+    if (!best)
+        return false;
+
+    piece->CastSpell(best, SPELL_MOVE_GENERIC, true);
+    LogKarazhanChessDebug(bot, "block-path move trigger=" + best->GetGUID().ToString());
+    return true;
+}
+
+bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
+{
+    if (!IsChessEventActive(botAI, bot))
+    {
+        ClearAssignedChessPiece(bot);
+        return false;
+    }
+
+    Creature* charm = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (charm && !IsChessPieceEntry(charm->GetEntry()))
+    {
+        ClearAssignedChessPiece(bot);
+        return false;
+    }
+
+    Creature* assigned = GetAssignedChessPiece(bot);
+    if (assigned && (!assigned->IsAlive() || assigned->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE)))
+    {
+        LogKarazhanChessDebug(bot, "assigned piece invalid, clearing");
+        ClearAssignedChessPiece(bot);
+    }
+
+    return false;
+}
+
 // Netherspite
 
 // One tank bot per phase will dance in and out of the red beam (5 seconds in, 5 seconds out)
@@ -1255,9 +1568,15 @@ bool PrinceMalchezaarMainTankMovementAction::Execute(Event /*event*/)
 // The tank moves Nightbane into position in two steps to try to get Nightbane to face sideways to the raid
 bool NightbaneGroundPhasePositionBossAction::Execute(Event /*event*/)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
+    {
+        LogKarazhanNightbaneDebug(bot, "ground-phase: no target");
         return false;
+    }
 
     MarkTargetWithSkull(bot, nightbane);
 
@@ -1278,9 +1597,14 @@ bool NightbaneGroundPhasePositionBossAction::Execute(Event /*event*/)
         const float maxDistance = 0.5f;
         float distanceToTarget = bot->GetExactDist2d(position);
 
-        if ((distanceToTarget > maxDistance) && bot->IsWithinMeleeRange(nightbane))
+        if (distanceToTarget > maxDistance)
+        {
+            LogKarazhanNightbaneDebug(
+                bot, "ground-phase: moving step=" + std::to_string(step) +
+                " dist=" + std::to_string(distanceToTarget));
             return MoveTo(KARAZHAN_MAP_ID, position.GetPositionX(), position.GetPositionY(), position.GetPositionZ(),
                           false, false, false, false, MovementPriority::MOVEMENT_FORCED, true, true);
+        }
 
         if (step == 0 && distanceToTarget <= maxDistance)
             nightbaneTankStep[botGuid] = 1;
@@ -1301,6 +1625,9 @@ bool NightbaneGroundPhasePositionBossAction::Execute(Event /*event*/)
 // Ranged positions are near the Northeastern door to the tower
 bool NightbaneGroundPhaseRotateRangedPositionsAction::Execute(Event /*event*/)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     const ObjectGuid botGuid = bot->GetGUID();
     uint8 index = nightbaneRangedStep.count(botGuid) ? nightbaneRangedStep[botGuid] : 0;
 
@@ -1323,6 +1650,7 @@ bool NightbaneGroundPhaseRotateRangedPositionsAction::Execute(Event /*event*/)
         float newDistanceToTarget = bot->GetExactDist2d(newPosition);
         if (newDistanceToTarget > maxDistance)
         {
+            LogKarazhanNightbaneDebug(bot, "ground-phase: rotating ranged charred-earth slot");
             bot->AttackStop();
             bot->InterruptNonMeleeSpells(true);
             return MoveTo(KARAZHAN_MAP_ID, newPosition.GetPositionX(), newPosition.GetPositionY(), newPosition.GetPositionZ(),
@@ -1333,6 +1661,8 @@ bool NightbaneGroundPhaseRotateRangedPositionsAction::Execute(Event /*event*/)
 
     if (distanceToTarget > maxDistance)
     {
+        LogKarazhanNightbaneDebug(
+            bot, "ground-phase: restoring ranged slot dist=" + std::to_string(distanceToTarget));
         bot->AttackStop();
         bot->InterruptNonMeleeSpells(true);
         return MoveTo(KARAZHAN_MAP_ID, position.GetPositionX(), position.GetPositionY(), position.GetPositionZ(),
@@ -1345,6 +1675,9 @@ bool NightbaneGroundPhaseRotateRangedPositionsAction::Execute(Event /*event*/)
 // For countering Bellowing Roars during the ground phase
 bool NightbaneCastFearWardOnMainTankAction::Execute(Event /*event*/)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     Player* mainTank = nullptr;
     if (Group* group = bot->GetGroup())
     {
@@ -1360,7 +1693,10 @@ bool NightbaneCastFearWardOnMainTankAction::Execute(Event /*event*/)
     }
 
     if (mainTank && botAI->CanCastSpell("fear ward", mainTank))
+    {
+        LogKarazhanNightbaneDebug(bot, "casting fear ward on main tank");
         return botAI->CastSpell("fear ward", mainTank);
+    }
 
     return false;
 }
@@ -1368,6 +1704,9 @@ bool NightbaneCastFearWardOnMainTankAction::Execute(Event /*event*/)
 // Put pets on passive during the flight phase so they don't try to chase Nightbane off the map
 bool NightbaneControlPetAggressionAction::Execute(Event /*event*/)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return false;
@@ -1394,9 +1733,15 @@ bool NightbaneControlPetAggressionAction::Execute(Event /*event*/)
 // ready to land, and the player will need to lead the bots over near the ground phase position
 bool NightbaneFlightPhaseMovementAction::Execute(Event /*event*/)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane || nightbane->GetPositionZ() <= NIGHTBANE_FLIGHT_Z)
+    {
+        LogKarazhanNightbaneDebug(bot, "flight-phase: inactive");
         return false;
+    }
 
     MarkTargetWithMoon(bot, nightbane);
 
@@ -1409,6 +1754,21 @@ bool NightbaneFlightPhaseMovementAction::Execute(Event /*event*/)
 
     const ObjectGuid botGuid = bot->GetGUID();
     bool hasRainOfBones = bot->HasAura(SPELL_RAIN_OF_BONES);
+    if (!hasRainOfBones)
+    {
+        if (Group* group = bot->GetGroup())
+        {
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (member && member->IsAlive() && member->HasAura(SPELL_RAIN_OF_BONES))
+                {
+                    hasRainOfBones = true;
+                    break;
+                }
+            }
+        }
+    }
 
     if (hasRainOfBones)
         nightbaneRainOfBonesHit[botGuid] = true;
@@ -1429,6 +1789,10 @@ bool NightbaneFlightPhaseMovementAction::Execute(Event /*event*/)
 
     if (bot->GetExactDist2d(destX, destY) > 2.0f)
     {
+        LogKarazhanNightbaneDebug(
+            bot, "flight-phase: moving to stack x=" + std::to_string(destX) +
+            " y=" + std::to_string(destY) +
+            " dist=" + std::to_string(bot->GetExactDist2d(destX, destY)));
         bot->AttackStop();
         bot->InterruptNonMeleeSpells(true);
         return MoveTo(KARAZHAN_MAP_ID, destX, destY, destZ, false, false, false, false,
@@ -1440,9 +1804,15 @@ bool NightbaneFlightPhaseMovementAction::Execute(Event /*event*/)
 
 bool NightbaneManageTimersAndTrackersAction::Execute(Event /*event*/)
 {
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
+    {
+        LogKarazhanNightbaneDebug(bot, "timers: no target");
         return false;
+    }
 
     const uint32 instanceId = nightbane->GetMap()->GetInstanceId();
     const ObjectGuid botGuid = bot->GetGUID();
@@ -1451,6 +1821,7 @@ bool NightbaneManageTimersAndTrackersAction::Execute(Event /*event*/)
     // Erase DPS wait timer and tank and ranged position tracking on encounter reset
     if (nightbane->GetHealth() == nightbane->GetMaxHealth())
     {
+        LogKarazhanNightbaneDebug(bot, "timers: reset state");
         if (botAI->IsMainTank(bot))
             nightbaneTankStep.erase(botGuid);
 
@@ -1463,6 +1834,7 @@ bool NightbaneManageTimersAndTrackersAction::Execute(Event /*event*/)
     // Erase flight phase timer and Rain of Bones tracker on ground phase and start DPS wait timer
     else if (nightbane->GetPositionZ() <= NIGHTBANE_FLIGHT_Z)
     {
+        LogKarazhanNightbaneDebug(bot, "timers: ground phase");
         nightbaneRainOfBonesHit.erase(botGuid);
 
         if (IsMechanicTrackerBot(botAI, bot, KARAZHAN_MAP_ID, nullptr))
@@ -1475,6 +1847,7 @@ bool NightbaneManageTimersAndTrackersAction::Execute(Event /*event*/)
     // at beginning of flight phase
     else if (nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
     {
+        LogKarazhanNightbaneDebug(bot, "timers: flight phase");
         if (botAI->IsMainTank(bot))
             nightbaneTankStep.erase(botGuid);
 
