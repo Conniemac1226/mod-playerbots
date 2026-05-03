@@ -319,7 +319,25 @@ bool NightbaneBossEngagedByMainTankTrigger::IsActive()
         return false;
 
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
-    return nightbane && nightbane->GetPositionZ() <= NIGHTBANE_FLIGHT_Z;
+    if (!nightbane || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
+        return false;
+
+    if (ShouldUseDynamicHumanTankMode(botAI, bot, nightbane))
+        return false;
+
+    return true;
+}
+
+bool NightbaneHumanTankGroundPhasePositioningTrigger::IsActive()
+{
+    if (!IsKarazhanNightbaneEnabled())
+        return false;
+
+    Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
+    if (!nightbane)
+        return false;
+
+    return ShouldUseDynamicHumanTankMode(botAI, bot, nightbane);
 }
 
 bool NightbaneRangedBotsAreInCharredEarthTrigger::IsActive()
@@ -327,11 +345,22 @@ bool NightbaneRangedBotsAreInCharredEarthTrigger::IsActive()
     if (!IsKarazhanNightbaneEnabled())
         return false;
 
+    Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
+    if (!nightbane || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
+        return false;
+
+    // Any non-main-tank bot standing in Charred Earth should try to move immediately.
+    if (bot->HasAura(SPELL_CHARRED_EARTH) && !bot->HasAura(SPELL_BELLOWING_ROAR) && !botAI->IsMainTank(bot))
+        return true;
+
     if (!botAI->IsRanged(bot))
         return false;
 
-    Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
-    return nightbane && nightbane->GetPositionZ() <= NIGHTBANE_FLIGHT_Z;
+    // In dynamic human-tank mode, ranged movement is handled by a shared anchor action.
+    if (ShouldUseDynamicHumanTankMode(botAI, bot, nightbane))
+        return false;
+
+    return true;
 }
 
 bool NightbaneMainTankIsSusceptibleToFearTrigger::IsActive()
@@ -488,5 +517,5 @@ bool KarazhanControlledChessPieceAbilityReadyTrigger::IsActive()
             return true;
     }
 
-    return !piece->HasAura(SPELL_MOVE_COOLDOWN);
+    return false;
 }

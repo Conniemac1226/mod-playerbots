@@ -301,6 +301,14 @@ public:
     bool IsActive() override;
 };
 
+class NightbaneHumanTankGroundPhasePositioningTrigger : public Trigger
+{
+public:
+    NightbaneHumanTankGroundPhasePositioningTrigger(
+        PlayerbotAI* botAI) : Trigger(botAI, "nightbane human tank ground phase positioning") {}
+    bool IsActive() override;
+};
+
 class NightbaneRangedBotsAreInCharredEarthTrigger : public Trigger
 {
 public:

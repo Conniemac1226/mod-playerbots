@@ -189,10 +189,10 @@ public:
     bool Execute(Event event) override;
 };
 
-class KarazhanChessClaimPieceAction : public Action
+class KarazhanChessClaimPieceAction : public MovementAction
 {
 public:
-    KarazhanChessClaimPieceAction(PlayerbotAI* botAI, std::string const name = "karazhan chess claim piece") : Action(botAI, name) {}
+    KarazhanChessClaimPieceAction(PlayerbotAI* botAI, std::string const name = "karazhan chess claim piece") : MovementAction(botAI, name) {}
     bool Execute(Event event) override;
 };
 
@@ -343,6 +343,14 @@ public:
     bool Execute(Event event) override;
 };
 
+class NightbaneGroundPhaseDynamicPositionAction : public MovementAction
+{
+public:
+    NightbaneGroundPhaseDynamicPositionAction(
+        PlayerbotAI* botAI, std::string const name = "nightbane ground phase dynamic position around human tank") : MovementAction(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
 class NightbaneGroundPhaseRotateRangedPositionsAction : public MovementAction
 {
 public:
@@ -375,11 +383,11 @@ public:
     bool Execute(Event event) override;
 };
 
-class NightbaneManageTimersAndTrackersAction : public Action
+class NightbaneManageTimersAndTrackersAction : public MovementAction
 {
 public:
     NightbaneManageTimersAndTrackersAction(
-        PlayerbotAI* botAI, std::string const name = "nightbane manage timers and trackers") : Action(botAI, name) {}
+        PlayerbotAI* botAI, std::string const name = "nightbane manage timers and trackers") : MovementAction(botAI, name) {}
     bool Execute(Event event) override;
 };
 

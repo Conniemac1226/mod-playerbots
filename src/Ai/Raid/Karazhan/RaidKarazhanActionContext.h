@@ -138,6 +138,9 @@ public:
         creators["nightbane ground phase position boss"] =
             &RaidKarazhanActionContext::nightbane_ground_phase_position_boss;
 
+        creators["nightbane ground phase dynamic position around human tank"] =
+            &RaidKarazhanActionContext::nightbane_ground_phase_dynamic_position_around_human_tank;
+
         creators["nightbane ground phase rotate ranged positions"] =
             &RaidKarazhanActionContext::nightbane_ground_phase_rotate_ranged_positions;
 
@@ -283,6 +286,9 @@ private:
     // Nightbane
     static Action* nightbane_ground_phase_position_boss(
         PlayerbotAI* botAI) { return new NightbaneGroundPhasePositionBossAction(botAI); }
+
+    static Action* nightbane_ground_phase_dynamic_position_around_human_tank(
+        PlayerbotAI* botAI) { return new NightbaneGroundPhaseDynamicPositionAction(botAI); }
 
     static Action* nightbane_ground_phase_rotate_ranged_positions(
         PlayerbotAI* botAI) { return new NightbaneGroundPhaseRotateRangedPositionsAction(botAI); }

@@ -102,6 +102,13 @@ namespace KarazhanHelpers
     constexpr uint32 DATA_CHESS_GAME_PHASE = 35;
     constexpr uint32 CHESS_PHASE_INPROGRESS_PVE = 2;
     constexpr uint32 CHESS_PHASE_INPROGRESS_PVP = 6;
+    
+    enum class ChessSide : uint8
+    {
+        UNKNOWN = 0,
+        ALLIANCE = 1,
+        HORDE = 2
+    };
 
     // Attumen the Huntsman
     extern std::unordered_map<uint32, time_t> attumenDpsWaitTimer;
@@ -116,10 +123,12 @@ namespace KarazhanHelpers
     extern std::unordered_map<ObjectGuid, uint8> nightbaneTankStep;
     extern std::unordered_map<ObjectGuid, uint8> nightbaneRangedStep;
     extern std::unordered_map<uint32, time_t> nightbaneFlightPhaseStartTimer;
+    extern std::unordered_map<uint32, bool> nightbaneWasInFlightPhase;
     extern std::unordered_map<ObjectGuid, bool> nightbaneRainOfBonesHit;
     extern std::unordered_map<ObjectGuid, ObjectGuid> chessAssignedPieceByBot;
     extern std::unordered_map<ObjectGuid, ObjectGuid> chessAssignedBotByPiece;
     extern std::unordered_map<ObjectGuid, time_t> chessAssignmentLockUntil;
+    extern std::unordered_map<ObjectGuid, time_t> chessSelfAbilityThrottleByPiece;
 
     extern const Position MAIDEN_OF_VIRTUE_BOSS_POSITION;
     extern const Position MAIDEN_OF_VIRTUE_RANGED_POSITION[8];
@@ -147,7 +156,24 @@ namespace KarazhanHelpers
     bool IsKarazhanChessDebugEnabled();
     bool IsKarazhanNightbaneEnabled();
     bool IsKarazhanNightbaneDebugEnabled();
+    bool IsMasterTankingNightbane(PlayerbotAI* botAI, Player* bot, Unit* nightbane);
+    bool ShouldUseDynamicHumanTankMode(PlayerbotAI* botAI, Player* bot, Unit* nightbane);
+    Position GetNightbaneDynamicAnchorForBot(PlayerbotAI* botAI, Player* bot, Unit* nightbane);
+    bool IsAtNightbaneDynamicAnchor(Player* bot, Position const& anchor, float tolerance = 2.5f);
+    bool IsSameFloorOrReasonableZ(Player* bot, Position const& anchor);
+    bool HasReasonablePathToNightbaneAnchor(Player* bot, Position const& anchor);
+    bool IsNightbaneAnchorPathSafe(Player* bot, Position const& anchor);
+    bool FindNearestSafeNightbaneAnchor(Player* bot, Unit* boss, Position wanted, Position& safeOut);
+    bool IsInsideNightbaneFightArea(Position const& pos);
+    bool IsNightbanePathContained(Player* bot, Position const& dest);
+    bool IsNightbaneMovementAllowed(Player* bot, Position const& dest);
+    bool IsNightbaneTargetAllowed(Unit* target);
+    Position GetNearestNightbaneSafePoint(Player* bot);
     bool IsChessPieceEntry(uint32 entry);
+    ChessSide GetChessSideForBot(Player* bot);
+    bool IsFriendlyChessPieceForBot(Player* bot, Creature* piece);
+    bool IsEnemyChessPieceForBot(Player* bot, Creature* piece);
+    bool IsClaimableChessPieceForBot(Player* bot, Creature* piece);
     bool IsHealerChessPieceEntry(uint32 entry);
     bool IsKingChessPieceEntry(uint32 entry);
     bool IsDamageChessPieceEntry(uint32 entry);

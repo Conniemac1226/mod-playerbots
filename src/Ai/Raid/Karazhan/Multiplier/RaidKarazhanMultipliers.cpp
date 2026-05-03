@@ -8,6 +8,7 @@
 #include "GenericActions.h"
 #include "HunterActions.h"
 #include "MageActions.h"
+#include "MovementActions.h"
 #include "Playerbots.h"
 #include "PriestActions.h"
 #include "RaidBossHelpers.h"
@@ -359,7 +360,7 @@ float NightbaneDisablePetsMultiplier::GetValue(Action* action)
     return 1.0f;
 }
 
-// Give the main tank 8 seconds to get aggro during phase transitions
+// Give the main tank a short window to rebuild aggro after Nightbane lands.
 float NightbaneWaitForDpsMultiplier::GetValue(Action* action)
 {
     if (!IsKarazhanNightbaneEnabled())
@@ -371,7 +372,7 @@ float NightbaneWaitForDpsMultiplier::GetValue(Action* action)
 
     const uint32 instanceId = nightbane->GetMap()->GetInstanceId();
     const time_t now = std::time(nullptr);
-    const uint8 dpsWaitSeconds = 8;
+    const uint8 dpsWaitSeconds = 5;
 
     auto it = nightbaneDpsWaitTimer.find(instanceId);
     if (it == nightbaneDpsWaitTimer.end() || (now - it->second) < dpsWaitSeconds)
@@ -418,12 +419,37 @@ float NightbaneDisableMovementMultiplier::GetValue(Action* action)
     if (!nightbane)
         return 1.0f;
 
+    Unit* target = botAI->GetUnit(bot->GetTarget());
+    const bool targetOutOfBounds = target && !IsNightbaneTargetAllowed(target);
+    if (targetOutOfBounds)
+    {
+        if (dynamic_cast<ReachTargetAction*>(action) ||
+            dynamic_cast<FollowAction*>(action) ||
+            dynamic_cast<TankAssistAction*>(action) ||
+            dynamic_cast<CombatFormationMoveAction*>(action))
+        {
+            LogKarazhanNightbaneDebug(
+                bot, "Nightbane containment suppressed chase/follow outside area action=" + action->getName() +
+                " target=(" + std::to_string(target->GetPositionX()) + "," + std::to_string(target->GetPositionY()) + "," +
+                std::to_string(target->GetPositionZ()) + ")");
+            return 0.0f;
+        }
+    }
+
+    const bool dynamicHumanTankMode = ShouldUseDynamicHumanTankMode(botAI, bot, nightbane);
+    if (!dynamicHumanTankMode || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
+        return 1.0f;
+
     if (dynamic_cast<CastBlinkBackAction*>(action) ||
         dynamic_cast<CastDisengageAction*>(action) ||
+        dynamic_cast<FollowAction*>(action) ||
+        dynamic_cast<ReachTargetAction*>(action) ||
+        dynamic_cast<AvoidAoeAction*>(action) ||
         dynamic_cast<FleeAction*>(action) ||
         (dynamic_cast<CombatFormationMoveAction*>(action) &&
          !dynamic_cast<SetBehindTargetAction*>(action)))
     {
+        LogKarazhanNightbaneDebug(bot, "dynamic-ground suppressed generic movement action: " + action->getName());
         return 0.0f;
     }
 

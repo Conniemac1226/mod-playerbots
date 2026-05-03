@@ -132,6 +132,9 @@ public:
         creators["nightbane boss engaged by main tank"] =
             &RaidKarazhanTriggerContext::nightbane_boss_engaged_by_main_tank;
 
+        creators["nightbane human tank ground phase positioning"] =
+            &RaidKarazhanTriggerContext::nightbane_human_tank_ground_phase_positioning;
+
         creators["nightbane ranged bots are in charred earth"] =
             &RaidKarazhanTriggerContext::nightbane_ranged_bots_are_in_charred_earth;
 
@@ -271,6 +274,9 @@ private:
     // Nightbane
     static Trigger* nightbane_boss_engaged_by_main_tank(
         PlayerbotAI* botAI) { return new NightbaneBossEngagedByMainTankTrigger(botAI); }
+
+    static Trigger* nightbane_human_tank_ground_phase_positioning(
+        PlayerbotAI* botAI) { return new NightbaneHumanTankGroundPhasePositioningTrigger(botAI); }
 
     static Trigger* nightbane_ranged_bots_are_in_charred_earth(
         PlayerbotAI* botAI) { return new NightbaneRangedBotsAreInCharredEarthTrigger(botAI); }

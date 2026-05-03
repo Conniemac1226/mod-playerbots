@@ -93,7 +93,8 @@ void RaidKarazhanStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode("karazhan chess event active",
         { NextAction("karazhan chess release or reassign", ACTION_EMERGENCY + 11),
           NextAction("karazhan chess claim piece", ACTION_EMERGENCY + 10),
-          NextAction("karazhan chess passive helper", ACTION_EMERGENCY + 9) }
+          NextAction("karazhan chess move piece", ACTION_RAID + 6),
+          NextAction("karazhan chess use ability", ACTION_RAID + 6) }
     ));
     triggers.push_back(new TriggerNode("karazhan chess piece needs controller",
         { NextAction("karazhan chess claim piece", ACTION_EMERGENCY + 10) }
@@ -147,6 +148,9 @@ void RaidKarazhanStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     // Nightbane
     triggers.push_back(new TriggerNode("nightbane boss engaged by main tank",
         { NextAction("nightbane ground phase position boss", ACTION_RAID + 1) }
+    ));
+    triggers.push_back(new TriggerNode("nightbane human tank ground phase positioning",
+        { NextAction("nightbane ground phase dynamic position around human tank", ACTION_EMERGENCY + 2) }
     ));
     triggers.push_back(new TriggerNode("nightbane ranged bots are in charred earth",
         { NextAction("nightbane ground phase rotate ranged positions", ACTION_EMERGENCY + 1) }

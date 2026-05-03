@@ -3,6 +3,7 @@
 #include "Config.h"
 #include "InstanceScript.h"
 #include "Log.h"
+#include "PathGenerator.h"
 
 namespace KarazhanHelpers
 {
@@ -37,10 +38,12 @@ namespace KarazhanHelpers
     std::unordered_map<ObjectGuid, uint8> nightbaneTankStep;
     std::unordered_map<ObjectGuid, uint8> nightbaneRangedStep;
     std::unordered_map<uint32, time_t> nightbaneFlightPhaseStartTimer;
+    std::unordered_map<uint32, bool> nightbaneWasInFlightPhase;
     std::unordered_map<ObjectGuid, bool> nightbaneRainOfBonesHit;
     std::unordered_map<ObjectGuid, ObjectGuid> chessAssignedPieceByBot;
     std::unordered_map<ObjectGuid, ObjectGuid> chessAssignedBotByPiece;
     std::unordered_map<ObjectGuid, time_t> chessAssignmentLockUntil;
+    std::unordered_map<ObjectGuid, time_t> chessSelfAbilityThrottleByPiece;
 
     const Position MAIDEN_OF_VIRTUE_BOSS_POSITION = { -10945.881f, -2103.782f, 92.712f };
     const Position MAIDEN_OF_VIRTUE_RANGED_POSITION[8] =
@@ -329,7 +332,7 @@ namespace KarazhanHelpers
 
     bool IsKarazhanChessDebugEnabled()
     {
-        return sConfigMgr->GetOption<bool>("PlayerbotAI.Karazhan.Chess.Debug", false);
+        return false;
     }
 
     bool IsKarazhanNightbaneEnabled()
@@ -339,7 +342,308 @@ namespace KarazhanHelpers
 
     bool IsKarazhanNightbaneDebugEnabled()
     {
-        return sConfigMgr->GetOption<bool>("PlayerbotAI.Karazhan.Nightbane.Debug", false);
+        return false;
+    }
+
+    bool IsMasterTankingNightbane(PlayerbotAI* botAI, Player* bot, Unit* nightbane)
+    {
+        if (!botAI || !bot || !nightbane)
+            return false;
+
+        Player* master = botAI->GetMaster();
+        if (!master || master == bot || GET_PLAYERBOT_AI(master))
+            return false;
+
+        if (nightbane->GetVictim() == master)
+            return true;
+
+        return botAI->IsMainTank(master);
+    }
+
+    bool ShouldUseDynamicHumanTankMode(PlayerbotAI* botAI, Player* bot, Unit* nightbane)
+    {
+        if (!IsKarazhanNightbaneEnabled() || !botAI || !bot || !nightbane)
+            return false;
+
+        if (bot->GetMapId() != KARAZHAN_MAP_ID || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
+            return false;
+
+        return IsMasterTankingNightbane(botAI, bot, nightbane);
+    }
+
+    Position GetNightbaneDynamicAnchorForBot(PlayerbotAI* botAI, Player* bot, Unit* nightbane)
+    {
+        if (!botAI || !bot || !nightbane)
+            return Position(bot ? bot->GetPositionX() : 0.0f, bot ? bot->GetPositionY() : 0.0f, bot ? bot->GetPositionZ() : 0.0f);
+
+        const float bossX = nightbane->GetPositionX();
+        const float bossY = nightbane->GetPositionY();
+        const float bossZ = nightbane->GetPositionZ();
+        const float facing = nightbane->GetOrientation();
+
+        float radius = 8.0f;
+        static const float meleeOffsets[4] = { -0.45f, -0.20f, 0.20f, 0.45f };
+        static const float healerOffsets[5] = { -1.2f, -0.6f, 0.0f, 0.6f, 1.2f };
+        static const float rangedOffsets[6] = { -1.6f, -1.0f, -0.4f, 0.4f, 1.0f, 1.6f };
+
+        uint32 slot = bot->GetGUID().GetCounter();
+        float offset = 0.0f;
+
+        if (botAI->IsMainTank(bot))
+        {
+            radius = 5.0f;
+            offset = 0.0f;
+        }
+        else if (botAI->IsTank(bot))
+        {
+            radius = 9.0f;
+            offset = meleeOffsets[slot % 4];
+        }
+        else if (botAI->IsHeal(bot))
+        {
+            radius = 20.0f;
+            offset = healerOffsets[slot % 5];
+        }
+        else if (botAI->IsRanged(bot))
+        {
+            radius = 24.0f;
+            offset = rangedOffsets[slot % 6];
+        }
+        else
+        {
+            radius = 6.0f;
+            offset = meleeOffsets[slot % 4];
+        }
+
+        // Build anchors from the boss's rear arc to keep bots out of breath/cleave.
+        const float angle = facing + static_cast<float>(M_PI) + offset;
+        const float x = bossX + std::cos(angle) * radius;
+        const float y = bossY + std::sin(angle) * radius;
+        return Position(x, y, bossZ);
+    }
+
+    bool IsAtNightbaneDynamicAnchor(Player* bot, Position const& anchor, float tolerance)
+    {
+        if (!bot)
+            return false;
+
+        return bot->GetExactDist2d(anchor.GetPositionX(), anchor.GetPositionY()) <= tolerance;
+    }
+
+    bool IsSameFloorOrReasonableZ(Player* bot, Position const& anchor)
+    {
+        if (!bot || !bot->GetMap())
+            return false;
+
+        const float anchorZ = anchor.GetPositionZ();
+        if (anchorZ <= INVALID_HEIGHT)
+            return false;
+
+        const float zDiff = std::fabs(anchorZ - bot->GetPositionZ());
+        return zDiff <= 8.0f;
+    }
+
+    bool HasReasonablePathToNightbaneAnchor(Player* bot, Position const& anchor)
+    {
+        if (!bot || !bot->GetMap())
+            return false;
+
+        PathGenerator path(bot);
+        path.CalculatePath(anchor.GetPositionX(), anchor.GetPositionY(), anchor.GetPositionZ(), false);
+
+        PathType type = path.GetPathType();
+        int typeOk = PATHFIND_NORMAL | PATHFIND_INCOMPLETE | PATHFIND_FARFROMPOLY;
+        if (type & (~typeOk))
+            return false;
+
+        const float direct = bot->GetExactDist2d(anchor.GetPositionX(), anchor.GetPositionY());
+        const float pathLen = path.getPathLength();
+        if (direct > 3.0f && pathLen > (direct * 2.6f + 6.0f))
+            return false;
+
+        return true;
+    }
+
+    bool IsNightbaneAnchorPathSafe(Player* bot, Position const& anchor)
+    {
+        if (!bot || !bot->GetMap() || bot->GetMapId() != KARAZHAN_MAP_ID)
+            return false;
+
+        if (!IsSameFloorOrReasonableZ(bot, anchor))
+            return false;
+
+        float x = anchor.GetPositionX();
+        float y = anchor.GetPositionY();
+        float z = anchor.GetPositionZ();
+        if (!bot->GetMap()->CheckCollisionAndGetValidCoords(bot, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
+                                                             x, y, z, true))
+            return false;
+
+        if (!bot->IsWithinLOS(x, y, z))
+            return false;
+
+        Position corrected(x, y, z);
+        return HasReasonablePathToNightbaneAnchor(bot, corrected) && IsNightbaneMovementAllowed(bot, corrected);
+    }
+
+    bool FindNearestSafeNightbaneAnchor(Player* bot, Unit* boss, Position wanted, Position& safeOut)
+    {
+        if (!bot || !boss || !bot->GetMap() || boss->GetMapId() != bot->GetMapId())
+            return false;
+
+        auto tryCandidate = [&](Position candidate, float& bestDist, bool& found) -> void
+        {
+            float cx = candidate.GetPositionX();
+            float cy = candidate.GetPositionY();
+            float cz = candidate.GetPositionZ();
+            if (!bot->GetMap()->CheckCollisionAndGetValidCoords(bot, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
+                                                                 cx, cy, cz, true))
+                return;
+
+            Position corrected(cx, cy, cz);
+            if (!IsNightbaneAnchorPathSafe(bot, corrected))
+                return;
+
+            float d = bot->GetExactDist2d(cx, cy);
+            if (!found || d < bestDist)
+            {
+                found = true;
+                bestDist = d;
+                safeOut = corrected;
+            }
+        };
+
+        float bestDist = 0.0f;
+        bool found = false;
+        tryCandidate(wanted, bestDist, found);
+        if (found)
+            return true;
+
+        const float baseRadius = std::max(5.0f, boss->GetExactDist2d(wanted.GetPositionX(), wanted.GetPositionY()));
+        const float facing = boss->GetOrientation();
+        static const float angleOffsets[] = { 0.0f, 0.35f, -0.35f, 0.7f, -0.7f, 1.0f, -1.0f, 1.35f, -1.35f };
+        static const float radii[] = { 0.0f, 2.0f, -2.0f, 4.0f };
+
+        for (float rOffset : radii)
+        {
+            float radius = std::max(4.0f, baseRadius + rOffset);
+            for (float aOffset : angleOffsets)
+            {
+                float angle = facing + static_cast<float>(M_PI) + aOffset;
+                Position candidate(boss->GetPositionX() + std::cos(angle) * radius,
+                                   boss->GetPositionY() + std::sin(angle) * radius,
+                                   boss->GetPositionZ());
+                tryCandidate(candidate, bestDist, found);
+            }
+        }
+
+        return found;
+    }
+
+    bool IsInsideNightbaneFightArea(Position const& pos)
+    {
+        // Nightbane Master's Terrace containment bounds.
+        return pos.GetPositionX() >= -11225.0f && pos.GetPositionX() <= -11100.0f &&
+               pos.GetPositionY() >= -2008.0f && pos.GetPositionY() <= -1860.0f &&
+               pos.GetPositionZ() >= 86.0f && pos.GetPositionZ() <= 105.5f;
+    }
+
+    bool IsNightbanePathContained(Player* bot, Position const& dest)
+    {
+        if (!bot || !bot->GetMap())
+            return false;
+
+        PathGenerator path(bot);
+        path.CalculatePath(dest.GetPositionX(), dest.GetPositionY(), dest.GetPositionZ(), false);
+        PathType type = path.GetPathType();
+        if (!(type & PATHFIND_NORMAL))
+            return false;
+
+        Movement::PointsArray points = path.GetPath();
+        if (points.empty())
+            return false;
+
+        for (auto const& p : points)
+        {
+            if (!IsInsideNightbaneFightArea(Position(p.x, p.y, p.z)))
+                return false;
+        }
+
+        return true;
+    }
+
+    bool IsNightbaneMovementAllowed(Player* bot, Position const& dest)
+    {
+        if (!bot || !bot->GetMap() || bot->GetMapId() != KARAZHAN_MAP_ID)
+            return false;
+
+        if (!IsInsideNightbaneFightArea(dest))
+            return false;
+
+        if (!IsSameFloorOrReasonableZ(bot, dest))
+            return false;
+
+        float x = dest.GetPositionX();
+        float y = dest.GetPositionY();
+        float z = dest.GetPositionZ();
+        if (!bot->GetMap()->CheckCollisionAndGetValidCoords(bot, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
+                                                             x, y, z, true))
+            return false;
+
+        if (!bot->IsWithinLOS(x, y, z))
+            return false;
+
+        Position corrected(x, y, z);
+        return HasReasonablePathToNightbaneAnchor(bot, corrected) && IsNightbanePathContained(bot, corrected);
+    }
+
+    bool IsNightbaneTargetAllowed(Unit* target)
+    {
+        if (!target)
+            return false;
+
+        return IsInsideNightbaneFightArea(Position(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ()));
+    }
+
+    Position GetNearestNightbaneSafePoint(Player* bot)
+    {
+        Position fallback = NIGHTBANE_FINAL_BOSS_POSITION;
+        if (!bot || !bot->GetMap())
+            return fallback;
+
+        if (IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+            return Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
+
+        Position best = fallback;
+        float bestDist = std::numeric_limits<float>::max();
+        const Position center = NIGHTBANE_FINAL_BOSS_POSITION;
+        static const float radii[] = { 0.0f, 5.0f, 9.0f, 13.0f, 17.0f };
+        static const uint8 numAngles = 24;
+
+        for (float r : radii)
+        {
+            for (uint8 i = 0; i < numAngles; ++i)
+            {
+                float angle = (2.0f * static_cast<float>(M_PI) * i) / numAngles;
+                Position cand(center.GetPositionX() + std::cos(angle) * r,
+                              center.GetPositionY() + std::sin(angle) * r,
+                              center.GetPositionZ());
+
+                if (!IsInsideNightbaneFightArea(cand))
+                    continue;
+                if (!IsNightbaneMovementAllowed(bot, cand))
+                    continue;
+
+                float d = bot->GetExactDist2d(cand.GetPositionX(), cand.GetPositionY());
+                if (d < bestDist)
+                {
+                    bestDist = d;
+                    best = cand;
+                }
+            }
+        }
+
+        return best;
     }
 
     bool IsChessPieceEntry(uint32 entry)
@@ -362,6 +666,84 @@ namespace KarazhanHelpers
             default:
                 return false;
         }
+    }
+
+    ChessSide GetChessSideForBot(Player* bot)
+    {
+        if (!bot)
+            return ChessSide::UNKNOWN;
+
+        Player* owner = bot;
+        if (PlayerbotAI* ai = GET_PLAYERBOT_AI(bot))
+        {
+            if (Player* master = ai->GetMaster())
+                owner = master;
+        }
+
+        if (owner->GetTeamId(true) == TEAM_ALLIANCE)
+            return ChessSide::ALLIANCE;
+        if (owner->GetTeamId(true) == TEAM_HORDE)
+            return ChessSide::HORDE;
+        return ChessSide::UNKNOWN;
+    }
+
+    bool IsFriendlyChessPieceForBot(Player* bot, Creature* piece)
+    {
+        if (!bot || !piece || !IsChessPieceEntry(piece->GetEntry()))
+            return false;
+
+        ChessSide side = GetChessSideForBot(bot);
+        if (side == ChessSide::ALLIANCE)
+        {
+            return piece->GetEntry() == NPC_PAWN_A || piece->GetEntry() == NPC_KNIGHT_A ||
+                   piece->GetEntry() == NPC_QUEEN_A || piece->GetEntry() == NPC_BISHOP_A ||
+                   piece->GetEntry() == NPC_ROOK_A || piece->GetEntry() == NPC_KING_A;
+        }
+        if (side == ChessSide::HORDE)
+        {
+            return piece->GetEntry() == NPC_PAWN_H || piece->GetEntry() == NPC_KNIGHT_H ||
+                   piece->GetEntry() == NPC_QUEEN_H || piece->GetEntry() == NPC_BISHOP_H ||
+                   piece->GetEntry() == NPC_ROOK_H || piece->GetEntry() == NPC_KING_H;
+        }
+
+        return false;
+    }
+
+    bool IsEnemyChessPieceForBot(Player* bot, Creature* piece)
+    {
+        if (!bot || !piece || !IsChessPieceEntry(piece->GetEntry()))
+            return false;
+
+        ChessSide side = GetChessSideForBot(bot);
+        if (side == ChessSide::ALLIANCE)
+        {
+            return piece->GetEntry() == NPC_PAWN_H || piece->GetEntry() == NPC_KNIGHT_H ||
+                   piece->GetEntry() == NPC_QUEEN_H || piece->GetEntry() == NPC_BISHOP_H ||
+                   piece->GetEntry() == NPC_ROOK_H || piece->GetEntry() == NPC_KING_H;
+        }
+        if (side == ChessSide::HORDE)
+        {
+            return piece->GetEntry() == NPC_PAWN_A || piece->GetEntry() == NPC_KNIGHT_A ||
+                   piece->GetEntry() == NPC_QUEEN_A || piece->GetEntry() == NPC_BISHOP_A ||
+                   piece->GetEntry() == NPC_ROOK_A || piece->GetEntry() == NPC_KING_A;
+        }
+
+        return false;
+    }
+
+    bool IsClaimableChessPieceForBot(Player* bot, Creature* piece)
+    {
+        if (!bot || !piece)
+            return false;
+
+        if (GetChessSideForBot(bot) == ChessSide::UNKNOWN)
+            return false;
+
+        if (!IsFriendlyChessPieceForBot(bot, piece))
+            return false;
+
+        return !piece->IsCharmed() && piece->IsAlive() &&
+               !piece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
     }
 
     bool IsHealerChessPieceEntry(uint32 entry)
@@ -500,10 +882,7 @@ namespace KarazhanHelpers
             if (!creature || !creature->IsAlive() || !IsChessPieceEntry(creature->GetEntry()))
                 continue;
 
-            if (creature->GetExactDist2d(bot) > 120.0f)
-                continue;
-
-            if (friendlyOnly && !bot->IsFriendlyTo(creature))
+            if (friendlyOnly && !IsFriendlyChessPieceForBot(bot, creature))
                 continue;
 
             pieces.push_back(creature);
@@ -516,7 +895,7 @@ namespace KarazhanHelpers
     {
         for (Creature* piece : GetNearbyChessPieces(botAI, bot, true))
         {
-            if (IsKingChessPieceEntry(piece->GetEntry()))
+            if (IsKingChessPieceEntry(piece->GetEntry()) && IsFriendlyChessPieceForBot(bot, piece))
                 return piece;
         }
         return nullptr;
@@ -526,21 +905,9 @@ namespace KarazhanHelpers
     {
         if (!botAI || !bot)
             return nullptr;
-
-        GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
-        for (ObjectGuid const& npcGuid : npcs)
-        {
-            Creature* creature = botAI->GetCreature(npcGuid);
-            if (!creature || !creature->IsAlive() || !IsKingChessPieceEntry(creature->GetEntry()))
-                continue;
-
-            if (bot->IsFriendlyTo(creature))
-                continue;
-
-            if (creature->GetExactDist2d(bot) <= 120.0f)
-                return creature;
-        }
-
+        for (Creature* piece : GetNearbyChessPieces(botAI, bot, false))
+            if (piece && piece->IsAlive() && IsKingChessPieceEntry(piece->GetEntry()) && IsEnemyChessPieceForBot(bot, piece))
+                return piece;
         return nullptr;
     }
 
@@ -556,9 +923,7 @@ namespace KarazhanHelpers
             Creature* creature = botAI->GetCreature(npcGuid);
             if (!creature || creature->GetEntry() != 22519)
                 continue;
-
-            if (creature->GetExactDist2d(bot) <= 140.0f)
-                triggers.push_back(creature);
+            triggers.push_back(creature);
         }
 
         return triggers;
