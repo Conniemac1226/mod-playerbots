@@ -174,6 +174,7 @@ namespace KarazhanHelpers
     bool IsFriendlyChessPieceForBot(Player* bot, Creature* piece);
     bool IsEnemyChessPieceForBot(Player* bot, Creature* piece);
     bool IsClaimableChessPieceForBot(Player* bot, Creature* piece);
+    bool IsClaimableFriendlyPawnForOpening(Player* bot, Creature* piece);
     bool IsHealerChessPieceEntry(uint32 entry);
     bool IsKingChessPieceEntry(uint32 entry);
     bool IsDamageChessPieceEntry(uint32 entry);

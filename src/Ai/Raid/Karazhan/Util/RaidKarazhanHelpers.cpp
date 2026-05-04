@@ -332,7 +332,7 @@ namespace KarazhanHelpers
 
     bool IsKarazhanChessDebugEnabled()
     {
-        return false;
+        return true;
     }
 
     bool IsKarazhanNightbaneEnabled()
@@ -746,6 +746,33 @@ namespace KarazhanHelpers
                !piece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
     }
 
+    bool IsClaimableFriendlyPawnForOpening(Player* bot, Creature* piece)
+    {
+        if (!bot || !piece)
+            return false;
+
+        uint32 const entry = piece->GetEntry();
+        ChessSide const side = GetChessSideForBot(bot);
+        if (side == ChessSide::UNKNOWN)
+            return false;
+
+        // Opening claim should not depend on pre-control select/charm state.
+        // Chess pieces may already be charmed by script-side controllers but are still valid
+        // targets for SPELL_CONTROL_PIECE takeover.
+        if (!piece->IsAlive())
+            return false;
+
+        if (!IsFriendlyChessPieceForBot(bot, piece))
+            return false;
+
+        if (side == ChessSide::HORDE)
+            return entry == NPC_PAWN_H;
+        if (side == ChessSide::ALLIANCE)
+            return entry == NPC_PAWN_A;
+
+        return false;
+    }
+
     bool IsHealerChessPieceEntry(uint32 entry)
     {
         return entry == NPC_BISHOP_A || entry == NPC_BISHOP_H;
@@ -917,11 +944,31 @@ namespace KarazhanHelpers
         if (!botAI || !bot)
             return triggers;
 
+        std::unordered_set<ObjectGuid::LowType> seen;
         GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
         for (ObjectGuid const& npcGuid : npcs)
         {
             Creature* creature = botAI->GetCreature(npcGuid);
             if (!creature || creature->GetEntry() != 22519)
+                continue;
+            if (!seen.insert(creature->GetGUID().GetCounter()).second)
+                continue;
+            triggers.push_back(creature);
+        }
+
+        // Fallback: nearest-npcs can miss chess move triggers for controlled pieces.
+        // Scan a wider grid around the controlled piece (or bot if not charmed).
+        WorldObject* anchor = bot;
+        if (Unit* charm = bot->GetCharm())
+            anchor = charm;
+
+        std::list<Creature*> gridTriggers;
+        anchor->GetCreatureListWithEntryInGrid(gridTriggers, 22519, 120.0f);
+        for (Creature* creature : gridTriggers)
+        {
+            if (!creature)
+                continue;
+            if (!seen.insert(creature->GetGUID().GetCounter()).second)
                 continue;
             triggers.push_back(creature);
         }

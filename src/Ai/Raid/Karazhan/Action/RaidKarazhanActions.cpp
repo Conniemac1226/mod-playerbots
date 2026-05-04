@@ -652,8 +652,16 @@ namespace
         std::map<std::pair<int, int>, Creature*> squareToTrigger;
         std::unordered_map<ObjectGuid, ChessSquare> pieceSquare;
         std::set<std::pair<int, int>> occupied;
-        std::vector<float> rowVals;
-        std::vector<float> colVals;
+        float originX = -11108.099609f;
+        float originY = -1872.910034f;
+        float rowStepX = 4.4f;
+        float rowStepY = 3.45f;
+        float colStepX = 3.49f;
+        float colStepY = -4.4f;
+        int minRow = 0;
+        int maxRow = 7;
+        int minCol = 0;
+        int maxCol = 7;
     };
 
     bool IsChessPieceCommandGcdReady(Creature* piece, uint32 gcdMs = 1500)
@@ -702,6 +710,56 @@ namespace
         return it == chessLastAbilityCommandByPiece.end() || (now - it->second) >= static_cast<time_t>(abilityWindowSec);
     }
 
+    bool IsChessMoveSpellId(uint32 spellId)
+    {
+        switch (spellId)
+        {
+            case 37146: // SPELL_MOVE_1
+            case 37144: // SPELL_MOVE_2
+            case 37148: // SPELL_MOVE_3
+            case 37151: // SPELL_MOVE_4
+            case 37152: // SPELL_MOVE_5
+            case 37153: // SPELL_MOVE_6
+            case SPELL_MOVE_GENERIC:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    std::string GetChessPieceSpellList(Creature* piece)
+    {
+        if (!piece)
+            return "none";
+
+        std::string out;
+        for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+        {
+            uint32 spellId = piece->m_spells[i];
+            if (!spellId)
+                continue;
+            if (!out.empty())
+                out += ",";
+            out += std::to_string(spellId);
+        }
+        return out.empty() ? "none" : out;
+    }
+
+    uint32 GetChessMoveSpellForPiece(Creature* piece)
+    {
+        if (!piece)
+            return 0;
+
+        for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+        {
+            uint32 spellId = piece->m_spells[i];
+            if (spellId && IsChessMoveSpellId(spellId))
+                return spellId;
+        }
+
+        return 0;
+    }
+
     bool IsPawnEntry(uint32 e) { return e == NPC_PAWN_A || e == NPC_PAWN_H; }
     bool IsKingEntry(uint32 e) { return e == NPC_KING_A || e == NPC_KING_H; }
 
@@ -715,49 +773,28 @@ namespace
         }
     }
 
-    static std::vector<float> BuildAxisBuckets(std::vector<float> values, float mergeTol = 1.0f)
+    static bool WorldToChessSquare(ChessBoardState const& s, float x, float y, int& row, int& col)
     {
-        std::vector<float> buckets;
-        if (values.empty())
-            return buckets;
-
-        std::sort(values.begin(), values.end());
-        float accum = values[0];
-        int count = 1;
-        for (size_t i = 1; i < values.size(); ++i)
-        {
-            if (std::fabs(values[i] - (accum / count)) <= mergeTol)
-            {
-                accum += values[i];
-                ++count;
-            }
-            else
-            {
-                buckets.push_back(accum / count);
-                accum = values[i];
-                count = 1;
-            }
-        }
-        buckets.push_back(accum / count);
-        return buckets;
+        // Invert:
+        // x = ox + row*rowStepX + col*colStepX
+        // y = oy + row*rowStepY + col*colStepY
+        float dx = x - s.originX;
+        float dy = y - s.originY;
+        float det = (s.rowStepX * s.colStepY) - (s.colStepX * s.rowStepY);
+        if (std::fabs(det) < 0.0001f)
+            return false;
+        float rowF = (dx * s.colStepY - s.colStepX * dy) / det;
+        float colF = (s.rowStepX * dy - dx * s.rowStepY) / det;
+        row = static_cast<int>(std::lround(rowF));
+        col = static_cast<int>(std::lround(colF));
+        return true;
     }
 
-    static int FindNearestBucket(std::vector<float> const& buckets, float v)
+    static Position ChessSquareToWorld(ChessBoardState const& s, int row, int col, float z)
     {
-        if (buckets.empty())
-            return -1;
-        int best = 0;
-        float bestD = std::fabs(v - buckets[0]);
-        for (size_t i = 1; i < buckets.size(); ++i)
-        {
-            float d = std::fabs(v - buckets[i]);
-            if (d < bestD)
-            {
-                bestD = d;
-                best = static_cast<int>(i);
-            }
-        }
-        return best;
+        float x = s.originX + (s.rowStepX * row) + (s.colStepX * col);
+        float y = s.originY + (s.rowStepY * row) + (s.colStepY * col);
+        return Position(x, y, z);
     }
 
     static ChessBoardState BuildChessBoardState(PlayerbotAI* botAI, Player* bot)
@@ -770,25 +807,14 @@ namespace
         if (triggers.empty())
             return state;
 
-        std::vector<float> xs;
-        std::vector<float> ys;
-        xs.reserve(triggers.size());
-        ys.reserve(triggers.size());
         for (Creature* t : triggers)
         {
-            xs.push_back(t->GetPositionX());
-            ys.push_back(t->GetPositionY());
-        }
-        state.colVals = BuildAxisBuckets(xs, 1.0f);
-        state.rowVals = BuildAxisBuckets(ys, 1.0f);
-
-        for (Creature* t : triggers)
-        {
-            int col = FindNearestBucket(state.colVals, t->GetPositionX());
-            int row = FindNearestBucket(state.rowVals, t->GetPositionY());
-            if (row < 0 || col < 0)
+            int row = -1, col = -1;
+            if (!WorldToChessSquare(state, t->GetPositionX(), t->GetPositionY(), row, col))
                 continue;
             std::pair<int, int> key = { row, col };
+            if (row < state.minRow || row > state.maxRow || col < state.minCol || col > state.maxCol)
+                continue;
             auto it = state.squareToTrigger.find(key);
             if (it == state.squareToTrigger.end())
             {
@@ -796,8 +822,11 @@ namespace
             }
             else
             {
-                float dOld = std::fabs(it->second->GetPositionX() - state.colVals[col]) + std::fabs(it->second->GetPositionY() - state.rowVals[row]);
-                float dNew = std::fabs(t->GetPositionX() - state.colVals[col]) + std::fabs(t->GetPositionY() - state.rowVals[row]);
+                Position desired = ChessSquareToWorld(state, row, col, t->GetPositionZ());
+                float dOld = std::fabs(it->second->GetPositionX() - desired.GetPositionX()) +
+                             std::fabs(it->second->GetPositionY() - desired.GetPositionY());
+                float dNew = std::fabs(t->GetPositionX() - desired.GetPositionX()) +
+                             std::fabs(t->GetPositionY() - desired.GetPositionY());
                 if (dNew < dOld)
                     state.squareToTrigger[key] = t;
             }
@@ -806,9 +835,10 @@ namespace
         std::vector<Creature*> pieces = GetNearbyChessPieces(botAI, bot, false);
         for (Creature* p : pieces)
         {
-            int col = FindNearestBucket(state.colVals, p->GetPositionX());
-            int row = FindNearestBucket(state.rowVals, p->GetPositionY());
-            if (row < 0 || col < 0)
+            int row = -1, col = -1;
+            if (!WorldToChessSquare(state, p->GetPositionX(), p->GetPositionY(), row, col))
+                continue;
+            if (row < state.minRow || row > state.maxRow || col < state.minCol || col > state.maxCol)
                 continue;
             ChessSquare sq{ row, col };
             state.pieceSquare[p->GetGUID()] = sq;
@@ -820,7 +850,7 @@ namespace
 
     static bool IsInsideBoard(ChessBoardState const& b, int row, int col)
     {
-        return row >= 0 && col >= 0 && row < static_cast<int>(b.rowVals.size()) && col < static_cast<int>(b.colVals.size());
+        return row >= b.minRow && row <= b.maxRow && col >= b.minCol && col <= b.maxCol;
     }
 
     static void AppendStepMoves(ChessBoardState const& b, int row, int col, int dr, int dc,
@@ -921,10 +951,13 @@ namespace
             auto itTr = b.squareToTrigger.find(rc);
             if (itTr == b.squareToTrigger.end())
                 continue;
-            legal.push_back(itTr->second);
+            bool const occupied = b.occupied.find(rc) != b.occupied.end();
             if (!dbgLegal.empty())
                 dbgLegal += ";";
-            dbgLegal += "(" + std::to_string(rc.first) + "," + std::to_string(rc.second) + ")";
+            dbgLegal += "cand=(" + std::to_string(rc.first) + "," + std::to_string(rc.second) + ")" +
+                        " occupied=" + (occupied ? std::string("1") : std::string("0")) +
+                        " trigger=" + (itTr != b.squareToTrigger.end() ? std::string("1") : std::string("0"));
+            legal.push_back(itTr->second);
         }
 
         return legal;
@@ -1024,8 +1057,15 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         return false;
 
     Creature* assigned = GetAssignedChessPiece(bot);
-    if (assigned && assigned->IsAlive() && !assigned->IsCharmed())
+    if (assigned && assigned->IsAlive())
     {
+        if (!IsPawnEntry(assigned->GetEntry()))
+        {
+            LogKarazhanChessDebug(bot, "claim assigned cleared: pawn-only mode");
+            ClearAssignedChessPiece(bot);
+            return false;
+        }
+
         if (phase == ChessPhase::OPENING && !IsPawnEntry(assigned->GetEntry()))
         {
             LogKarazhanChessDebug(bot, "claim assigned cleared: opening pawn phase");
@@ -1040,7 +1080,7 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
             return false;
         }
 
-        if (!IsClaimableChessPieceForBot(bot, assigned))
+        if (!IsClaimableFriendlyPawnForOpening(bot, assigned))
         {
             LogKarazhanChessDebug(
                 bot, "claim assigned rejected side=" + ChessSideToString(botSide) +
@@ -1073,13 +1113,10 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
     bool hasClaimablePawn = false;
     for (Creature* p : nearby)
     {
-        if (!p || !IsClaimableChessPieceForBot(bot, p) || IsPieceAssignedToOtherBot(bot, p))
+        if (!p || !IsClaimableFriendlyPawnForOpening(bot, p) || IsPieceAssignedToOtherBot(bot, p))
             continue;
-        if (IsPawnEntry(p->GetEntry()))
-        {
-            hasClaimablePawn = true;
-            break;
-        }
+        hasClaimablePawn = true;
+        break;
     }
 
     for (Creature* piece : nearby)
@@ -1087,29 +1124,61 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         if (!piece)
             continue;
 
+        bool const isPawn = IsPawnEntry(piece->GetEntry());
+        bool const pawnOnlyMode = true;
+        bool finalClaimAllowed = false;
+        std::string rejectReason;
+        ChessSide const pieceBotSide = GetChessSideForBot(bot);
+        bool const sideKnown = pieceBotSide != ChessSide::UNKNOWN;
+        bool const isFriendlyForBot = IsFriendlyChessPieceForBot(bot, piece);
+        bool const alive = piece->IsAlive();
+        bool const charmed = piece->IsCharmed();
+        bool const openingClaimable = IsClaimableFriendlyPawnForOpening(bot, piece);
+
+        if (!openingClaimable)
+        {
+            if (!sideKnown)
+                rejectReason = "side-unknown";
+            else if (!isFriendlyForBot)
+                rejectReason = "wrong-side";
+            else if (!isPawn)
+                rejectReason = "not-pawn";
+            else if (!alive)
+                rejectReason = "dead";
+            else
+                rejectReason = "not-claimable";
+        }
+        else if (IsKingEntry(piece->GetEntry()) && !canClaimKing)
+            rejectReason = "king-restricted-to-tank";
+        else if (IsPieceAssignedToOtherBot(bot, piece))
+            rejectReason = "assigned-to-other-bot";
+        else if (pawnOnlyMode && !isPawn)
+            rejectReason = "pawn-only-mode";
+        else if (phase == ChessPhase::OPENING && hasClaimablePawn && !isPawn)
+            rejectReason = "opening-pawn-phase";
+        else
+            finalClaimAllowed = true;
+
         LogKarazhanChessDebug(
             bot, "claim consider side=" + ChessSideToString(botSide) +
             " piece=" + piece->GetName() + " entry=" + std::to_string(piece->GetEntry()) +
-            " classified=" + PieceSideToString(bot, piece));
+            " classified=" + PieceSideToString(bot, piece) +
+            " isPawn=" + std::string(isPawn ? "1" : "0") +
+            " alive=" + std::string(alive ? "1" : "0") +
+            " charmed=" + std::string(charmed ? "1" : "0") +
+            " sideKnown=" + std::string(sideKnown ? "1" : "0") +
+            " isFriendlyForBot=" + std::string(isFriendlyForBot ? "1" : "0") +
+            " pawnOnlyMode=" + std::string(pawnOnlyMode ? "1" : "0") +
+            " finalClaimAllowed=" + std::string(finalClaimAllowed ? "1" : "0") +
+            " rejectReason=" + (rejectReason.empty() ? "none" : rejectReason));
 
-        if (!IsClaimableChessPieceForBot(bot, piece))
+        if (!finalClaimAllowed)
+            continue;
+
+        // Hard guard requested: never select non-claimable targets.
+        if (!IsClaimableFriendlyPawnForOpening(bot, piece))
         {
             LogKarazhanChessDebug(bot, "claim rejected wrong-side/unknown piece=" + piece->GetName());
-            continue;
-        }
-
-        if (IsKingEntry(piece->GetEntry()) && !canClaimKing)
-        {
-            LogKarazhanChessDebug(bot, "claim rejected: king restricted to tank piece=" + piece->GetName());
-            continue;
-        }
-
-        if (IsPieceAssignedToOtherBot(bot, piece))
-            continue;
-
-        if (phase == ChessPhase::OPENING && hasClaimablePawn && !IsPawnEntry(piece->GetEntry()))
-        {
-            LogKarazhanChessDebug(bot, "claim rejected: opening pawn phase piece=" + piece->GetName());
             continue;
         }
 
@@ -1198,6 +1267,8 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
     Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
     if (!piece || !IsChessPieceEntry(piece->GetEntry()))
         return false;
+    if (!IsPawnEntry(piece->GetEntry()))
+        return false;
     if (!IsChessPieceCommandGcdReady(piece))
     {
         LogKarazhanChessDebug(bot, "decision=HOLD reason=piece_global_cooldown_or_casting");
@@ -1256,6 +1327,8 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
 
     std::string legalDbg;
     std::vector<Creature*> triggers = GetLegalMoveTriggersForPiece(botAI, bot, piece, board, legalDbg);
+    uint32 const moveSpell = GetChessMoveSpellForPiece(piece);
+    std::string const pieceSpellList = GetChessPieceSpellList(piece);
     std::vector<std::pair<float, Creature*>> legalMoves;
     ObjectGuid const pieceGuid = piece->GetGUID();
     time_t const nowTick = now;
@@ -1285,7 +1358,34 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
 
     if (legalMoves.empty())
     {
-        LogKarazhanChessDebug(bot, "decision=HOLD reason=no_legal_move_trigger_or_only_recently_failed legal=" + legalDbg);
+        int forward = 0;
+        if (pieceSqIt != board.pieceSquare.end() && kingSqIt != board.pieceSquare.end())
+            forward = (kingSqIt->second.row > pieceSqIt->second.row) ? 1 : -1;
+        if (forward == 0)
+            forward = 1;
+        bool const hasMoveSpell = moveSpell != 0;
+
+        std::string curSq = "unknown";
+        if (pieceSqIt != board.pieceSquare.end())
+            curSq = "(" + std::to_string(pieceSqIt->second.row) + "," + std::to_string(pieceSqIt->second.col) + ")";
+
+        std::string squareBounds = "rows=" + std::to_string(board.minRow) + ".." + std::to_string(board.maxRow) +
+                                   " cols=" + std::to_string(board.minCol) + ".." + std::to_string(board.maxCol);
+        LogKarazhanChessDebug(
+            bot, "decision=HOLD reason=no_legal_move_trigger_or_only_recently_failed piece=" + piece->GetName() +
+            " entry=" + std::to_string(piece->GetEntry()) +
+            " world=(" + std::to_string(piece->GetPositionX()) + "," + std::to_string(piece->GetPositionY()) + "," + std::to_string(piece->GetPositionZ()) + ")" +
+            " board_origin=(" + std::to_string(board.originX) + "," + std::to_string(board.originY) + ")" +
+            " board_cell_row=(" + std::to_string(board.rowStepX) + "," + std::to_string(board.rowStepY) + ")" +
+            " board_cell_col=(" + std::to_string(board.colStepX) + "," + std::to_string(board.colStepY) + ")" +
+            " board_bounds=" + squareBounds +
+            " current_square=" + curSq +
+            " forward=" + std::to_string(forward) +
+            " legal=" + legalDbg +
+            " piece_spells=" + pieceSpellList +
+            " selected_movement_spell=" + std::to_string(moveSpell) +
+            " movement_spell_found=" + std::string(hasMoveSpell ? "1" : "0") +
+            " movement_spell_cooldown=" + std::string((hasMoveSpell && piece->HasSpellCooldown(moveSpell)) ? "1" : "0"));
         return false;
     }
 
@@ -1295,8 +1395,8 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
             return lhs.first < rhs.first;
         });
 
-    // Opening phase: pawns move first to open lanes, one forward/outward legal move.
-    if (phase == ChessPhase::OPENING && IsPawnEntry(piece->GetEntry()))
+    // Pawn-only deterministic opener: one legal forward/outward pawn move via native chess move spell.
+    if (IsPawnEntry(piece->GetEntry()))
     {
         if (pieceSqIt == board.pieceSquare.end())
         {
@@ -1306,13 +1406,39 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
         ChessSquare curSq = pieceSqIt->second;
         int bestForward = 0;
         Creature* bestForwardTrigger = nullptr;
+        std::string candDbg;
         for (std::pair<float, Creature*> const& mv : legalMoves)
         {
-            auto trSqIt = board.pieceSquare.find(mv.second->GetGUID());
-            (void)trSqIt;
-            int col = FindNearestBucket(board.colVals, mv.second->GetPositionX());
-            int row = FindNearestBucket(board.rowVals, mv.second->GetPositionY());
-            if (!IsInsideBoard(board, row, col))
+            int row = -1, col = -1;
+            bool const mapped = WorldToChessSquare(board, mv.second->GetPositionX(), mv.second->GetPositionY(), row, col);
+            bool const inBounds = mapped && IsInsideBoard(board, row, col);
+            Position candWorld = ChessSquareToWorld(board, row, col, mv.second->GetPositionZ());
+            bool const occupied = inBounds && board.occupied.find({ row, col }) != board.occupied.end();
+            std::string occBy = "none";
+            if (occupied)
+            {
+                for (auto const& pg : board.pieceSquare)
+                {
+                    if (pg.second.row == row && pg.second.col == col)
+                    {
+                        if (Creature* occPiece = botAI->GetCreature(pg.first))
+                            occBy = occPiece->GetName() + "/" + pg.first.ToString();
+                        else
+                            occBy = pg.first.ToString();
+                        break;
+                    }
+                }
+            }
+
+            if (!candDbg.empty())
+                candDbg += ";";
+            candDbg += "cand_sq=(" + std::to_string(row) + "," + std::to_string(col) + ")" +
+                       " world=(" + std::to_string(candWorld.GetPositionX()) + "," + std::to_string(candWorld.GetPositionY()) + "," + std::to_string(candWorld.GetPositionZ()) + ")" +
+                       " in_bounds=" + std::string(inBounds ? "1" : "0") +
+                       " occupied=" + std::string(occupied ? "1" : "0") +
+                       " occupied_by=" + occBy;
+
+            if (!inBounds)
                 continue;
 
             // prevent direct reverse unless emergency
@@ -1335,13 +1461,48 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
 
         if (!bestForwardTrigger)
         {
-            LogKarazhanChessDebug(bot, "decision=HOLD reason=opening_pawn_no_forward_legal_move phase=" + ChessPhaseToString(phase));
+            LogKarazhanChessDebug(bot, "decision=HOLD reason=pawn_no_forward_legal_move phase=" + ChessPhaseToString(phase) +
+                                       " candidates=" + candDbg);
             return false;
         }
 
-        int toCol = FindNearestBucket(board.colVals, bestForwardTrigger->GetPositionX());
-        int toRow = FindNearestBucket(board.rowVals, bestForwardTrigger->GetPositionY());
-        piece->CastSpell(bestForwardTrigger, SPELL_MOVE_GENERIC, true);
+        int toRow = -1, toCol = -1;
+        WorldToChessSquare(board, bestForwardTrigger->GetPositionX(), bestForwardTrigger->GetPositionY(), toRow, toCol);
+        bool occupied = board.occupied.find({ toRow, toCol }) != board.occupied.end();
+        if (occupied)
+        {
+            std::string occBy = "unknown";
+            for (auto const& pg : board.pieceSquare)
+            {
+                if (pg.second.row == toRow && pg.second.col == toCol)
+                {
+                    if (Creature* occPiece = botAI->GetCreature(pg.first))
+                        occBy = occPiece->GetName() + "/" + pg.first.ToString();
+                    else
+                        occBy = pg.first.ToString();
+                    break;
+                }
+            }
+            LogKarazhanChessDebug(
+                bot, "decision=HOLD pawn=" + piece->GetName() + " guid=" + piece->GetGUID().ToString() +
+                " current=(" + std::to_string(curSq.row) + "," + std::to_string(curSq.col) + ")" +
+                " dest=(" + std::to_string(toRow) + "," + std::to_string(toCol) + ")" +
+                " occupied=1 occupied_by=" + occBy + " reason=destination_occupied");
+            return false;
+        }
+
+        if (!moveSpell)
+        {
+            LogKarazhanChessDebug(
+                bot, "decision=HOLD pawn=" + piece->GetName() + " entry=" + std::to_string(piece->GetEntry()) +
+                " current=(" + std::to_string(curSq.row) + "," + std::to_string(curSq.col) + ")" +
+                " dest=(" + std::to_string(toRow) + "," + std::to_string(toCol) + ")" +
+                " piece_spells=" + pieceSpellList +
+                " selected_movement_spell=0 movement_spell_found=0 reason=no_movement_spell_on_piece");
+            return false;
+        }
+
+        piece->CastSpell(bestForwardTrigger, moveSpell, true);
         if (piece->HasAura(SPELL_MOVE_COOLDOWN))
         {
             StampChessPieceCommandGcd(piece);
@@ -1352,69 +1513,25 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
             chessOpenedLanePawnsByInstance[instanceId].insert(piece->GetGUID());
             chessLastMoveFromSquareByPiece[pieceGuid] = curSq;
             chessLastMoveToSquareByPiece[pieceGuid] = ChessSquare{ toRow, toCol };
-            LogKarazhanChessDebug(bot, "decision=MOVE phase=" + ChessPhaseToString(phase) + " opening_pawn_lane_opened=1");
+            LogKarazhanChessDebug(
+                bot, "decision=MOVE pawn=" + piece->GetName() + " guid=" + piece->GetGUID().ToString() +
+                " current=(" + std::to_string(curSq.row) + "," + std::to_string(curSq.col) + ")" +
+                " dest=(" + std::to_string(toRow) + "," + std::to_string(toCol) + ")" +
+                " occupied=0 move_spell=" + std::to_string(moveSpell) +
+                " gcd_ms=1500 move_cd_sec=5 result=success");
             return true;
         }
 
-        LogKarazhanChessDebug(bot, "decision=HOLD reason=opening_pawn_move_not_applied phase=" + ChessPhaseToString(phase));
+        LogKarazhanChessDebug(
+            bot, "decision=HOLD pawn=" + piece->GetName() + " guid=" + piece->GetGUID().ToString() +
+            " current=(" + std::to_string(curSq.row) + "," + std::to_string(curSq.col) + ")" +
+            " dest=(" + std::to_string(toRow) + "," + std::to_string(toCol) + ")" +
+            " occupied=0 move_spell=" + std::to_string(moveSpell) +
+            " result=fail reason=move_not_applied");
         return false;
     }
 
-    for (std::pair<float, Creature*> const& move : legalMoves)
-    {
-        Creature* trigger = move.second;
-        Position before(piece->GetPositionX(), piece->GetPositionY(), piece->GetPositionZ());
-        ChessSquare curSq{};
-        bool hasCurSq = false;
-        if (pieceSqIt != board.pieceSquare.end())
-        {
-            curSq = pieceSqIt->second;
-            hasCurSq = true;
-        }
-        int toCol = FindNearestBucket(board.colVals, trigger->GetPositionX());
-        int toRow = FindNearestBucket(board.rowVals, trigger->GetPositionY());
-
-        // avoid immediate reverse movement unless in fire
-        if (hasCurSq && !bot->HasAura(SPELL_CHARRED_EARTH))
-        {
-            auto lastFromIt = chessLastMoveFromSquareByPiece.find(pieceGuid);
-            auto lastToIt = chessLastMoveToSquareByPiece.find(pieceGuid);
-            if (lastFromIt != chessLastMoveFromSquareByPiece.end() &&
-                lastToIt != chessLastMoveToSquareByPiece.end() &&
-                lastToIt->second.row == curSq.row && lastToIt->second.col == curSq.col &&
-                lastFromIt->second.row == toRow && lastFromIt->second.col == toCol)
-            {
-                continue;
-            }
-        }
-        piece->CastSpell(trigger, SPELL_MOVE_GENERIC, true);
-
-        if (piece->HasAura(SPELL_MOVE_COOLDOWN))
-        {
-            StampChessPieceCommandGcd(piece);
-            chessLastFailedMoveTriggerByPiece.erase(pieceGuid);
-            chessLastFailedMoveTimeByPiece.erase(pieceGuid);
-            chessLastMoveCommandByPiece[pieceGuid] = nowTick;
-            chessMovementCooldownUntilByPiece[pieceGuid] = nowTick + 5;
-            if (hasCurSq)
-                chessLastMoveFromSquareByPiece[pieceGuid] = curSq;
-            chessLastMoveToSquareByPiece[pieceGuid] = ChessSquare{ toRow, toCol };
-            LogKarazhanChessDebug(
-                bot, "decision=MOVE phase=" + ChessPhaseToString(phase) + " trigger=" + trigger->GetGUID().ToString() +
-                " legal_moves=" + std::to_string(legalMoves.size()) + " legal=" + legalDbg);
-            return true;
-        }
-
-        chessLastFailedMoveTriggerByPiece[pieceGuid] = trigger->GetGUID();
-        chessLastFailedMoveTimeByPiece[pieceGuid] = nowTick;
-        LogKarazhanChessDebug(
-            bot, "decision=MOVE_TO_KING skipped trigger=" + trigger->GetGUID().ToString() +
-            " reason=move_cast_not_applied piece_pos=(" +
-            std::to_string(before.GetPositionX()) + "," + std::to_string(before.GetPositionY()) + "," +
-            std::to_string(before.GetPositionZ()) + ")");
-    }
-
-    LogKarazhanChessDebug(bot, "decision=HOLD reason=all_legal_moves_rejected_or_blocked");
+    LogKarazhanChessDebug(bot, "decision=HOLD reason=non_pawn_move_blocked");
     return false;
 }
 
@@ -1422,6 +1539,8 @@ bool KarazhanChessMoveOutOfFireAction::Execute(Event /*event*/)
 {
     Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
     if (!piece || !IsChessPieceEntry(piece->GetEntry()))
+        return false;
+    if (!IsPawnEntry(piece->GetEntry()))
         return false;
     if (!IsChessPieceCommandGcdReady(piece))
     {
@@ -1447,6 +1566,7 @@ bool KarazhanChessMoveOutOfFireAction::Execute(Event /*event*/)
     ChessBoardState board = BuildChessBoardState(botAI, bot);
     std::string legalDbg;
     std::vector<Creature*> triggers = GetLegalMoveTriggersForPiece(botAI, bot, piece, board, legalDbg);
+    uint32 const moveSpell = GetChessMoveSpellForPiece(piece);
     Creature* safe = nullptr;
     for (Creature* trigger : triggers)
     {
@@ -1472,13 +1592,20 @@ bool KarazhanChessMoveOutOfFireAction::Execute(Event /*event*/)
         return false;
     }
 
-    piece->CastSpell(safe, SPELL_MOVE_GENERIC, true);
+    if (!moveSpell)
+    {
+        LogKarazhanChessDebug(bot, "decision=HOLD move-out-of-fire skipped: no movement spell piece_spells=" + GetChessPieceSpellList(piece));
+        return false;
+    }
+
+    piece->CastSpell(safe, moveSpell, true);
     if (piece->HasAura(SPELL_MOVE_COOLDOWN))
     {
         StampChessPieceCommandGcd(piece);
         chessLastMoveCommandByPiece[piece->GetGUID()] = now;
     }
-    LogKarazhanChessDebug(bot, "decision=MOVE_SAFE move-out-of-fire trigger=" + safe->GetGUID().ToString());
+    LogKarazhanChessDebug(bot, "decision=MOVE_SAFE move-out-of-fire spell=" + std::to_string(moveSpell) +
+                               " trigger=" + safe->GetGUID().ToString());
     return true;
 }
 
@@ -1486,6 +1613,8 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
 {
     Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
     if (!piece || !IsChessPieceEntry(piece->GetEntry()))
+        return false;
+    if (!IsPawnEntry(piece->GetEntry()))
         return false;
     if (!IsChessPieceCommandGcdReady(piece))
     {
@@ -1503,6 +1632,11 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
     const ObjectGuid pieceGuid = piece->GetGUID();
     const bool isPawn = piece->GetEntry() == NPC_PAWN_A || piece->GetEntry() == NPC_PAWN_H;
     const float kingDist = enemyKing ? piece->GetExactDist2d(enemyKing) : 999.0f;
+    const uint32 instanceId = bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0;
+    ChessBoardState board = BuildChessBoardState(botAI, bot);
+    ChessPhase phase = GetChessPhase(botAI, bot, board);
+    bool const openingPawnMoved = instanceId && chessOpenedLanePawnsByInstance.count(instanceId) &&
+        !chessOpenedLanePawnsByInstance[instanceId].empty();
 
     if (!IsChessAbilityReady(piece, now, 5))
     {
@@ -1549,6 +1683,11 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
 
         if (enemyKing)
         {
+            if (phase == ChessPhase::OPENING && !openingPawnMoved)
+            {
+                LogKarazhanChessDebug(bot, "decision=HOLD reason=opening_no_attack_until_pawn_moves");
+                continue;
+            }
             chessLastAbilityCommandByPiece[pieceGuid] = now;
             piece->CastSpell(enemyKing, spellId, true);
             if (piece->HasSpellCooldown(spellId))
@@ -1604,6 +1743,8 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
     Creature* king = GetFriendlyChessKing(botAI, bot);
     if (!piece || !king || !IsHealerChessPieceEntry(piece->GetEntry()))
         return false;
+    if (!IsPawnEntry(piece->GetEntry()))
+        return false;
     if (!IsChessPieceCommandGcdReady(piece))
         return false;
     const time_t now = std::time(nullptr);
@@ -1633,11 +1774,23 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
     Creature* enemyKing = GetEnemyChessKing(botAI, bot);
     if (!piece || !enemyKing)
         return false;
+    if (!IsPawnEntry(piece->GetEntry()))
+        return false;
     if (!IsChessPieceCommandGcdReady(piece))
         return false;
     const time_t now = std::time(nullptr);
     if (!IsChessAbilityReady(piece, now, 5))
         return false;
+    const uint32 instanceId = bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0;
+    ChessBoardState board = BuildChessBoardState(botAI, bot);
+    ChessPhase phase = GetChessPhase(botAI, bot, board);
+    bool const openingPawnMoved = instanceId && chessOpenedLanePawnsByInstance.count(instanceId) &&
+        !chessOpenedLanePawnsByInstance[instanceId].empty();
+    if (phase == ChessPhase::OPENING && !openingPawnMoved)
+    {
+        LogKarazhanChessDebug(bot, "decision=HOLD reason=opening_no_attack_until_pawn_moves");
+        return false;
+    }
 
     for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
     {
@@ -1662,6 +1815,8 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
     Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
     if (!piece || !IsChessPieceEntry(piece->GetEntry()))
         return false;
+    if (!IsPawnEntry(piece->GetEntry()))
+        return false;
     if (!IsChessPieceCommandGcdReady(piece))
         return false;
     const time_t now = std::time(nullptr);
@@ -1679,6 +1834,7 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
     ChessBoardState board = BuildChessBoardState(botAI, bot);
     std::string legalDbg;
     std::vector<Creature*> triggers = GetLegalMoveTriggersForPiece(botAI, bot, piece, board, legalDbg);
+    uint32 const moveSpell = GetChessMoveSpellForPiece(piece);
     Creature* best = nullptr;
     float bestDist = std::numeric_limits<float>::max();
     for (Creature* trigger : triggers)
@@ -1696,13 +1852,20 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
     if (!best)
         return false;
 
-    piece->CastSpell(best, SPELL_MOVE_GENERIC, true);
+    if (!moveSpell)
+    {
+        LogKarazhanChessDebug(bot, "decision=HOLD block-path skipped: no movement spell piece_spells=" + GetChessPieceSpellList(piece));
+        return false;
+    }
+
+    piece->CastSpell(best, moveSpell, true);
     if (piece->HasAura(SPELL_MOVE_COOLDOWN))
     {
         StampChessPieceCommandGcd(piece);
         chessLastMoveCommandByPiece[piece->GetGUID()] = now;
     }
-    LogKarazhanChessDebug(bot, "decision=BLOCK block-path move trigger=" + best->GetGUID().ToString());
+    LogKarazhanChessDebug(bot, "decision=BLOCK block-path move spell=" + std::to_string(moveSpell) +
+                               " trigger=" + best->GetGUID().ToString());
     return true;
 }
 
@@ -1745,11 +1908,36 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
         chessSelfAbilityThrottleByPiece.erase(assigned->GetGUID());
         ClearAssignedChessPiece(bot);
     }
-    else if (assigned && !IsClaimableChessPieceForBot(bot, assigned))
+    else if (assigned)
     {
-        LogKarazhanChessDebug(bot, "assigned piece wrong-side/unknown, clearing");
-        chessSelfAbilityThrottleByPiece.erase(assigned->GetGUID());
-        ClearAssignedChessPiece(bot);
+        ChessBoardState board = BuildChessBoardState(botAI, bot);
+        ChessPhase phase = GetChessPhase(botAI, bot, board);
+        bool const pawnOnlyMode = true;
+        bool const isPawn = IsPawnEntry(assigned->GetEntry());
+        bool const isFriendlyForBot = IsFriendlyChessPieceForBot(bot, assigned);
+        bool const openingAssignedAllowed = IsClaimableFriendlyPawnForOpening(bot, assigned);
+        bool const assignedAllowed = openingAssignedAllowed && (!pawnOnlyMode || isPawn);
+
+        if (!assignedAllowed)
+        {
+            Unit* controller = assigned->GetCharmerOrOwner();
+            std::string clearReason = !isFriendlyForBot ? "wrong-side" : (!isPawn ? "non-pawn-in-opening" : "not-claimable");
+            LogKarazhanChessDebug(
+                bot, "assigned validation guid=" + assigned->GetGUID().ToString() +
+                " entry=" + std::to_string(assigned->GetEntry()) +
+                " name=" + assigned->GetName() +
+                " side=" + ChessSideToString(GetChessSideForBot(bot)) +
+                " isPawn=" + std::string(isPawn ? "1" : "0") +
+                " isFriendlyForBot=" + std::string(isFriendlyForBot ? "1" : "0") +
+                " pawnOnlyMode=" + std::string(pawnOnlyMode ? "1" : "0") +
+                " charmed=" + std::string(assigned->IsCharmed() ? "1" : "0") +
+                " controller=" + (controller ? controller->GetName() : std::string("none")) +
+                " finalAssignedAllowed=" + std::string(assignedAllowed ? "1" : "0") +
+                " clearReason=" + clearReason +
+                " phase=" + ChessPhaseToString(phase));
+            chessSelfAbilityThrottleByPiece.erase(assigned->GetGUID());
+            ClearAssignedChessPiece(bot);
+        }
     }
 
     return false;
