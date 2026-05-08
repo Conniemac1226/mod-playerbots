@@ -1,7 +1,5 @@
 #pragma once
 
-#include "AiObjectContext.h"
-#include "Multiplier.h"
 #include "Strategy.h"
 
 class RaidOsStrategy : public Strategy
