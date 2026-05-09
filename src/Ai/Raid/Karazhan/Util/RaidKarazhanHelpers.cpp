@@ -1,9 +1,8 @@
 #include "RaidKarazhanHelpers.h"
 #include "Playerbots.h"
-#include "Config.h"
 #include "InstanceScript.h"
-#include "Log.h"
 #include "PathGenerator.h"
+#include <cmath>
 
 namespace KarazhanHelpers
 {
@@ -23,6 +22,7 @@ namespace KarazhanHelpers
 
             return false;
         }
+
     }
 
     // Attumen the Huntsman
@@ -325,26 +325,6 @@ namespace KarazhanHelpers
         return infernals;
     }
 
-    bool IsKarazhanChessEnabled()
-    {
-        return sConfigMgr->GetOption<bool>("PlayerbotAI.Karazhan.Chess.Enable", true);
-    }
-
-    bool IsKarazhanChessDebugEnabled()
-    {
-        return true;
-    }
-
-    bool IsKarazhanNightbaneEnabled()
-    {
-        return sConfigMgr->GetOption<bool>("PlayerbotAI.Karazhan.Nightbane.Enable", true);
-    }
-
-    bool IsKarazhanNightbaneDebugEnabled()
-    {
-        return false;
-    }
-
     bool IsMasterTankingNightbane(PlayerbotAI* botAI, Player* bot, Unit* nightbane)
     {
         if (!botAI || !bot || !nightbane)
@@ -362,7 +342,7 @@ namespace KarazhanHelpers
 
     bool ShouldUseDynamicHumanTankMode(PlayerbotAI* botAI, Player* bot, Unit* nightbane)
     {
-        if (!IsKarazhanNightbaneEnabled() || !botAI || !bot || !nightbane)
+        if (!botAI || !bot || !nightbane)
             return false;
 
         if (bot->GetMapId() != KARAZHAN_MAP_ID || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
@@ -691,6 +671,8 @@ namespace KarazhanHelpers
     {
         if (!bot || !piece || !IsChessPieceEntry(piece->GetEntry()))
             return false;
+        if (!piece->IsInWorld())
+            return false;
 
         ChessSide side = GetChessSideForBot(bot);
         if (side == ChessSide::ALLIANCE)
@@ -713,6 +695,8 @@ namespace KarazhanHelpers
     {
         if (!bot || !piece || !IsChessPieceEntry(piece->GetEntry()))
             return false;
+        if (!piece->IsInWorld())
+            return false;
 
         ChessSide side = GetChessSideForBot(bot);
         if (side == ChessSide::ALLIANCE)
@@ -731,7 +715,7 @@ namespace KarazhanHelpers
         return false;
     }
 
-    bool IsClaimableChessPieceForBot(Player* bot, Creature* piece)
+    bool IsClaimableChessPieceForBot(Player* bot, Creature* piece, bool allowControlledState /*= false*/)
     {
         if (!bot || !piece)
             return false;
@@ -742,7 +726,16 @@ namespace KarazhanHelpers
         if (!IsFriendlyChessPieceForBot(bot, piece))
             return false;
 
-        return !piece->IsCharmed() && piece->IsAlive() &&
+        if (!piece->IsInWorld())
+            return false;
+
+        if (!piece->IsAlive())
+            return false;
+
+        if (allowControlledState)
+            return true;
+
+        return !piece->IsCharmed() &&
                !piece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
     }
 
@@ -759,7 +752,7 @@ namespace KarazhanHelpers
         // Opening claim should not depend on pre-control select/charm state.
         // Chess pieces may already be charmed by script-side controllers but are still valid
         // targets for SPELL_CONTROL_PIECE takeover.
-        if (!piece->IsAlive())
+        if (!piece->IsInWorld() || !piece->IsAlive())
             return false;
 
         if (!IsFriendlyChessPieceForBot(bot, piece))
@@ -802,9 +795,145 @@ namespace KarazhanHelpers
         return phase == CHESS_PHASE_INPROGRESS_PVE || phase == CHESS_PHASE_INPROGRESS_PVP;
     }
 
+    void CountEnemyChessBoardState(PlayerbotAI* botAI, Player* bot, uint32& supportAlive, uint32& damageAlive, uint32& pawnAlive)
+    {
+        supportAlive = 0;
+        damageAlive = 0;
+        pawnAlive = 0;
+
+        if (!botAI || !bot)
+            return;
+
+        for (Creature* piece : GetNearbyChessPieces(botAI, bot, false))
+        {
+            if (!piece || !piece->IsAlive() || !IsEnemyChessPieceForBot(bot, piece) || IsKingChessPieceEntry(piece->GetEntry()))
+                continue;
+
+            switch (piece->GetEntry())
+            {
+                case NPC_BISHOP_A:
+                case NPC_BISHOP_H:
+                    ++supportAlive;
+                    break;
+                case NPC_ROOK_A:
+                case NPC_ROOK_H:
+                case NPC_QUEEN_A:
+                case NPC_QUEEN_H:
+                case NPC_KNIGHT_A:
+                case NPC_KNIGHT_H:
+                    ++damageAlive;
+                    break;
+                case NPC_PAWN_A:
+                case NPC_PAWN_H:
+                    ++pawnAlive;
+                    break;
+                default:
+                    ++damageAlive;
+                    break;
+            }
+        }
+    }
+
+    bool IsOnActiveChessBoard(Creature* piece)
+    {
+        if (!piece || !piece->IsInWorld() || !piece->IsAlive() || !IsChessPieceEntry(piece->GetEntry()))
+            return false;
+
+        // Same Karazhan chess board projection used by the action-side active-board checks.
+        constexpr float originX = -11108.099609f;
+        constexpr float originY = -1872.910034f;
+        constexpr float rowStepX = 4.4f;
+        constexpr float rowStepY = 3.45f;
+        constexpr float colStepX = 3.49f;
+        constexpr float colStepY = -4.4f;
+        constexpr float determinant = rowStepX * colStepY - rowStepY * colStepX;
+        if (std::fabs(determinant) < 0.001f)
+            return false;
+
+        float const dx = piece->GetPositionX() - originX;
+        float const dy = piece->GetPositionY() - originY;
+        float const rowF = (dx * colStepY - dy * colStepX) / determinant;
+        float const colF = (rowStepX * dy - rowStepY * dx) / determinant;
+        int const row = static_cast<int>(std::lround(rowF));
+        int const col = static_cast<int>(std::lround(colF));
+
+        if (row < 0 || row > 7 || col < 0 || col > 7)
+            return false;
+
+        float const expectedX = originX + row * rowStepX + col * colStepX;
+        float const expectedY = originY + row * rowStepY + col * colStepY;
+        float const distSq = (piece->GetPositionX() - expectedX) * (piece->GetPositionX() - expectedX) +
+            (piece->GetPositionY() - expectedY) * (piece->GetPositionY() - expectedY);
+        return distSq <= 10.24f;
+    }
+
+    void CountActiveBoardEnemyChessBoardState(PlayerbotAI* botAI, Player* bot, uint32& supportAlive, uint32& damageAlive, uint32& pawnAlive, uint32& activeNonKingRemaining)
+    {
+        supportAlive = 0;
+        damageAlive = 0;
+        pawnAlive = 0;
+        activeNonKingRemaining = 0;
+
+        if (!botAI || !bot)
+            return;
+
+        for (Creature* piece : GetNearbyChessPieces(botAI, bot, false))
+        {
+            if (!piece || !IsEnemyChessPieceForBot(bot, piece) || IsKingChessPieceEntry(piece->GetEntry()))
+                continue;
+
+            if (!IsOnActiveChessBoard(piece))
+                continue;
+
+            ++activeNonKingRemaining;
+            switch (piece->GetEntry())
+            {
+                case NPC_BISHOP_A:
+                case NPC_BISHOP_H:
+                    ++supportAlive;
+                    break;
+                case NPC_ROOK_A:
+                case NPC_ROOK_H:
+                case NPC_QUEEN_A:
+                case NPC_QUEEN_H:
+                case NPC_KNIGHT_A:
+                case NPC_KNIGHT_H:
+                    ++damageAlive;
+                    break;
+                case NPC_PAWN_A:
+                case NPC_PAWN_H:
+                    ++pawnAlive;
+                    break;
+                default:
+                    ++damageAlive;
+                    break;
+            }
+        }
+    }
+
+    bool IsKarazhanChessKingFocusAllowed(PlayerbotAI* botAI, Player* bot, Creature* enemyKing, uint32& supportAlive, uint32& damageAlive, uint32& pawnAlive, std::string& gateReason)
+    {
+        CountEnemyChessBoardState(botAI, bot, supportAlive, damageAlive, pawnAlive);
+
+        bool const kingCriticallyLow = enemyKing && enemyKing->GetHealthPct() < 30.0f;
+        bool const boardMostlyCleared = supportAlive == 0 && damageAlive == 0 && pawnAlive <= 3;
+        gateReason = kingCriticallyLow ? "king_critically_low" : (boardMostlyCleared ? "board_mostly_cleared" : "board_not_cleared");
+        return kingCriticallyLow || boardMostlyCleared;
+    }
+
+    bool IsKarazhanChessKingFocusAllowedActiveBoard(PlayerbotAI* botAI, Player* bot, Creature* enemyKing, uint32& supportAlive, uint32& damageAlive, uint32& pawnAlive, uint32& activeNonKingRemaining, std::string& gateReason)
+    {
+        CountActiveBoardEnemyChessBoardState(botAI, bot, supportAlive, damageAlive, pawnAlive, activeNonKingRemaining);
+
+        bool const kingCriticallyLow = enemyKing && enemyKing->GetHealthPct() < 30.0f;
+        bool const boardMostlyCleared = supportAlive == 0 && damageAlive == 0 && pawnAlive <= 3;
+        gateReason = kingCriticallyLow ? "king_critically_low" : (boardMostlyCleared ? "board_mostly_cleared" : "board_not_cleared");
+        return kingCriticallyLow || boardMostlyCleared;
+    }
+
     bool IsChessEventActive(PlayerbotAI* botAI, Player* bot)
     {
-        if (!botAI || !bot || bot->GetMapId() != KARAZHAN_MAP_ID || !IsKarazhanChessEnabled())
+        if (!botAI || !bot || bot->GetMapId() != KARAZHAN_MAP_ID)
             return false;
 
         bool hasChessUnitNearby = false;
@@ -852,7 +981,7 @@ namespace KarazhanHelpers
 
         Unit* unit = ObjectAccessor::GetUnit(*bot, it->second);
         Creature* piece = unit ? unit->ToCreature() : nullptr;
-        if (!piece || !piece->IsAlive() || !IsChessPieceEntry(piece->GetEntry()))
+        if (!piece || !piece->IsInWorld() || !piece->IsAlive() || !IsChessPieceEntry(piece->GetEntry()))
             return nullptr;
 
         return piece;
@@ -906,7 +1035,7 @@ namespace KarazhanHelpers
         for (ObjectGuid const& npcGuid : npcs)
         {
             Creature* creature = botAI->GetCreature(npcGuid);
-            if (!creature || !creature->IsAlive() || !IsChessPieceEntry(creature->GetEntry()))
+            if (!creature || !creature->IsInWorld() || !creature->IsAlive() || !IsChessPieceEntry(creature->GetEntry()))
                 continue;
 
             if (friendlyOnly && !IsFriendlyChessPieceForBot(bot, creature))
@@ -974,22 +1103,6 @@ namespace KarazhanHelpers
         }
 
         return triggers;
-    }
-
-    void LogKarazhanChessDebug(Player* bot, std::string const& reason)
-    {
-        if (!bot || !IsKarazhanChessDebugEnabled())
-            return;
-
-        LOG_INFO("playerbots", "KZ-CHESS bot={} reason={}", bot->GetName(), reason);
-    }
-
-    void LogKarazhanNightbaneDebug(Player* bot, std::string const& reason)
-    {
-        if (!bot || !IsKarazhanNightbaneDebugEnabled())
-            return;
-
-        LOG_INFO("playerbots", "KZ-NIGHTBANE bot={} reason={}", bot->GetName(), reason);
     }
 
     bool IsStraightPathSafe(const Position& start, const Position& target, const std::vector<Unit*>& hazards,

@@ -312,9 +312,6 @@ bool PrinceMalchezaarBossEngagedByMainTankTrigger::IsActive()
 
 bool NightbaneBossEngagedByMainTankTrigger::IsActive()
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return false;
-
     if (!botAI->IsMainTank(bot))
         return false;
 
@@ -330,9 +327,6 @@ bool NightbaneBossEngagedByMainTankTrigger::IsActive()
 
 bool NightbaneHumanTankGroundPhasePositioningTrigger::IsActive()
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return false;
-
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return false;
@@ -342,9 +336,6 @@ bool NightbaneHumanTankGroundPhasePositioningTrigger::IsActive()
 
 bool NightbaneRangedBotsAreInCharredEarthTrigger::IsActive()
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return false;
-
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
         return false;
@@ -365,9 +356,6 @@ bool NightbaneRangedBotsAreInCharredEarthTrigger::IsActive()
 
 bool NightbaneMainTankIsSusceptibleToFearTrigger::IsActive()
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return false;
-
     if (bot->getClass() != CLASS_PRIEST)
         return false;
 
@@ -395,9 +383,6 @@ bool NightbaneMainTankIsSusceptibleToFearTrigger::IsActive()
 
 bool NightbanePetsIgnoreCollisionToChaseFlyingBossTrigger::IsActive()
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return false;
-
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return false;
@@ -408,9 +393,6 @@ bool NightbanePetsIgnoreCollisionToChaseFlyingBossTrigger::IsActive()
 
 bool NightbaneBossIsFlyingTrigger::IsActive()
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return false;
-
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane || nightbane->GetPositionZ() <= NIGHTBANE_FLIGHT_Z)
         return false;
@@ -425,9 +407,6 @@ bool NightbaneBossIsFlyingTrigger::IsActive()
 
 bool NightbaneNeedToManageTimersAndTrackersTrigger::IsActive()
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return false;
-
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     return nightbane != nullptr;
 }
@@ -444,7 +423,12 @@ bool KarazhanChessPieceNeedsControllerTrigger::IsActive()
 
     Creature* charm = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
     if (charm && IsChessPieceEntry(charm->GetEntry()))
-        return false;
+    {
+        if (IsOnActiveChessBoard(charm))
+            return false;
+
+        return true;
+    }
 
     Creature* assigned = GetAssignedChessPiece(bot);
     if (!assigned || assigned->IsCharmed())
@@ -498,7 +482,19 @@ bool KarazhanEnemyKingVulnerableTrigger::IsActive()
     if (!piece)
         return false;
 
-    return piece->GetDistance(enemyKing) < 30.0f || enemyKing->GetHealthPct() < 60.0f;
+    uint32 supportAlive = 0;
+    uint32 damageAlive = 0;
+    uint32 pawnAlive = 0;
+    uint32 activeNonKingRemaining = 0;
+    std::string gateReason;
+    bool const attackAllowed = IsKarazhanChessKingFocusAllowedActiveBoard(botAI, bot, enemyKing, supportAlive, damageAlive, pawnAlive, activeNonKingRemaining, gateReason);
+
+
+    if (!attackAllowed)
+        return false;
+
+    bool const kingCriticallyLow = gateReason == "king_critically_low";
+    return piece->GetDistance(enemyKing) < 30.0f || kingCriticallyLow;
 }
 
 bool KarazhanControlledChessPieceAbilityReadyTrigger::IsActive()

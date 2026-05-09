@@ -84,15 +84,6 @@
 # Enable or disable Playerbots module
 AiPlayerbot.Enabled = 1
 
-# Karazhan raid encounter helper toggles (mod-playerbots local strategy options)
-# Chess helper mode: when active, bots go passive to avoid griefing chess-piece control.
-PlayerbotAI.Karazhan.Chess.Enable = 1
-PlayerbotAI.Karazhan.Chess.Debug = 0
-
-# Nightbane strategy toggle/debug.
-PlayerbotAI.Karazhan.Nightbane.Enable = 1
-PlayerbotAI.Karazhan.Nightbane.Debug = 0
-
 # Enable randombot system
 AiPlayerbot.RandomBotAutologin = 1
 

@@ -152,10 +152,6 @@ namespace KarazhanHelpers
     std::vector<Unit*> GetAllVoidZones(PlayerbotAI *botAI, Player* bot);
     bool IsSafePosition (float x, float y, const std::vector<Unit*>& hazards, float hazardRadius);
     std::vector<Unit*> GetSpawnedInfernals(PlayerbotAI* botAI);
-    bool IsKarazhanChessEnabled();
-    bool IsKarazhanChessDebugEnabled();
-    bool IsKarazhanNightbaneEnabled();
-    bool IsKarazhanNightbaneDebugEnabled();
     bool IsMasterTankingNightbane(PlayerbotAI* botAI, Player* bot, Unit* nightbane);
     bool ShouldUseDynamicHumanTankMode(PlayerbotAI* botAI, Player* bot, Unit* nightbane);
     Position GetNightbaneDynamicAnchorForBot(PlayerbotAI* botAI, Player* bot, Unit* nightbane);
@@ -173,13 +169,18 @@ namespace KarazhanHelpers
     ChessSide GetChessSideForBot(Player* bot);
     bool IsFriendlyChessPieceForBot(Player* bot, Creature* piece);
     bool IsEnemyChessPieceForBot(Player* bot, Creature* piece);
-    bool IsClaimableChessPieceForBot(Player* bot, Creature* piece);
+    bool IsClaimableChessPieceForBot(Player* bot, Creature* piece, bool allowControlledState = false);
     bool IsClaimableFriendlyPawnForOpening(Player* bot, Creature* piece);
     bool IsHealerChessPieceEntry(uint32 entry);
     bool IsKingChessPieceEntry(uint32 entry);
     bool IsDamageChessPieceEntry(uint32 entry);
     bool IsChessEventActive(PlayerbotAI* botAI, Player* bot);
     bool IsChessPhaseInProgress(Player* bot);
+    bool IsOnActiveChessBoard(Creature* piece);
+    void CountEnemyChessBoardState(PlayerbotAI* botAI, Player* bot, uint32& supportAlive, uint32& damageAlive, uint32& pawnAlive);
+    void CountActiveBoardEnemyChessBoardState(PlayerbotAI* botAI, Player* bot, uint32& supportAlive, uint32& damageAlive, uint32& pawnAlive, uint32& activeNonKingRemaining);
+    bool IsKarazhanChessKingFocusAllowed(PlayerbotAI* botAI, Player* bot, Creature* enemyKing, uint32& supportAlive, uint32& damageAlive, uint32& pawnAlive, std::string& gateReason);
+    bool IsKarazhanChessKingFocusAllowedActiveBoard(PlayerbotAI* botAI, Player* bot, Creature* enemyKing, uint32& supportAlive, uint32& damageAlive, uint32& pawnAlive, uint32& activeNonKingRemaining, std::string& gateReason);
     Creature* GetAssignedChessPiece(Player* bot);
     bool SetAssignedChessPiece(Player* bot, Creature* piece, time_t lockSeconds = 8);
     void ClearAssignedChessPiece(Player* bot);
@@ -188,8 +189,6 @@ namespace KarazhanHelpers
     Creature* GetFriendlyChessKing(PlayerbotAI* botAI, Player* bot);
     Creature* GetEnemyChessKing(PlayerbotAI* botAI, Player* bot);
     std::vector<Creature*> GetNearbyChessMoveTriggers(PlayerbotAI* botAI, Player* bot);
-    void LogKarazhanChessDebug(Player* bot, std::string const& reason);
-    void LogKarazhanNightbaneDebug(Player* bot, std::string const& reason);
     bool IsStraightPathSafe(
         const Position& start, const Position& target,
         const std::vector<Unit*>& hazards, float hazardRadius, float stepSize);

@@ -336,9 +336,6 @@ float PrinceMalchezaarDelayBloodlustAndHeroismMultiplier::GetValue(Action* actio
 // Hunter and Warlock pets are addressed in ControlPetAggressionAction
 float NightbaneDisablePetsMultiplier::GetValue(Action* action)
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return 1.0f;
-
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return 1.0f;
@@ -363,9 +360,6 @@ float NightbaneDisablePetsMultiplier::GetValue(Action* action)
 // Give the main tank a short window to rebuild aggro after Nightbane lands.
 float NightbaneWaitForDpsMultiplier::GetValue(Action* action)
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return 1.0f;
-
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
         return 1.0f;
@@ -393,9 +387,6 @@ float NightbaneWaitForDpsMultiplier::GetValue(Action* action)
 // It is also disabled for all bots during the flight phase
 float NightbaneDisableAvoidAoeMultiplier::GetValue(Action* action)
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return 1.0f;
-
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return 1.0f;
@@ -412,9 +403,6 @@ float NightbaneDisableAvoidAoeMultiplier::GetValue(Action* action)
 // Disable some movement actions that conflict with the strategies
 float NightbaneDisableMovementMultiplier::GetValue(Action* action)
 {
-    if (!IsKarazhanNightbaneEnabled())
-        return 1.0f;
-
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return 1.0f;
@@ -428,10 +416,6 @@ float NightbaneDisableMovementMultiplier::GetValue(Action* action)
             dynamic_cast<TankAssistAction*>(action) ||
             dynamic_cast<CombatFormationMoveAction*>(action))
         {
-            LogKarazhanNightbaneDebug(
-                bot, "Nightbane containment suppressed chase/follow outside area action=" + action->getName() +
-                " target=(" + std::to_string(target->GetPositionX()) + "," + std::to_string(target->GetPositionY()) + "," +
-                std::to_string(target->GetPositionZ()) + ")");
             return 0.0f;
         }
     }
@@ -449,7 +433,6 @@ float NightbaneDisableMovementMultiplier::GetValue(Action* action)
         (dynamic_cast<CombatFormationMoveAction*>(action) &&
          !dynamic_cast<SetBehindTargetAction*>(action)))
     {
-        LogKarazhanNightbaneDebug(bot, "dynamic-ground suppressed generic movement action: " + action->getName());
         return 0.0f;
     }
 
