@@ -165,6 +165,8 @@ namespace KarazhanHelpers
     bool IsNightbaneMovementAllowed(Player* bot, Position const& dest);
     bool IsNightbaneTargetAllowed(Unit* target);
     Position GetNearestNightbaneSafePoint(Player* bot);
+    bool IsInsideChessFightArea(Position const& pos);
+    bool IsChessEncounterRelevant(PlayerbotAI* botAI, Player* bot);
     bool IsChessPieceEntry(uint32 entry);
     ChessSide GetChessSideForBot(Player* bot);
     bool IsFriendlyChessPieceForBot(Player* bot, Creature* piece);

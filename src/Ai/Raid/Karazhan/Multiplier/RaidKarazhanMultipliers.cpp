@@ -190,6 +190,9 @@ float ShadeOfAranFlameWreathDisableMovementMultiplier::GetValue(Action* action)
 
 float KarazhanChessDisableCombatActionsMultiplier::GetValue(Action* action)
 {
+    if (!IsChessEncounterRelevant(botAI, bot))
+        return 1.0f;
+
     if (!IsChessEventActive(botAI, bot))
         return 1.0f;
 
@@ -336,6 +339,9 @@ float PrinceMalchezaarDelayBloodlustAndHeroismMultiplier::GetValue(Action* actio
 // Hunter and Warlock pets are addressed in ControlPetAggressionAction
 float NightbaneDisablePetsMultiplier::GetValue(Action* action)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return 1.0f;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return 1.0f;
@@ -360,6 +366,9 @@ float NightbaneDisablePetsMultiplier::GetValue(Action* action)
 // Give the main tank a short window to rebuild aggro after Nightbane lands.
 float NightbaneWaitForDpsMultiplier::GetValue(Action* action)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return 1.0f;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
         return 1.0f;
@@ -387,6 +396,9 @@ float NightbaneWaitForDpsMultiplier::GetValue(Action* action)
 // It is also disabled for all bots during the flight phase
 float NightbaneDisableAvoidAoeMultiplier::GetValue(Action* action)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return 1.0f;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return 1.0f;
@@ -403,6 +415,9 @@ float NightbaneDisableAvoidAoeMultiplier::GetValue(Action* action)
 // Disable some movement actions that conflict with the strategies
 float NightbaneDisableMovementMultiplier::GetValue(Action* action)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return 1.0f;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return 1.0f;

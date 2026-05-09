@@ -3,6 +3,7 @@
 #include "InstanceScript.h"
 #include "PathGenerator.h"
 #include <cmath>
+#include <unordered_set>
 
 namespace KarazhanHelpers
 {
@@ -21,6 +22,110 @@ namespace KarazhanHelpers
             }
 
             return false;
+        }
+
+        struct ChessNearbyCache
+        {
+            uint32 stampMs = 0;
+            std::vector<Creature*> pieces;
+            std::vector<Creature*> friendlyPieces;
+            std::vector<Creature*> moveTriggers;
+            bool hasChessPieceNearby = false;
+            bool hasCombatPieceNearby = false;
+            bool hasMedivhHazardNearby = false;
+        };
+
+        static std::unordered_map<ObjectGuid, ChessNearbyCache> chessNearbyCacheByBot;
+        static constexpr uint32 ChessNearbyCacheTtlMs = 250;
+
+        static bool IsFreshCache(uint32 nowMs, uint32 stampMs, uint32 ttlMs)
+        {
+            return stampMs != 0 && (nowMs - stampMs) <= ttlMs;
+        }
+
+        static void CollectNearbyChessData(PlayerbotAI* botAI, Player* bot, ChessNearbyCache& cache, size_t& scannedCount)
+        {
+            cache.pieces.clear();
+            cache.friendlyPieces.clear();
+            cache.moveTriggers.clear();
+            cache.hasChessPieceNearby = false;
+            cache.hasCombatPieceNearby = false;
+            cache.hasMedivhHazardNearby = false;
+            scannedCount = 0;
+
+            if (!botAI || !bot)
+                return;
+
+            GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+            scannedCount += npcs.size();
+
+            std::unordered_set<ObjectGuid::LowType> seenTriggers;
+            for (ObjectGuid const& npcGuid : npcs)
+            {
+                Creature* creature = botAI->GetCreature(npcGuid);
+                if (!creature || !creature->IsInWorld() || !creature->IsAlive())
+                    continue;
+
+                if (IsChessPieceEntry(creature->GetEntry()))
+                {
+                    cache.hasChessPieceNearby = true;
+                    cache.pieces.push_back(creature);
+                    if (IsFriendlyChessPieceForBot(bot, creature))
+                        cache.friendlyPieces.push_back(creature);
+                    if (creature->IsInCombat() || creature->GetVictim())
+                        cache.hasCombatPieceNearby = true;
+                }
+                else if (creature->GetEntry() == 22519)
+                {
+                    if (seenTriggers.insert(creature->GetGUID().GetCounter()).second)
+                        cache.moveTriggers.push_back(creature);
+                }
+                else if (creature->GetEntry() == NPC_CHESS_EVENT_MEDIVH_CHEAT_FIRES)
+                {
+                    if (creature->GetExactDist2d(bot) <= 100.0f)
+                        cache.hasMedivhHazardNearby = true;
+                }
+            }
+
+            WorldObject* anchor = bot;
+            if (Unit* charm = bot->GetCharm())
+                anchor = charm;
+
+            std::list<Creature*> gridTriggers;
+            anchor->GetCreatureListWithEntryInGrid(gridTriggers, 22519, 120.0f);
+            scannedCount += gridTriggers.size();
+            for (Creature* creature : gridTriggers)
+            {
+                if (!creature)
+                    continue;
+                if (!seenTriggers.insert(creature->GetGUID().GetCounter()).second)
+                    continue;
+                cache.moveTriggers.push_back(creature);
+            }
+        }
+
+        static ChessNearbyCache const& GetChessNearbyCache(PlayerbotAI* botAI, Player* bot, size_t& scannedCount, bool& usedCache)
+        {
+            static ChessNearbyCache empty;
+            usedCache = false;
+
+            if (!botAI || !bot || bot->GetMapId() != KARAZHAN_MAP_ID || !IsInsideChessFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+                return empty;
+
+            uint32 const nowMs = getMSTime();
+            ChessNearbyCache& cache = chessNearbyCacheByBot[bot->GetGUID()];
+            if (IsFreshCache(nowMs, cache.stampMs, ChessNearbyCacheTtlMs))
+            {
+                usedCache = true;
+                scannedCount = 0;
+                return cache;
+            }
+
+            size_t scanned = 0;
+            CollectNearbyChessData(botAI, bot, cache, scanned);
+            cache.stampMs = nowMs;
+            scannedCount = scanned;
+            return cache;
         }
 
     }
@@ -585,6 +690,25 @@ namespace KarazhanHelpers
         return IsInsideNightbaneFightArea(Position(target->GetPositionX(), target->GetPositionY(), target->GetPositionZ()));
     }
 
+    bool IsInsideChessFightArea(Position const& pos)
+    {
+        return pos.GetPositionX() >= -11132.0f && pos.GetPositionX() <= -11035.0f &&
+               pos.GetPositionY() >= -1930.0f && pos.GetPositionY() <= -1848.0f &&
+               pos.GetPositionZ() >= 214.0f && pos.GetPositionZ() <= 236.0f;
+    }
+
+    bool IsChessEncounterRelevant(PlayerbotAI* botAI, Player* bot)
+    {
+        if (!botAI || !bot || bot->GetMapId() != KARAZHAN_MAP_ID)
+            return false;
+
+        if (IsInsideChessFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+            return true;
+
+        Creature* charm = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+        return charm && IsChessPieceEntry(charm->GetEntry());
+    }
+
     Position GetNearestNightbaneSafePoint(Player* bot)
     {
         Position fallback = NIGHTBANE_FINAL_BOSS_POSITION;
@@ -933,41 +1057,21 @@ namespace KarazhanHelpers
 
     bool IsChessEventActive(PlayerbotAI* botAI, Player* bot)
     {
-        if (!botAI || !bot || bot->GetMapId() != KARAZHAN_MAP_ID)
+        if (!botAI || !bot || bot->GetMapId() != KARAZHAN_MAP_ID || !IsChessEncounterRelevant(botAI, bot))
             return false;
 
-        bool hasChessUnitNearby = false;
-        bool hasCombatPieceNearby = false;
-        bool hasMedivhHazardNearby = false;
+        size_t scannedCount = 0;
+        bool usedCache = false;
+        ChessNearbyCache const& cache = GetChessNearbyCache(botAI, bot, scannedCount, usedCache);
+        (void)scannedCount;
 
-        GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
-        for (ObjectGuid const& npcGuid : npcs)
-        {
-            Unit* unit = botAI->GetUnit(npcGuid);
-            if (!unit)
-                continue;
-
-            if (unit->GetExactDist2d(bot) > 100.0f)
-                continue;
-
-            if (unit->GetEntry() == NPC_CHESS_EVENT_MEDIVH_CHEAT_FIRES)
-                hasMedivhHazardNearby = true;
-
-            if (!IsChessPieceEntry(unit->GetEntry()))
-                continue;
-
-            hasChessUnitNearby = true;
-            if (unit->IsInCombat() || unit->GetVictim())
-                hasCombatPieceNearby = true;
-        }
-
-        if (hasMedivhHazardNearby)
+        if (cache.hasMedivhHazardNearby)
             return true;
 
         if (HasChessSessionAura(bot->GetGroup()))
             return true;
 
-        return IsChessPhaseInProgress(bot) || (hasChessUnitNearby && hasCombatPieceNearby);
+        return IsChessPhaseInProgress(bot) || (cache.hasChessPieceNearby && cache.hasCombatPieceNearby);
     }
 
     Creature* GetAssignedChessPiece(Player* bot)
@@ -1028,22 +1132,16 @@ namespace KarazhanHelpers
     std::vector<Creature*> GetNearbyChessPieces(PlayerbotAI* botAI, Player* bot, bool friendlyOnly)
     {
         std::vector<Creature*> pieces;
-        if (!botAI || !bot)
+        size_t scannedCount = 0;
+        bool usedCache = false;
+        ChessNearbyCache const& cache = GetChessNearbyCache(botAI, bot, scannedCount, usedCache);
+        if (!botAI || !bot || bot->GetMapId() != KARAZHAN_MAP_ID)
             return pieces;
 
-        GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
-        for (ObjectGuid const& npcGuid : npcs)
-        {
-            Creature* creature = botAI->GetCreature(npcGuid);
-            if (!creature || !creature->IsInWorld() || !creature->IsAlive() || !IsChessPieceEntry(creature->GetEntry()))
-                continue;
+        if (usedCache)
+            return friendlyOnly ? cache.friendlyPieces : cache.pieces;
 
-            if (friendlyOnly && !IsFriendlyChessPieceForBot(bot, creature))
-                continue;
-
-            pieces.push_back(creature);
-        }
-
+        pieces = friendlyOnly ? cache.friendlyPieces : cache.pieces;
         return pieces;
     }
 
@@ -1070,38 +1168,16 @@ namespace KarazhanHelpers
     std::vector<Creature*> GetNearbyChessMoveTriggers(PlayerbotAI* botAI, Player* bot)
     {
         std::vector<Creature*> triggers;
-        if (!botAI || !bot)
+        size_t scannedCount = 0;
+        bool usedCache = false;
+        ChessNearbyCache const& cache = GetChessNearbyCache(botAI, bot, scannedCount, usedCache);
+        if (!botAI || !bot || bot->GetMapId() != KARAZHAN_MAP_ID)
             return triggers;
 
-        std::unordered_set<ObjectGuid::LowType> seen;
-        GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
-        for (ObjectGuid const& npcGuid : npcs)
-        {
-            Creature* creature = botAI->GetCreature(npcGuid);
-            if (!creature || creature->GetEntry() != 22519)
-                continue;
-            if (!seen.insert(creature->GetGUID().GetCounter()).second)
-                continue;
-            triggers.push_back(creature);
-        }
+        if (usedCache)
+            return cache.moveTriggers;
 
-        // Fallback: nearest-npcs can miss chess move triggers for controlled pieces.
-        // Scan a wider grid around the controlled piece (or bot if not charmed).
-        WorldObject* anchor = bot;
-        if (Unit* charm = bot->GetCharm())
-            anchor = charm;
-
-        std::list<Creature*> gridTriggers;
-        anchor->GetCreatureListWithEntryInGrid(gridTriggers, 22519, 120.0f);
-        for (Creature* creature : gridTriggers)
-        {
-            if (!creature)
-                continue;
-            if (!seen.insert(creature->GetGUID().GetCounter()).second)
-                continue;
-            triggers.push_back(creature);
-        }
-
+        triggers = cache.moveTriggers;
         return triggers;
     }
 

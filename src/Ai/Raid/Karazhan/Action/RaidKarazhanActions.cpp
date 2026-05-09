@@ -674,15 +674,6 @@ namespace
     std::unordered_map<ObjectGuid, uint8> chessPawnOpeningAdvanceCountByPiece;
     std::unordered_map<uint32, std::set<ObjectGuid>> chessOpenedLanePawnsByInstance;
     std::unordered_set<uint32> chessOpeningProgressConfirmedByInstance;
-    std::unordered_map<ObjectGuid, time_t> chessPoisonCloudLastAppliedByTarget;
-
-    enum class ChessPhase : uint8
-    {
-        OPENING = 0,
-        CLAIM_HIGH_VALUE = 1,
-        COMBAT = 2
-    };
-
     struct ChessBoardState
     {
         std::map<std::pair<int, int>, Creature*> squareToTrigger;
@@ -698,6 +689,18 @@ namespace
         int maxRow = 7;
         int minCol = 0;
         int maxCol = 7;
+        uint32 cacheStampMs = 0;
+    };
+
+    std::unordered_map<ObjectGuid, time_t> chessPoisonCloudLastAppliedByTarget;
+    std::unordered_map<ObjectGuid, ChessBoardState> chessBoardCacheByBot;
+    constexpr uint32 ChessBoardCacheTtlMs = 250;
+
+    enum class ChessPhase : uint8
+    {
+        OPENING = 0,
+        CLAIM_HIGH_VALUE = 1,
+        COMBAT = 2
     };
 
     static bool HasPawnMovedDuringOpening(uint32 instanceId, ObjectGuid const& pieceGuid)
@@ -2175,12 +2178,22 @@ namespace
     static ChessBoardState BuildChessBoardState(PlayerbotAI* botAI, Player* bot)
     {
         ChessBoardState state;
-        if (!botAI || !bot)
+        if (!botAI || !bot || !IsChessEncounterRelevant(botAI, bot))
             return state;
+
+        uint32 const nowMs = getMSTime();
+        auto cacheIt = chessBoardCacheByBot.find(bot->GetGUID());
+        if (cacheIt != chessBoardCacheByBot.end() && (nowMs - cacheIt->second.cacheStampMs) <= ChessBoardCacheTtlMs)
+            return cacheIt->second;
 
         std::vector<Creature*> triggers = GetNearbyChessMoveTriggers(botAI, bot);
         if (triggers.empty())
-            return state;
+        {
+            state.cacheStampMs = nowMs;
+            ChessBoardState& cached = chessBoardCacheByBot[bot->GetGUID()];
+            cached = state;
+            return cached;
+        }
 
         for (Creature* t : triggers)
         {
@@ -2215,7 +2228,6 @@ namespace
                                     row >= state.minRow && row <= state.maxRow &&
                                     col >= state.minCol && col <= state.maxCol;
             ChessSquare sq;
-            bool usedFallback = false;
             std::string fallbackSource;
 
             if (mappedLive)
@@ -2226,7 +2238,6 @@ namespace
                      sq.row >= state.minRow && sq.row <= state.maxRow &&
                      sq.col >= state.minCol && sq.col <= state.maxCol)
             {
-                usedFallback = true;
                 row = sq.row;
                 col = sq.col;
             }
@@ -2237,13 +2248,12 @@ namespace
 
             state.pieceSquare[p->GetGUID()] = sq;
             state.occupied.insert({ row, col });
-
-            if (usedFallback)
-            {
-            }
         }
 
-        return state;
+        state.cacheStampMs = nowMs;
+        ChessBoardState& cached = chessBoardCacheByBot[bot->GetGUID()];
+        cached = state;
+        return cached;
     }
 
     static bool IsInsideBoard(ChessBoardState const& b, int row, int col)
@@ -2287,7 +2297,17 @@ namespace
             return legal;
 
         ChessSquare sq = itSq->second;
-        Creature* enemyKing = GetEnemyChessKing(botAI, bot);
+        Creature* enemyKing = nullptr;
+        for (auto const& pieceEntry : b.pieceSquare)
+        {
+            Creature* candidate = botAI->GetCreature(pieceEntry.first);
+            if (candidate && candidate->IsAlive() && IsKingChessPieceEntry(candidate->GetEntry()) &&
+                IsEnemyChessPieceForBot(bot, candidate))
+            {
+                enemyKing = candidate;
+                break;
+            }
+        }
         int forward = 0;
         if (enemyKing)
         {
@@ -2371,18 +2391,18 @@ namespace
         {
             return ChessPhase::CLAIM_HIGH_VALUE;
         }
-        std::vector<Creature*> friendly = GetNearbyChessPieces(botAI, bot, true);
-
         uint32 movedPawns = 0;
         uint32 friendlyPawns = 0;
-        for (Creature* p : friendly)
+        for (auto const& pieceEntry : b.pieceSquare)
         {
-            if (!p)
+            ObjectGuid const& pieceGuid = pieceEntry.first;
+            Creature* p = botAI->GetCreature(pieceGuid);
+            if (!p || !p->IsAlive() || !IsFriendlyChessPieceForBot(bot, p))
                 continue;
             if (IsPawnEntry(p->GetEntry()))
             {
                 ++friendlyPawns;
-                if (chessOpenedLanePawnsByInstance[instanceId].find(p->GetGUID()) != chessOpenedLanePawnsByInstance[instanceId].end())
+                if (chessOpenedLanePawnsByInstance[instanceId].find(pieceGuid) != chessOpenedLanePawnsByInstance[instanceId].end())
                     ++movedPawns;
                 continue;
             }
@@ -2404,6 +2424,9 @@ namespace
 
 bool KarazhanChessPassiveHelperAction::Execute(Event /*event*/)
 {
+    if (!IsChessEncounterRelevant(botAI, bot))
+        return false;
+
     if (!IsChessEventActive(botAI, bot))
         return false;
 
@@ -2429,6 +2452,9 @@ bool KarazhanChessPassiveHelperAction::Execute(Event /*event*/)
 
 bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
 {
+    if (!IsChessEncounterRelevant(botAI, bot))
+        return false;
+
     if (!IsChessEventActive(botAI, bot))
         return false;
 
@@ -2728,6 +2754,8 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
 {
     Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
     if (!piece || !IsChessPieceEntry(piece->GetEntry()))
+        return false;
+    if (!IsChessEncounterRelevant(botAI, bot))
         return false;
     if (!IsChessPieceCommandGcdReady(piece))
     {
@@ -3083,6 +3111,8 @@ bool KarazhanChessMoveOutOfFireAction::Execute(Event /*event*/)
     Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
     if (!piece || !IsChessPieceEntry(piece->GetEntry()))
         return false;
+    if (!IsChessEncounterRelevant(botAI, bot))
+        return false;
     const uint32 instanceId = bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0;
     bool const openingProgressConfirmed = HasConfirmedOpeningProgress(instanceId);
     bool const controlledNonPawn = !IsPawnEntry(piece->GetEntry()) && openingProgressConfirmed;
@@ -3189,6 +3219,8 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
 {
     Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
     if (!piece || !IsChessPieceEntry(piece->GetEntry()))
+        return false;
+    if (!IsChessEncounterRelevant(botAI, bot))
         return false;
     const uint32 instanceId = bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0;
     bool const openingProgressConfirmed = HasConfirmedOpeningProgress(instanceId);
@@ -3617,8 +3649,12 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
 {
     (void)event;
     Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece || !IsHealerChessPieceEntry(piece->GetEntry()))
+        return false;
+    if (!IsChessEncounterRelevant(botAI, bot))
+        return false;
     Creature* king = GetFriendlyChessKing(botAI, bot);
-    if (!piece || !king || !IsHealerChessPieceEntry(piece->GetEntry()))
+    if (!king)
         return false;
     const uint32 instanceId = bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0;
     bool const openingProgressConfirmed = HasConfirmedOpeningProgress(instanceId);
@@ -3688,8 +3724,12 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
 bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
 {
     Creature* piece = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
+    if (!piece)
+        return false;
+    if (!IsChessEncounterRelevant(botAI, bot))
+        return false;
     Creature* enemyKing = GetEnemyChessKing(botAI, bot);
-    if (!piece || !enemyKing)
+    if (!enemyKing)
         return false;
     const uint32 instanceId = bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0;
     bool const openingProgressConfirmed = HasConfirmedOpeningProgress(instanceId);
@@ -3821,6 +3861,8 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
         return false;
     if (!IsPawnEntry(piece->GetEntry()))
         return false;
+    if (!IsChessEncounterRelevant(botAI, bot))
+        return false;
     if (!IsChessPieceCommandGcdReady(piece))
         return false;
     const time_t now = std::time(nullptr);
@@ -3894,6 +3936,9 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
 
 bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
 {
+    if (!IsChessEncounterRelevant(botAI, bot))
+        return false;
+
     if (!IsChessEventActive(botAI, bot))
     {
         if (Creature* controlled = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr)
@@ -4714,6 +4759,9 @@ bool PrinceMalchezaarMainTankMovementAction::Execute(Event /*event*/)
 // The tank moves Nightbane into position in two steps to try to get Nightbane to face sideways to the raid
 bool NightbaneGroundPhasePositionBossAction::Execute(Event /*event*/)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
     {
@@ -4770,6 +4818,9 @@ bool NightbaneGroundPhasePositionBossAction::Execute(Event /*event*/)
 
 bool NightbaneGroundPhaseDynamicPositionAction::Execute(Event /*event*/)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane || nightbane->GetPositionZ() > NIGHTBANE_FLIGHT_Z)
         return false;
@@ -4866,6 +4917,9 @@ bool NightbaneGroundPhaseDynamicPositionAction::Execute(Event /*event*/)
 // Ranged positions are near the Northeastern door to the tower
 bool NightbaneGroundPhaseRotateRangedPositionsAction::Execute(Event /*event*/)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (nightbane && ShouldUseDynamicHumanTankMode(botAI, bot, nightbane))
     {
@@ -4940,6 +4994,9 @@ bool NightbaneGroundPhaseRotateRangedPositionsAction::Execute(Event /*event*/)
 // For countering Bellowing Roars during the ground phase
 bool NightbaneCastFearWardOnMainTankAction::Execute(Event /*event*/)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return false;
+
     Player* mainTank = nullptr;
     if (Group* group = bot->GetGroup())
     {
@@ -4965,6 +5022,9 @@ bool NightbaneCastFearWardOnMainTankAction::Execute(Event /*event*/)
 // Put pets on passive during the flight phase so they don't try to chase Nightbane off the map
 bool NightbaneControlPetAggressionAction::Execute(Event /*event*/)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
         return false;
@@ -4991,6 +5051,9 @@ bool NightbaneControlPetAggressionAction::Execute(Event /*event*/)
 // ready to land, and the player will need to lead the bots over near the ground phase position
 bool NightbaneFlightPhaseMovementAction::Execute(Event /*event*/)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane || nightbane->GetPositionZ() <= NIGHTBANE_FLIGHT_Z)
     {
@@ -5058,6 +5121,9 @@ bool NightbaneFlightPhaseMovementAction::Execute(Event /*event*/)
 
 bool NightbaneManageTimersAndTrackersAction::Execute(Event /*event*/)
 {
+    if (!IsInsideNightbaneFightArea(Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ())))
+        return false;
+
     Unit* nightbane = AI_VALUE2(Unit*, "find target", "nightbane");
     if (!nightbane)
     {
