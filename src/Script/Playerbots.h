@@ -18,11 +18,20 @@
 #include "SpellMgr.h"
 #include "TravelNode.h"
 
+#include <functional>
+
+class ItemTemplate;
+
 std::vector<std::string> split(std::string const s, char delim);
 void split(std::vector<std::string>& dest, std::string const str, char const* delim);
 #ifndef WIN32
 int strcmpi(char const* s1, char const* s2);
 #endif
+
+using PlayerbotBeforeLootRollCallback = std::function<bool(Player* bot, ItemTemplate const* itemTemplate, RollVote& rollVote)>;
+
+void SetPlayerbotBeforeLootRollCallback(PlayerbotBeforeLootRollCallback callback);
+bool OnPlayerbotBeforeLootRoll(Player* bot, ItemTemplate const* itemTemplate, RollVote& rollVote);
 
 #define CAST_ANGLE_IN_FRONT (2.f * static_cast<float>(M_PI) / 3.f)
 #define EMOTE_ANGLE_IN_FRONT (2.f * static_cast<float>(M_PI) / 6.f)

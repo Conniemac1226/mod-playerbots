@@ -92,6 +92,8 @@ bool LootRollAction::Execute(Event /*event*/)
         else if (vote == GREED && !sPlayerbotAIConfig.lootGreedRollLevel)
             vote = PASS;
 
+        OnPlayerbotBeforeLootRoll(bot, proto, vote);
+
         switch (group->GetLootMethod())
         {
             case MASTER_LOOT:

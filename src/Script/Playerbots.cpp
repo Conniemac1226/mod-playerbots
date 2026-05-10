@@ -34,6 +34,35 @@
 #include "cmath"
 #include "BattleGroundTactics.h"
 
+#include <mutex>
+#include <utility>
+
+namespace
+{
+    std::mutex sPlayerbotBeforeLootRollMutex;
+    PlayerbotBeforeLootRollCallback sPlayerbotBeforeLootRollCallback;
+}
+
+void SetPlayerbotBeforeLootRollCallback(PlayerbotBeforeLootRollCallback callback)
+{
+    std::lock_guard<std::mutex> guard(sPlayerbotBeforeLootRollMutex);
+    sPlayerbotBeforeLootRollCallback = std::move(callback);
+}
+
+bool OnPlayerbotBeforeLootRoll(Player* bot, ItemTemplate const* itemTemplate, RollVote& rollVote)
+{
+    PlayerbotBeforeLootRollCallback callback;
+    {
+        std::lock_guard<std::mutex> guard(sPlayerbotBeforeLootRollMutex);
+        callback = sPlayerbotBeforeLootRollCallback;
+    }
+
+    if (!callback)
+        return false;
+
+    return callback(bot, itemTemplate, rollVote);
+}
+
 class PlayerbotsDatabaseScript : public DatabaseScript
 {
 public:
