@@ -16,7 +16,39 @@
 namespace
 {
     constexpr float PI_F = 3.14159265358979323846f;
+    constexpr uint32 kEncounterCacheMs = 400U;
+    constexpr uint32 kKaelthasGravityMoveCooldownMs = 700U;
+    constexpr float kKaelthasGravitySafeDistance = 18.0f;
+    constexpr float kKaelthasGravityMinDelta = 4.0f;
+    constexpr float kDelrissaHelperSearchRadius = 50.0f;
 }
+
+namespace
+{
+    struct KaelthasCache
+    {
+        uint32 lastPhoenixScanMs = 0;
+        uint32 lastGravityScanMs = 0;
+        uint32 phoenixLockMs = 0;
+        uint32 lastGravityMoveMs = 0;
+        ObjectGuid phoenixGuid = ObjectGuid::Empty;
+        ObjectGuid phoenixEggGuid = ObjectGuid::Empty;
+        ObjectGuid gravitySphereGuid = ObjectGuid::Empty;
+        ObjectGuid phoenixLockGuid = ObjectGuid::Empty;
+        float gravitySphereDistance = 0.0f;
+        bool hasGravityMoveDest = false;
+        bool wasFlying = false;
+    };
+
+    struct DelrissaCache
+    {
+        uint32 lastHelperScanMs = 0;
+        GuidVector helperGuids;
+    };
+}
+
+std::map<ObjectGuid, KaelthasCache> g_kaelthas_cache;
+std::map<ObjectGuid, DelrissaCache> g_delrissa_cache;
 
 // Per-bot state maps for Kael'thas gravity lapse
 std::map<ObjectGuid, uint32> g_kaelthas_lastMoveTime;
@@ -104,6 +136,152 @@ Unit* MagistersTerraceHelpers::SelectActiveFelCrystal(Player* bot, PlayerbotAI* 
     return activeCrystal;
 }
 
+bool MagistersTerraceHelpers::IsKaelthasPhoenix(Unit const* unit)
+{
+    return unit && unit->IsAlive() &&
+        (unit->GetEntry() == NPC_PHOENIX || unit->GetEntry() == NPC_PHOENIX_EGG);
+}
+
+Unit* MagistersTerraceHelpers::SelectKaelthasPhoenixTarget(Player* bot, PlayerbotAI* botAI, Unit* boss)
+{
+    if (!bot || !botAI || !boss)
+        return nullptr;
+
+    KaelthasCache& cache = g_kaelthas_cache[bot->GetGUID()];
+    uint32 now = getMSTime();
+
+    auto resolve = [&](ObjectGuid guid) -> Unit*
+    {
+        if (guid.IsEmpty())
+            return nullptr;
+
+        Unit* unit = botAI->GetUnit(guid);
+        if (!unit)
+            unit = ObjectAccessor::GetUnit(*bot, guid);
+        return unit;
+    };
+
+    auto consider = [&](Unit* unit)
+    {
+        if (!MagistersTerraceHelpers::IsKaelthasPhoenix(unit))
+            return;
+
+        if (unit->GetEntry() == NPC_PHOENIX_EGG && cache.phoenixEggGuid.IsEmpty())
+            cache.phoenixEggGuid = unit->GetGUID();
+        else if (unit->GetEntry() == NPC_PHOENIX && cache.phoenixGuid.IsEmpty())
+            cache.phoenixGuid = unit->GetGUID();
+    };
+
+    if ((now - cache.lastPhoenixScanMs) >= kEncounterCacheMs)
+    {
+        cache.lastPhoenixScanMs = now;
+        cache.phoenixGuid = ObjectGuid::Empty;
+        cache.phoenixEggGuid = ObjectGuid::Empty;
+
+        if (AiObjectContext* context = botAI->GetAiObjectContext())
+        {
+            if (auto* possibleValue = context->GetValue<GuidVector>("possible targets"))
+            {
+                GuidVector possible = possibleValue->Get();
+                for (ObjectGuid const& guid : possible)
+                    consider(botAI->GetUnit(guid));
+            }
+
+            if (cache.phoenixGuid.IsEmpty() && cache.phoenixEggGuid.IsEmpty())
+            {
+                if (auto* npcsValue = context->GetValue<GuidVector>("nearest hostile npcs"))
+                {
+                    GuidVector npcs = npcsValue->Get();
+                    for (ObjectGuid const& guid : npcs)
+                        consider(botAI->GetUnit(guid));
+                }
+            }
+        }
+
+        if (cache.phoenixGuid.IsEmpty() && cache.phoenixEggGuid.IsEmpty())
+            TbcDungeon::ForEachNearbyNpc(botAI, bot, 80.0f, consider);
+    }
+
+    if (Unit* egg = resolve(cache.phoenixEggGuid))
+    {
+        if (AttackersValue::IsValidTarget(egg, bot))
+            return egg;
+    }
+
+    if (Unit* phoenix = resolve(cache.phoenixGuid))
+    {
+        if (AttackersValue::IsValidTarget(phoenix, bot))
+            return phoenix;
+    }
+
+    return nullptr;
+}
+
+bool MagistersTerraceHelpers::IsDelrissaHelper(Unit const* unit)
+{
+    if (!unit || !unit->IsAlive())
+        return false;
+
+    static const uint32 delrissaHelpers[] = {24557, 24558, 24554, 24561, 24559, 24555, 24553, 24556};
+    for (uint32 helperId : delrissaHelpers)
+    {
+        if (unit->GetEntry() == helperId)
+            return true;
+    }
+
+    return false;
+}
+
+GuidVector MagistersTerraceHelpers::GetDelrissaHelpersCached(PlayerbotAI* botAI, Player* bot, uint32 cacheMs)
+{
+    GuidVector helpers;
+    if (!bot || !botAI)
+        return helpers;
+
+    DelrissaCache& cache = g_delrissa_cache[bot->GetGUID()];
+    uint32 now = getMSTime();
+    if ((now - cache.lastHelperScanMs) < cacheMs)
+        return cache.helperGuids;
+
+    cache.lastHelperScanMs = now;
+    cache.helperGuids.clear();
+
+    auto consider = [&](Unit* unit)
+    {
+        if (!MagistersTerraceHelpers::IsDelrissaHelper(unit))
+            return;
+
+        if (AttackersValue::IsValidTarget(unit, bot))
+            cache.helperGuids.push_back(unit->GetGUID());
+    };
+
+    if (AiObjectContext* context = botAI->GetAiObjectContext())
+    {
+        if (auto* possibleValue = context->GetValue<GuidVector>("possible targets"))
+        {
+            GuidVector possible = possibleValue->Get();
+            for (ObjectGuid const& guid : possible)
+                consider(botAI->GetUnit(guid));
+        }
+
+        if (cache.helperGuids.empty())
+        {
+            if (auto* npcsValue = context->GetValue<GuidVector>("nearest hostile npcs"))
+            {
+                GuidVector npcs = npcsValue->Get();
+                for (ObjectGuid const& guid : npcs)
+                    consider(botAI->GetUnit(guid));
+            }
+        }
+    }
+
+    if (cache.helperGuids.empty())
+        TbcDungeon::ForEachNearbyNpc(botAI, bot, kDelrissaHelperSearchRadius, consider);
+
+    helpers = cache.helperGuids;
+    return helpers;
+}
+
 namespace
 {
     struct DelrissaHelperPriority
@@ -114,14 +292,14 @@ namespace
 
     static const DelrissaHelperPriority kDelrissaHelperPriority[] =
     {
-        {24554, 100}, // Eramas Brightblaze
-        {24558, 95},  // Elris Duskhallow
-        {24561, 85},  // Yazzaj
-        {24553, 80},  // Apoko
-        {24557, 70},  // Kagani Nightstrike
-        {24559, 65},  // Warlord Salaris
-        {24555, 50},  // Garaxxas
-        {24556, 45}   // Zelfan
+        {24553, 100}, // Apoko - healer
+        {24561, 95},  // Yazzaj - polymorph/control
+        {24555, 90},  // Garaxxas - trap / aimed shot
+        {24559, 85},  // Warlord Salaris - mortal strike / fears
+        {24554, 80},  // Eramas Brightblaze - burst caster
+        {24558, 75},  // Ellris Duskhallow - fear / dot caster
+        {24557, 70},  // Kagani Nightstrike - rogue burst
+        {24556, 60}   // Zelfan - gadgets / bombs
     };
 
     Unit* SelectDelrissaHelperTarget(Player* bot, PlayerbotAI* botAI, GuidVector const& candidates, bool requireCombatCheck)
@@ -224,19 +402,12 @@ bool AvoidGravityLapseAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // CRITICAL: Always interrupt any casting during gravity lapse
-    if (bot->IsNonMeleeSpellCast(false))
-    {
-        bot->InterruptNonMeleeSpells(true);
-        return true;
-    }
-
     // FLIGHT STATE DETECTION - The key to survival
+    bool isHealer = botAI->IsHeal(bot);
     bool hasFlightAura = bot->HasAura(SPELL_GRAVITY_LAPSE_FLY);
     bool hasDotAura = bot->HasAura(SPELL_GRAVITY_LAPSE_DOT);
     bool isInGravityLapse = hasFlightAura || hasDotAura;
     
-
     if (isInGravityLapse)
     {
         static const float STUCK_MOVEMENT_EPSILON = 1.2f;
@@ -312,7 +483,6 @@ bool AvoidGravityLapseAction::Execute(Event event)
             float distance = bot->GetExactDist(emergencyX, emergencyY, emergencyZ);
             float delay = 1000.0f * distance / bot->GetSpeed(MOVE_FLIGHT);
             AI_VALUE(LastMovement&, "last movement").Set(bot->GetMapId(), emergencyX, emergencyY, emergencyZ, bot->GetOrientation(), delay, MovementPriority::MOVEMENT_FORCED);
-            
             g_kaelthas_lastMoveTime[botGuid] = currentTime;
             return true; // Emergency ascent complete
         }
@@ -346,7 +516,7 @@ bool AvoidGravityLapseAction::Execute(Event event)
         }
         
         // EMERGENCY: Force movement if haven't moved recently (prevent landing)
-        if ((currentTime - g_kaelthas_lastMoveTime[botGuid]) > MIN_MOVEMENT_INTERVAL)
+        if (!isHealer && (currentTime - g_kaelthas_lastMoveTime[botGuid]) > MIN_MOVEMENT_INTERVAL)
         {
             shouldMove = true;
         }
@@ -386,6 +556,17 @@ bool AvoidGravityLapseAction::Execute(Event event)
 
         // Update safe position status
         g_kaelthas_inSafePosition[botGuid] = !shouldMove && (!nearestSphere || sphereDistance > SAFE_SPHERE_DISTANCE);
+
+        // Healers should keep casting if they are already in a safe pocket away from spheres.
+        // Only interrupt when movement is actually required.
+        if (isHealer && !shouldMove && (!nearestSphere || sphereDistance > SAFE_SPHERE_DISTANCE) &&
+            currentHeight >= MIN_FLIGHT_HEIGHT && distanceFromCenter >= 10.0f)
+        {
+            return false;
+        }
+
+        if (shouldMove && bot->IsNonMeleeSpellCast(false))
+            bot->InterruptNonMeleeSpells(true);
         
         if (shouldMove)
         {
@@ -639,12 +820,11 @@ bool AvoidGravityLapseAction::isUseful()
     if (!bot || !botAI)
         return false;
 
-    // SIMPLIFIED: Only be useful when spheres are actually dangerous
+    // Check if in gravity lapse
     Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check if in gravity lapse
     bool hasFlightAura = bot->HasAura(SPELL_GRAVITY_LAPSE_FLY);
     bool hasDotAura = bot->HasAura(SPELL_GRAVITY_LAPSE_DOT);
     
@@ -770,6 +950,71 @@ bool AvoidFlamestrikeAction::isUseful()
     }
     
     return false;
+}
+
+bool KaelthasPhoenixesAndEggsAction::Execute(Event /*event*/)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    if (botAI->IsHeal(bot) || botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    if (bot->HasAura(SPELL_GRAVITY_LAPSE_FLY) || bot->HasAura(SPELL_GRAVITY_LAPSE_DOT))
+        return false;
+
+    KaelthasCache& cache = g_kaelthas_cache[bot->GetGUID()];
+    uint32 now = getMSTime();
+    static constexpr uint32 kPhoenixTargetLockMs = 4000U;
+
+    if (!cache.phoenixLockGuid.IsEmpty() && cache.phoenixLockMs && (now - cache.phoenixLockMs) < kPhoenixTargetLockMs)
+    {
+        Unit* locked = botAI->GetUnit(cache.phoenixLockGuid);
+        if (!locked)
+            locked = ObjectAccessor::GetUnit(*bot, cache.phoenixLockGuid);
+        if (locked && locked->IsAlive() && AttackersValue::IsValidTarget(locked, bot))
+            return Attack(locked);
+    }
+
+    Unit* target = MagistersTerraceHelpers::SelectKaelthasPhoenixTarget(bot, botAI, boss);
+    if (!target)
+    {
+        cache.phoenixEggGuid = ObjectGuid::Empty;
+        cache.phoenixGuid = ObjectGuid::Empty;
+        cache.phoenixLockGuid = ObjectGuid::Empty;
+        cache.phoenixLockMs = 0;
+        return false;
+    }
+
+    cache.phoenixEggGuid = target->GetEntry() == NPC_PHOENIX_EGG ? target->GetGUID() : ObjectGuid::Empty;
+    cache.phoenixGuid = target->GetEntry() == NPC_PHOENIX ? target->GetGUID() : ObjectGuid::Empty;
+    cache.phoenixLockGuid = target->GetGUID();
+    cache.phoenixLockMs = now;
+    return Attack(target);
+}
+
+bool KaelthasPhoenixesAndEggsAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI)
+        return false;
+
+    if (botAI->IsHeal(bot) || botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    if (bot->HasAura(SPELL_GRAVITY_LAPSE_FLY) || bot->HasAura(SPELL_GRAVITY_LAPSE_DOT))
+        return false;
+
+    return MagistersTerraceHelpers::SelectKaelthasPhoenixTarget(bot, botAI, boss) != nullptr;
 }
 
 // Vexallus Actions
@@ -1192,14 +1437,8 @@ bool AttackDelrissaAddAction::Execute(Event event)
         }
     }
 
-    GuidVector hostileNpcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* priorityTarget = SelectDelrissaHelperTarget(bot, botAI, hostileNpcs, true);
-
-    if (!priorityTarget)
-    {
-        GuidVector possibleTargets = AI_VALUE(GuidVector, "possible targets");
-        priorityTarget = SelectDelrissaHelperTarget(bot, botAI, possibleTargets, false);
-    }
+    GuidVector helpers = MagistersTerraceHelpers::GetDelrissaHelpersCached(botAI, bot);
+    Unit* priorityTarget = SelectDelrissaHelperTarget(bot, botAI, helpers, true);
 
     // If we found a priority target, lock onto it
     if (priorityTarget)
@@ -1228,12 +1467,8 @@ bool AttackDelrissaAddAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    GuidVector hostileNpcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    if (SelectDelrissaHelperTarget(bot, botAI, hostileNpcs, false))
-        return true;
-
-    GuidVector possibleTargets = AI_VALUE(GuidVector, "possible targets");
-    return SelectDelrissaHelperTarget(bot, botAI, possibleTargets, false) != nullptr;
+    GuidVector helpers = MagistersTerraceHelpers::GetDelrissaHelpersCached(botAI, bot);
+    return SelectDelrissaHelperTarget(bot, botAI, helpers, false) != nullptr;
 }
 // Interrupt dangerous helper abilities
 bool InterruptDelrissaHelperAction::Execute(Event event)
@@ -1247,18 +1482,30 @@ bool InterruptDelrissaHelperAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // High priority spells to interrupt from helpers
+    // High priority interrupt targets from the actual helper scripts.
+    // Keep the list conservative: if the spell is not cast-time or not interruptible,
+    // the interrupt simply fails and we continue fighting normally.
     const uint32 dangerousSpells[] = {
-        33831,  // Polymorph (Eramas)
-        5782,   // Fear (Elris/Yazzaj)
-        34447,  // Arcane Missiles
-        32364,  // Unstable Affliction
-        36679,  // Mortal Strike
-        44164,  // Heal spells
+        13323,  // Polymorph - Yazzaj
+        38595,  // Fear - Ellris Duskhallow
+        44256,  // Lesser Healing Wave - Apoko
+        44271,  // Aimed Shot - Garaxxas
+        44136,  // Freezing Trap - Garaxxas
+        44267,  // Immolate - Ellris Duskhallow
+        12471,  // Shadow Bolt - Ellris Duskhallow
+        14875,  // Curse of Agony - Ellris Duskhallow
+        44141,  // Seed of Corruption - Ellris Duskhallow
+        44120,  // Fists of Arcane - Eramas Brightblaze
+        15043,  // Frostbolt - Yazzaj
+        44178,  // Blizzard - Yazzaj
+        44272,  // Goblin Dragon Gun - Zelfan
+        44137,  // Rocket Launch - Zelfan
+        46024,  // Fel Iron Bomb - Zelfan
+        44274   // Recombobulate - Zelfan
     };
 
-    // Find helpers casting dangerous abilities
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    // Use the short-lived helper cache instead of rescanning every update.
+    GuidVector npcs = MagistersTerraceHelpers::GetDelrissaHelpersCached(botAI, bot);
     Unit* interruptTarget = nullptr;
     float closestDistance = 30.0f; // Interrupt range
 
@@ -1266,21 +1513,6 @@ bool InterruptDelrissaHelperAction::Execute(Event event)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive() || !unit->IsInCombat())
-            continue;
-
-        // Check if it's a Delrissa helper
-        const uint32 delrissaHelpers[] = {24557, 24558, 24554, 24561, 24559, 24555, 24553, 24556};
-        bool isHelper = false;
-        for (uint32 helperId : delrissaHelpers)
-        {
-            if (unit->GetEntry() == helperId)
-            {
-                isHelper = true;
-                break;
-            }
-        }
-
-        if (!isHelper)
             continue;
 
         // Check if casting dangerous spell
@@ -1350,40 +1582,21 @@ bool DelrissaDispelHandlingAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Re-apply important buffs that might have been dispelled
-    const uint32 importantBuffs[] = {
-        25570,  // Blessing of Might
-        25572,  // Blessing of Wisdom
-        23028,  // Arcane Intellect
-        1126,   // Mark of the Wild
-        27681,  // Prayer of Spirit
-        15473,  // Shadowform (priests)
+    if (!botAI->IsTank(bot))
+        return false;
+
+    // Keep this conservative during the add fight: only restore tank control auras,
+    // and only if the tank actually lost them.
+    const uint32 tankStances[] = {
+        71,     // Defensive Stance
+        5487,   // Bear Form
+        25780,  // Righteous Fury
     };
 
-    for (uint32 buffId : importantBuffs)
+    for (uint32 stanceId : tankStances)
     {
-        if (!bot->HasAura(buffId) && botAI->CanCastSpell(buffId, bot, false))
-        {
-            return botAI->CastSpell(buffId, bot);
-        }
-    }
-
-    // If tank, ensure defensive stance/righteous fury
-    if (botAI->IsTank(bot))
-    {
-        const uint32 tankStances[] = {
-            71,     // Defensive Stance
-            5487,   // Bear Form  
-            25780,  // Righteous Fury
-        };
-
-        for (uint32 stanceId : tankStances)
-        {
-            if (!bot->HasAura(stanceId) && botAI->CanCastSpell(stanceId, bot, false))
-            {
-                return botAI->CastSpell(stanceId, bot);
-            }
-        }
+        if (!bot->HasAura(stanceId) && botAI->CanCastSpell(stanceId, bot, false))
+            return botAI->CastSpell(stanceId, bot);
     }
 
     return false;

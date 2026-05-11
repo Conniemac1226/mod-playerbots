@@ -12,6 +12,10 @@ class Unit;
 namespace MagistersTerraceHelpers
 {
     Unit* SelectActiveFelCrystal(Player* bot, PlayerbotAI* botAI, Unit* boss);
+    bool IsKaelthasPhoenix(Unit const* unit);
+    Unit* SelectKaelthasPhoenixTarget(Player* bot, PlayerbotAI* botAI, Unit* boss);
+    bool IsDelrissaHelper(Unit const* unit);
+    GuidVector GetDelrissaHelpersCached(PlayerbotAI* botAI, Player* bot, uint32 cacheMs = 400);
 }
 
 // Kael'thas Actions
@@ -43,6 +47,14 @@ class AvoidFlamestrikeAction : public MovementAction
 {
 public:
     AvoidFlamestrikeAction(PlayerbotAI* ai) : MovementAction(ai, "avoid flamestrike") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class KaelthasPhoenixesAndEggsAction : public AttackAction
+{
+public:
+    KaelthasPhoenixesAndEggsAction(PlayerbotAI* ai) : AttackAction(ai, "kaelthas phoenixes and eggs") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

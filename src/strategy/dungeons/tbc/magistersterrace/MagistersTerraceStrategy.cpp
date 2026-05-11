@@ -64,11 +64,17 @@ void MagistersTerraceStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
         "kaelthas flamestrike",
         NextAction::array(0, new NextAction("avoid flamestrike", ACTION_MOVE + 4), NULL)
     ));
+
+    triggers.push_back(new TriggerNode(
+        "kaelthas phoenixes and eggs active",
+        NextAction::array(0, new NextAction("kaelthas phoenixes and eggs", ACTION_NORMAL + 6), NULL)
+    ));
 }
 
 void MagistersTerraceStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new MagistersTerraceMultiplier(botAI));
+    multipliers.push_back(new KaelthasPhoenixesAndEggsMultiplier(botAI));
     multipliers.push_back(new VexallusPureEnergyMultiplier(botAI));
     multipliers.push_back(new SelinFelCrystalMultiplier(botAI));
     multipliers.push_back(new DelrissaAddMultiplier(botAI));

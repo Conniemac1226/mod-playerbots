@@ -57,6 +57,13 @@ public:
     bool IsActive() override;
 };
 
+class KaelthasPhoenixesAndEggsTrigger : public Trigger
+{
+public:
+    KaelthasPhoenixesAndEggsTrigger(PlayerbotAI* ai) : Trigger(ai, "kaelthas phoenixes and eggs active") {}
+    bool IsActive() override;
+};
+
 // Vexallus
 class VexallusPureEnergySpawnedTrigger : public Trigger
 {

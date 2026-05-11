@@ -73,6 +73,19 @@ bool KaelthasMTFlamestrikeTrigger::IsActive()
     return TbcDungeon::FindClosestNpcByEntry(botAI, bot, NPC_FLAMESTRIKE_TRIGGER, 12.0f) != nullptr;
 }
 
+bool KaelthasPhoenixesAndEggsTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    return MagistersTerraceHelpers::SelectKaelthasPhoenixTarget(bot, botAI, boss) != nullptr;
+}
+
 // Vexallus
 bool VexallusPureEnergySpawnedTrigger::IsActive()
 {
@@ -229,25 +242,5 @@ bool DelrissaAddActiveTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check for her adds (various entries)
-    const uint32 delrissaAdds[] = {24557, 24558, 24554, 24561, 24559, 24555, 24553, 24556};
-
-    bool addPresent = false;
-    TbcDungeon::ForEachNearbyNpc(botAI, bot, 50.0f, [&](Unit* unit)
-    {
-        if (addPresent)
-            return;
-
-        for (uint32 addId : delrissaAdds)
-        {
-            if (unit->GetEntry() == addId)
-            {
-                addPresent = true;
-                return;
-            }
-        }
-    });
-
-    return addPresent;
+    return !MagistersTerraceHelpers::GetDelrissaHelpersCached(botAI, bot).empty();
 }
-

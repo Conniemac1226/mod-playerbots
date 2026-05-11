@@ -14,6 +14,7 @@ public:
         creators["avoid gravity lapse"] = &MagistersTerraceActionContext::avoid_gravity_lapse;
         creators["flee arcane sphere"] = &MagistersTerraceActionContext::flee_arcane_sphere;
         creators["avoid flamestrike"] = &MagistersTerraceActionContext::avoid_flamestrike;
+        creators["kaelthas phoenixes and eggs"] = &MagistersTerraceActionContext::kaelthas_phoenixes_and_eggs;
 
         // Vexallus
         creators["attack pure energy"] = &MagistersTerraceActionContext::attack_pure_energy;
@@ -35,6 +36,7 @@ private:
     static Action* avoid_gravity_lapse(PlayerbotAI* ai) { return new AvoidGravityLapseAction(ai); }
     static Action* flee_arcane_sphere(PlayerbotAI* ai) { return new FleeArcaneSphereAction(ai); }
     static Action* avoid_flamestrike(PlayerbotAI* ai) { return new AvoidFlamestrikeAction(ai); }
+    static Action* kaelthas_phoenixes_and_eggs(PlayerbotAI* ai) { return new KaelthasPhoenixesAndEggsAction(ai); }
 
     // Vexallus
     static Action* attack_pure_energy(PlayerbotAI* ai) { return new AttackPureEnergyAction(ai); }

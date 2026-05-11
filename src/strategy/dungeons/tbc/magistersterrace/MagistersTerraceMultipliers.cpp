@@ -1,4 +1,5 @@
 #include "MagistersTerraceMultipliers.h"
+#include "MagistersTerraceActions.h"
 #include "MagistersTerraceTriggers.h"
 #include "Unit.h"
 #include "PlayerbotAI.h"
@@ -63,6 +64,22 @@ float SelinFelCrystalMultiplier::GetValue(Action* action)
     return 1.0f;
 }
 
+float KaelthasPhoenixesAndEggsMultiplier::GetValue(Action* action)
+{
+    if (!action || action->getName() != "dps assist")
+        return 1.0f;
+
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return 1.0f;
+
+    Unit* boss = bot->FindNearestCreature(NPC_KAELTHAS, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return 1.0f;
+
+    return MagistersTerraceHelpers::SelectKaelthasPhoenixTarget(bot, botAI, boss) ? 0.0f : 1.0f;
+}
+
 float DelrissaAddMultiplier::GetValue(Action* action)
 {
     if (!action || action->getName() != "dps assist")
@@ -72,26 +89,9 @@ float DelrissaAddMultiplier::GetValue(Action* action)
     if (!bot)
         return 1.0f;
 
-    // WotLK pattern - check for any Delrissa helper present
-    const uint32 delrissaHelpers[] = {
-        24554, 24558, 24561, 24553,  // Casters (high priority)
-        24557, 24559, 24555, 24556   // Melee helpers
-    };
-    
-    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (auto& target : targets)
-    {
-        Unit* unit = botAI->GetUnit(target);
-        if (unit)
-        {
-            for (uint32 helperId : delrissaHelpers)
-            {
-                if (unit->GetEntry() == helperId)
-                {
-                    return 0.0f; // Block DpsAssist when any Delrissa helper present
-                }
-            }
-        }
-    }
-    return 1.0f;
+    Unit* boss = bot->FindNearestCreature(NPC_DELRISSA, 120.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return 1.0f;
+
+    return MagistersTerraceHelpers::GetDelrissaHelpersCached(botAI, bot).empty() ? 1.0f : 0.0f;
 }

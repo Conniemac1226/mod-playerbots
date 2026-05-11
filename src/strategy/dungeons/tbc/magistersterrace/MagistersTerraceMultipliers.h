@@ -24,6 +24,13 @@ public:
     float GetValue(Action* action) override;
 };
 
+class KaelthasPhoenixesAndEggsMultiplier : public Multiplier
+{
+public:
+    KaelthasPhoenixesAndEggsMultiplier(PlayerbotAI* ai) : Multiplier(ai, "kaelthas phoenixes and eggs") {}
+    float GetValue(Action* action) override;
+};
+
 class DelrissaAddMultiplier : public Multiplier
 {
 public:
