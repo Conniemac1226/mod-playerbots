@@ -12,13 +12,11 @@ const uint32 ARC_SPELL_SHADOW_NOVA = 36127;
 const uint32 SPELL_SEED_OF_CORRUPTION = 36123;
 
 const uint32 ARC_SPELL_WHIRLWIND = 36142;
-const uint32 SPELL_GIFT_OF_THE_DOOMSAYER = 36173;
 const uint32 ARC_SPELL_HEAL = 36144;
 
 const uint32 ARC_SPELL_KNOCK_AWAY = 36512;
 const uint32 ARC_SPELL_CHARGE = 35754;
 const uint32 SPELL_FELFIRE = 35769;
-const uint32 SPELL_FELFIRE_SHOCK = 35759;
 
 // Persistent ground effect NPCs
 const uint32 NPC_FELFIRE_GROUND = 20978; // "Wrath-Scryer's Felfire" - persistent ground fire
@@ -33,7 +31,6 @@ const uint32 NPC_MELLICHAR = 20904;
 // Warden Mellichar's adds
 const uint32 NPC_TRICKSTER = 20905;
 const uint32 NPC_PH_HUNTER = 20906;
-const uint32 NPC_MILLHOUSE = 20977;      // NOTE: Becomes friendly ally, not hostile!
 const uint32 NPC_AKKIRIS = 20908;
 const uint32 NPC_SULFURON = 20909;
 const uint32 NPC_TW_DRAK = 20910;

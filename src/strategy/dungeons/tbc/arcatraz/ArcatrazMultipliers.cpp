@@ -197,7 +197,7 @@ float SkyrissMultiplier::GetValue(Action* action)
             Unit* unit = botAI->GetUnit(npc);
             if (unit && unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive())
             {
-                return 0.2f; // Significantly reduce regular attacks when illusions present
+                return 1.0f; // Do not suppress baseline attacks; Skyriss action already prioritizes illusions
             }
         }
     }

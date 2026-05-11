@@ -1,7 +1,6 @@
 #include "Playerbots.h"
 #include "ArcatrazActions.h"
 #include "ArcatrazStrategy.h"
-#include "AttackersValue.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -54,7 +53,6 @@ bool AttackMellicharAddsAction::Execute(Event event)
     if (!bot || botAI->IsHeal(bot))
         return false;
 
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
     GuidVector targets = AI_VALUE(GuidVector, "possible targets");
 
     const uint32 mellicharAdds[] = {
@@ -502,6 +500,19 @@ bool SkyrissIllusionAction::Execute(Event event)
     
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || unit->GetEntry() != NPC_HARBINGER_ILLUSION || !unit->IsAlive() || !bot->IsValidAttackTarget(unit))
+            continue;
+
+        FocusPriorityTarget(botAI, unit);
+
+        if (Attack(unit))
+            return true;
+    }
+
+    const GuidVector possibleTargets = AI_VALUE(GuidVector, "possible targets");
+    for (auto& npc : possibleTargets)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit || unit->GetEntry() != NPC_HARBINGER_ILLUSION || !unit->IsAlive() || !bot->IsValidAttackTarget(unit))
