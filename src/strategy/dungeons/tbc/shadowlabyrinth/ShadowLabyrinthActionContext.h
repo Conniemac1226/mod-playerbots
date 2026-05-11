@@ -15,6 +15,7 @@ public:
         creators["avoid war stomp"] = &ShadowLabyrinthActionContext::avoid_war_stomp;
         creators["blackheart charge react"] = &ShadowLabyrinthActionContext::blackheart_charge_react;
         creators["void traveler priority"] = &ShadowLabyrinthActionContext::void_traveler_priority;
+        creators["vorpil spread"] = &ShadowLabyrinthActionContext::vorpil_spread;
         creators["move from rain of fire"] = &ShadowLabyrinthActionContext::move_from_rain_of_fire;
         creators["draw shadows react"] = &ShadowLabyrinthActionContext::draw_shadows_react;
         creators["murmur sonic boom"] = &ShadowLabyrinthActionContext::murmur_sonic_boom;
@@ -30,6 +31,7 @@ private:
     static Action* avoid_war_stomp(PlayerbotAI* botAI) { return new AvoidWarStompAction(botAI); }
     static Action* blackheart_charge_react(PlayerbotAI* botAI) { return new BlackheartChargeReactAction(botAI); }
     static Action* void_traveler_priority(PlayerbotAI* botAI) { return new VoidTravelerPriorityAction(botAI); }
+    static Action* vorpil_spread(PlayerbotAI* botAI) { return new VorpilSpreadAction(botAI); }
     static Action* move_from_rain_of_fire(PlayerbotAI* botAI) { return new MoveFromRainOfFireAction(botAI); }
     static Action* draw_shadows_react(PlayerbotAI* botAI) { return new DrawShadowsReactAction(botAI); }
     static Action* murmur_sonic_boom(PlayerbotAI* botAI) { return new MurmurSonicBoomAction(botAI); }

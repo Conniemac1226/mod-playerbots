@@ -15,6 +15,7 @@ public:
         creators["blackheart war stomp"] = &ShadowLabyrinthTriggerContext::blackheart_war_stomp;
         creators["blackheart charge"] = &ShadowLabyrinthTriggerContext::blackheart_charge;
         creators["vorpil void traveler"] = &ShadowLabyrinthTriggerContext::vorpil_void_traveler;
+        creators["vorpil spread"] = &ShadowLabyrinthTriggerContext::vorpil_spread;
         creators["vorpil rain of fire"] = &ShadowLabyrinthTriggerContext::vorpil_rain_of_fire;
         creators["vorpil draw shadows"] = &ShadowLabyrinthTriggerContext::vorpil_draw_shadows;
         creators["murmur sonic boom"] = &ShadowLabyrinthTriggerContext::murmur_sonic_boom;
@@ -30,6 +31,7 @@ private:
     static Trigger* blackheart_war_stomp(PlayerbotAI* botAI) { return new BlackheartWarStompTrigger(botAI); }
     static Trigger* blackheart_charge(PlayerbotAI* botAI) { return new BlackheartChargeTrigger(botAI); }
     static Trigger* vorpil_void_traveler(PlayerbotAI* botAI) { return new VorpilVoidTravelerTrigger(botAI); }
+    static Trigger* vorpil_spread(PlayerbotAI* botAI) { return new VorpilSpreadTrigger(botAI); }
     static Trigger* vorpil_rain_of_fire(PlayerbotAI* botAI) { return new VorpilRainOfFireTrigger(botAI); }
     static Trigger* vorpil_draw_shadows(PlayerbotAI* botAI) { return new VorpilDrawShadowsTrigger(botAI); }
     static Trigger* murmur_sonic_boom(PlayerbotAI* botAI) { return new MurmurSonicBoomTrigger(botAI); }

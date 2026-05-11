@@ -4,6 +4,7 @@
 #include "Trigger.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
+#include "ShadowLabyrinthHelpers.h"
 
 class HellmawCorrosiveAcidTrigger : public Trigger
 {
@@ -44,6 +45,13 @@ class VorpilVoidTravelerTrigger : public Trigger
 {
 public:
     VorpilVoidTravelerTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vorpil void traveler") {}
+    bool IsActive() override;
+};
+
+class VorpilSpreadTrigger : public Trigger
+{
+public:
+    VorpilSpreadTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vorpil spread") {}
     bool IsActive() override;
 };
 

@@ -6,30 +6,7 @@
 #include "MovementActions.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
-
-const uint32 SPELL_CORROSIVE_ACID = 33551;
-const uint32 SL_SPELL_FEAR = 33547;
-
-const uint32 SPELL_INCITE_CHAOS = 33676;
-const uint32 SPELL_INCITE_CHAOS_B = 33684;
-const uint32 SL_SPELL_CHARGE = 33709;
-const uint32 SL_SPELL_WAR_STOMP = 33707;
-
-const uint32 SPELL_RAIN_OF_FIRE = 33617;
-const uint32 SPELL_DRAW_SHADOWS = 33563;
-const uint32 SPELL_SHADOWBOLT_VOLLEY = 33841;
-const uint32 SPELL_BANISH = 38791;
-
-const uint32 SPELL_SONIC_BOOM_CAST = 33923;
-const uint32 SPELL_SONIC_BOOM_EFFECT = 38795;
-const uint32 SPELL_MURMURS_TOUCH = 33711;
-const uint32 SPELL_RESONANCE = 33657;
-const uint32 SL_SPELL_MAGNETIC_PULL = 33689;
-const uint32 SPELL_THUNDERING_STORM = 39365;
-
-const uint32 NPC_VOID_TRAVELER = 19226;
-const uint32 NPC_GRANDMASTER_VORPIL = 18732;
-const uint32 NPC_INCITE_TRIGGER = 19300;
+#include "ShadowLabyrinthHelpers.h"
 
 class AvoidCorrosiveAcidAction : public MovementAction
 {
@@ -70,6 +47,14 @@ class VoidTravelerPriorityAction : public AttackAction
 {
 public:
     VoidTravelerPriorityAction(PlayerbotAI* botAI) : AttackAction(botAI, "void traveler priority") {}
+    bool isUseful() override;
+    bool Execute(Event event) override;
+};
+
+class VorpilSpreadAction : public MovementAction
+{
+public:
+    VorpilSpreadAction(PlayerbotAI* botAI) : MovementAction(botAI, "vorpil spread") {}
     bool isUseful() override;
     bool Execute(Event event) override;
 };

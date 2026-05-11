@@ -1,12 +1,11 @@
 #include "Playerbots.h"
 #include "ShadowLabyrinthActions.h"
 #include "ShadowLabyrinthStrategy.h"
-#include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
+#include "ShadowLabyrinthHelpers.h"
 
-// Per-bot state maps for Void Traveler timeout mechanism
-std::map<ObjectGuid, uint32> g_voidTraveler_lastSeenTime;
-std::map<ObjectGuid, uint32> g_voidTraveler_stuckTime;
-std::map<ObjectGuid, ObjectGuid> g_voidTraveler_lastTarget;
+#include "Group.h"
+
+#include <cmath>
 
 
 bool AvoidCorrosiveAcidAction::Execute(Event event)
@@ -229,61 +228,26 @@ bool VoidTravelerPriorityAction::isUseful()
     if (botAI->IsHeal(bot))
         return false;
 
-    // Check if Grandmaster Vorpil encounter is active
-    Unit* boss = bot->FindNearestCreature(NPC_GRANDMASTER_VORPIL, 100.0f);
+    Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // SMART TIMEOUT: Don't be useful if stuck on same target too long
-    ObjectGuid botGuid = bot->GetGUID();
-    uint32 currentTime = getMSTime();
-    
-    // If we've been targeting Void Travelers for more than 20 seconds, something is wrong
-    if (g_voidTraveler_lastSeenTime[botGuid] > 0 && 
-        (currentTime - g_voidTraveler_lastSeenTime[botGuid]) > 20000U)
+    if (boss->GetHealthPct() <= 12.0f)
     {
-        // Force timeout - let bots resume normal combat
-        g_voidTraveler_lastSeenTime[botGuid] = 0;
         return false;
     }
 
-    // ENHANCED DETECTION: Same logic as trigger to ensure consistency
-    bool voidTravelerFound = false;
+    Unit* voidTraveler = ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, bot, boss, 80.0f);
+    if (!voidTraveler)
+        return false;
 
-    // Method 1: Check hostile NPCs list for Void Travelers (most reliable method)
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    for (auto& npc : npcs)
+    if (botAI->IsTank(bot))
     {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_VOID_TRAVELER)
-        {
-            voidTravelerFound = true;
-            // Update last seen time for timeout system
-            g_voidTraveler_lastSeenTime[botGuid] = currentTime;
-            break;
-        }
+        float const dangerDistance = voidTraveler->GetDistance(boss);
+        return dangerDistance < 20.0f;
     }
 
-    // Method 2: Direct creature search if not found in hostile list
-    if (!voidTravelerFound)
-    {
-        TbcDungeon::ForEachNearbyNpc(botAI, bot, 80.0f, [&](Unit* unit)
-        {
-            if (voidTravelerFound)
-                return;
-
-            if (unit->GetEntry() == NPC_VOID_TRAVELER)
-            {
-                voidTravelerFound = true;
-                g_voidTraveler_lastSeenTime[botGuid] = currentTime;
-            }
-        });
-    }
-    
-    return voidTravelerFound;
+    return true;
 }
 
 bool VoidTravelerPriorityAction::Execute(Event event)
@@ -292,141 +256,150 @@ bool VoidTravelerPriorityAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // CRITICAL: HEALERS NEVER ATTACK ADDS - Always prioritize healing
     if (botAI->IsHeal(bot))
         return false;
         
     Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!boss || !boss->IsInCombat())
+    if (!ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
     
-    // ENHANCED VOID TRAVELER TARGETING: Multi-method approach for REACT_PASSIVE
-    Unit* voidTraveler = nullptr;
-    float closestDistToBoss = 100.0f;
-
-    // Method 1: Check hostile NPCs list first (most reliable)
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_VOID_TRAVELER)
-        {
-            float distToBoss = unit->GetExactDist2d(boss);
-            if (distToBoss < closestDistToBoss)
-            {
-                closestDistToBoss = distToBoss;
-                voidTraveler = unit;
-            }
-        }
-    }
-
-    if (!voidTraveler)
-    {
-        TbcDungeon::ForEachNearbyNpc(botAI, bot, 100.0f, [&](Unit* unit)
-        {
-            if (unit->GetEntry() != NPC_VOID_TRAVELER)
-                return;
-
-            float distToBoss = unit->GetExactDist2d(boss);
-            if (distToBoss < closestDistToBoss)
-            {
-                closestDistToBoss = distToBoss;
-                voidTraveler = unit;
-            }
-        });
-    }
+    Unit* voidTraveler = ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, bot, boss, 80.0f);
 
     if (voidTraveler)
     {
-        ObjectGuid botGuid = bot->GetGUID();
-        ObjectGuid travelerGuid = voidTraveler->GetGUID();
-        uint32 currentTime = getMSTime();
-        
-        // EMERGENCY FALLBACK: Track if bot is stuck on same Void Traveler target
-        if (g_voidTraveler_lastTarget[botGuid] == travelerGuid)
-        {
-            // Same target - check if stuck
-            if (g_voidTraveler_stuckTime[botGuid] == 0)
-            {
-                g_voidTraveler_stuckTime[botGuid] = currentTime;
-            }
-            else if ((currentTime - g_voidTraveler_stuckTime[botGuid]) > 15000U)
-            {
-                // Stuck for 15+ seconds - force target switch or fallback to boss
-                g_voidTraveler_lastTarget[botGuid] = ObjectGuid::Empty;
-                g_voidTraveler_stuckTime[botGuid] = 0;
-                
-                return false;
-            }
-        }
-        else
-        {
-            // New target - reset tracking
-            g_voidTraveler_lastTarget[botGuid] = travelerGuid;
-            g_voidTraveler_stuckTime[botGuid] = 0;
-        }
-        
-        // SPECIAL HANDLING: Void Travelers have REACT_PASSIVE
-        // Use direct targeting instead of normal Attack() which might fail
-        
-        // Clear current target to reset combat state
+        if (botAI->IsTank(bot) && voidTraveler->GetDistance(boss) > 20.0f)
+            return false;
+
         bot->SetTarget(voidTraveler->GetGUID());
-        
-        // Force threat generation for passive targets
+
         if (!voidTraveler->GetThreatMgr().GetThreat(bot))
         {
             voidTraveler->GetThreatMgr().AddThreat(bot, 1.0f);
         }
-        
-        // Use normal attack method
+
         return Attack(voidTraveler);
     }
     
     return false;
 }
 
+bool VorpilSpreadAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI || botAI->IsTank(bot))
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
+    if (!ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    if (boss->GetHealthPct() <= 12.0f)
+        return false;
+
+    if (ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, bot, boss, 80.0f))
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (member && member != bot && member->IsAlive() && bot->GetExactDist2d(member) < 8.0f)
+            return true;
+    }
+
+    return false;
+}
+
+bool VorpilSpreadAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
+    if (!ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    Player* nearestAlly = nullptr;
+    float nearestDistance = 8.0f;
+    Group* group = bot->GetGroup();
+    if (group)
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (!member || member == bot || !member->IsAlive())
+                continue;
+
+            float const distance = bot->GetExactDist2d(member);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestAlly = member;
+            }
+        }
+    }
+
+    if (!nearestAlly)
+        return false;
+
+    ShadowLabyrinth::VorpilCache& cache = ShadowLabyrinth::GetVorpilCache(bot->GetGUID());
+    uint32 const now = getMSTime();
+    Position destination = ShadowLabyrinth::GetVorpilSafeSpreadPosition(bot, boss, nearestAlly);
+    if (!ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+        return false;
+
+    return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+}
+
 bool MoveFromRainOfFireAction::Execute(Event event)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!boss)
+    if (!ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
-    
-    // Rain of Fire is cast at center after teleport
-    if (boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE))
+
+    ShadowLabyrinth::VorpilCache& cache = ShadowLabyrinth::GetVorpilCache(bot->GetGUID());
+    uint32 const now = getMSTime();
+    Position const centerPos = ShadowLabyrinth::GetVorpilCenter();
+
+    if (boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE) || bot->HasAura(SPELL_RAIN_OF_FIRE))
     {
-        Position centerPos = {-253.548f, -263.646f, 17.0864f};
-        float safeRadius = 15.0f; // Rain of Fire radius plus safety margin
+        float const safeRadius = 15.0f;
         float currentDist = bot->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY());
         
         if (currentDist < safeRadius)
         {
-            // Move away from center immediately
             float angle = atan2(bot->GetPositionY() - centerPos.GetPositionY(),
                               bot->GetPositionX() - centerPos.GetPositionX());
-            float destX = centerPos.GetPositionX() + cos(angle) * (safeRadius + 3.0f);
-            float destY = centerPos.GetPositionY() + sin(angle) * (safeRadius + 3.0f);
-            return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
-                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            Position destination = {centerPos.GetPositionX() + cos(angle) * (safeRadius + 3.0f),
+                centerPos.GetPositionY() + sin(angle) * (safeRadius + 3.0f), bot->GetPositionZ()};
+            if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+            {
+                return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            }
         }
     }
-    
-    // Also check if we're standing in Rain of Fire (ground effect)
-    if (bot->HasAura(33617)) // Rain of Fire damage aura
+
+    if (bot->HasAura(SPELL_RAIN_OF_FIRE))
     {
-        Position centerPos = {-253.548f, -263.646f, 17.0864f};
         float angle = atan2(bot->GetPositionY() - centerPos.GetPositionY(),
                           bot->GetPositionX() - centerPos.GetPositionX());
-        float destX = centerPos.GetPositionX() + cos(angle) * 18.0f;
-        float destY = centerPos.GetPositionY() + sin(angle) * 18.0f;
-        return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
-                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        Position destination = {centerPos.GetPositionX() + cos(angle) * 18.0f,
+            centerPos.GetPositionY() + sin(angle) * 18.0f, bot->GetPositionZ()};
+        if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+        {
+            return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        }
     }
     
     return false;
@@ -435,28 +408,30 @@ bool MoveFromRainOfFireAction::Execute(Event event)
 bool DrawShadowsReactAction::Execute(Event event)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!boss)
+    if (!ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
     
-    // Draw Shadows teleports boss to center, then casts Rain of Fire
-    // Move away from center immediately when Draw Shadows is cast
     if (boss->FindCurrentSpellBySpellId(SPELL_DRAW_SHADOWS))
     {
-        Position centerPos = {-253.548f, -263.646f, 17.0864f};
-        float safeDistance = 15.0f; // Rain of Fire has ~12 yard radius
+        ShadowLabyrinth::VorpilCache& cache = ShadowLabyrinth::GetVorpilCache(bot->GetGUID());
+        uint32 const now = getMSTime();
+        Position const centerPos = ShadowLabyrinth::GetVorpilCenter();
+        float const safeDistance = 15.0f;
         float currentDist = bot->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY());
         
         if (currentDist < safeDistance)
         {
-            // Move directly away from center
             float angle = atan2(bot->GetPositionY() - centerPos.GetPositionY(), 
                               bot->GetPositionX() - centerPos.GetPositionX());
-            float destX = centerPos.GetPositionX() + cos(angle) * (safeDistance + 3.0f);
-            float destY = centerPos.GetPositionY() + sin(angle) * (safeDistance + 3.0f);
-            return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
-                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            Position destination = {centerPos.GetPositionX() + cos(angle) * (safeDistance + 3.0f),
+                centerPos.GetPositionY() + sin(angle) * (safeDistance + 3.0f), bot->GetPositionZ()};
+            if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+            {
+                return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            }
         }
     }
     
@@ -466,30 +441,52 @@ bool DrawShadowsReactAction::Execute(Event event)
 bool MurmurSonicBoomAction::Execute(Event event)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "murmur");
-    if (!boss)
+    Player* bot = botAI->GetBot();
+    if (!bot || !ShadowLabyrinth::IsMurmur(boss) || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
-    
-    // CRITICAL: Sonic Boom does 80% of CURRENT health damage!
-    // Must be 34+ yards away to avoid it
-    if (boss->FindCurrentSpellBySpellId(SPELL_SONIC_BOOM_CAST))
+
+    ShadowLabyrinth::MurmurCache& cache = ShadowLabyrinth::GetMurmurCache(bot->GetGUID());
+    uint32 const now = getMSTime();
+    bool const sonicBoomCasting = ShadowLabyrinth::IsMurmurCastingSonicBoom(boss);
+    if (sonicBoomCasting)
     {
-        float safeDistance = 36.0f; // 34 yards + safety margin
-        float currentDist = bot->GetExactDist(boss);
-        
+        cache.sonicBoomDangerUntilMs = now + 4000U;
+        cache.sonicBoomReturnUntilMs = now + 7000U;
+    }
+
+    float const currentDist = bot->GetExactDist(boss);
+    float const safeDistance = 48.0f;
+    if (cache.sonicBoomDangerUntilMs > now)
+    {
         if (currentDist < safeDistance)
         {
-            // Move directly away from boss FAST
-            float angle = boss->GetAngle(bot) + M_PI;
-            float moveDistance = safeDistance - currentDist + 2.0f;
-            float destX = boss->GetPositionX() + cos(angle) * (currentDist + moveDistance);
-            float destY = boss->GetPositionY() + sin(angle) * (currentDist + moveDistance);
-            float destZ = boss->GetPositionZ();
-            
-            // Force immediate movement with highest priority
-            return MoveTo(boss->GetMapId(), destX, destY, destZ, 
-                         false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            Position destination = ShadowLabyrinth::GetMurmurSafeMovePosition(bot, boss, nullptr, safeDistance);
+            if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+            {
+                return MoveTo(boss->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            }
+        }
+        return false;
+    }
+
+    if (cache.sonicBoomReturnUntilMs > now)
+    {
+        float const desiredRange = botAI->IsTank(bot) || botAI->IsMelee(bot) ? 5.0f : 28.0f;
+        if (std::fabs(currentDist - desiredRange) > 3.0f)
+        {
+            Position destination = ShadowLabyrinth::GetMurmurSafeMovePosition(bot, boss, nullptr, desiredRange);
+            if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+            {
+                return MoveTo(boss->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            }
+        }
+        else
+        {
+            cache.sonicBoomReturnUntilMs = 0;
         }
     }
     
@@ -499,46 +496,47 @@ bool MurmurSonicBoomAction::Execute(Event event)
 bool MurmurResonanceAction::Execute(Event event)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "murmur");
-    if (!boss)
+    Player* bot = botAI->GetBot();
+    if (!bot || !ShadowLabyrinth::IsMurmur(boss) || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
     
-    // Resonance is cast when no one is in melee range
-    // Tank must stay close to prevent it
     if (botAI->IsTank(bot))
     {
-        float meleeRange = 5.0f;
-        float currentDist = bot->GetExactDist(boss);
-        
-        // Always stay in melee range as tank
-        if (currentDist > meleeRange)
+        if (bot->GetExactDist(boss) > 5.0f)
         {
-            return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), 
-                         boss->GetPositionZ(), false, false, false, true,
-                         MovementPriority::MOVEMENT_FORCED);
+            ShadowLabyrinth::MurmurCache& cache = ShadowLabyrinth::GetMurmurCache(bot->GetGUID());
+            uint32 const now = getMSTime();
+            Position destination = ShadowLabyrinth::GetMurmurSafeMovePosition(bot, boss, nullptr, 5.0f);
+            if (!ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+                return false;
+
+            return MoveTo(boss->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         }
     }
-    else if (boss->FindCurrentSpellBySpellId(SPELL_RESONANCE))
+    else if (boss->FindCurrentSpellBySpellId(SPELL_RESONANCE) && bot->GetExactDist(boss) < 10.0f)
     {
-        // Non-tanks should spread to minimize damage
         Group* group = bot->GetGroup();
         if (group)
         {
             for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
             {
                 Player* member = ref->GetSource();
-                if (member && member != bot && member->IsAlive())
+                if (member && member != bot && member->IsAlive() && bot->GetExactDist2d(member) < 10.0f)
                 {
-                    float dist = bot->GetExactDist2d(member);
-                    if (dist < 10.0f)
-                    {
-                        float angle = bot->GetAngle(member) + M_PI;
-                        float destX = bot->GetPositionX() + cos(angle) * 12.0f;
-                        float destY = bot->GetPositionY() + sin(angle) * 12.0f;
-                        return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
-                                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-                    }
+                    float angle = bot->GetAngle(member) + M_PI;
+                    float destX = bot->GetPositionX() + cos(angle) * 12.0f;
+                    float destY = bot->GetPositionY() + sin(angle) * 12.0f;
+                    ShadowLabyrinth::MurmurCache& cache = ShadowLabyrinth::GetMurmurCache(bot->GetGUID());
+                    uint32 const now = getMSTime();
+                    Position destination = {destX, destY, bot->GetPositionZ()};
+                    if (!ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+                        return false;
+
+                    return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
+                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
                 }
             }
         }
@@ -550,35 +548,71 @@ bool MurmurResonanceAction::Execute(Event event)
 bool MurmurMagneticPullAction::Execute(Event event)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "murmur");
-    if (!boss)
+    Player* bot = botAI->GetBot();
+    if (!bot || !ShadowLabyrinth::IsMurmur(boss) || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
     
-    // Magnetic Pull brings a player to Murmur, followed by Murmur's Touch
-    // The touched player needs to move away from others to avoid spread
-    if (bot->HasAura(SPELL_MURMURS_TOUCH) || bot->HasAura(SL_SPELL_MAGNETIC_PULL))
+    ShadowLabyrinth::MurmurCache& cache = ShadowLabyrinth::GetMurmurCache(bot->GetGUID());
+    uint32 const now = getMSTime();
+    Player* touchedPlayer = ShadowLabyrinth::FindTouchedPlayerCached(botAI, bot, 18.0f);
+    bool const selfTouched = ShadowLabyrinth::HasMurmursTouch(bot) || bot->HasAura(SL_SPELL_MAGNETIC_PULL);
+
+    if (selfTouched || touchedPlayer)
     {
-        // Move away from other players to avoid Murmur's Touch explosion
-        Group* group = bot->GetGroup();
-        if (group)
+        Unit const* threatSource = nullptr;
+        if (selfTouched)
         {
-            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            Group* group = bot->GetGroup();
+            if (group)
             {
-                Player* member = ref->GetSource();
-                if (member && member != bot && member->IsAlive())
+                for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
                 {
-                    float dist = bot->GetExactDist2d(member);
-                    if (dist < 15.0f) // Murmur's Touch has splash damage
+                    Player* member = ref->GetSource();
+                    if (member && member != bot && member->IsAlive() && !ShadowLabyrinth::HasMurmursTouch(member) &&
+                        bot->GetExactDist2d(member) < 15.0f)
                     {
-                        float angle = bot->GetAngle(member) + M_PI;
-                        float destX = bot->GetPositionX() + cos(angle) * 20.0f;
-                        float destY = bot->GetPositionY() + sin(angle) * 20.0f;
-                        return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
-                                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                        threatSource = member;
+                        break;
                     }
                 }
             }
+
+            if (!threatSource)
+                threatSource = boss;
+        }
+
+        if (!threatSource)
+            threatSource = touchedPlayer;
+
+        Position destination = ShadowLabyrinth::GetMurmurSafeMovePosition(bot, boss, threatSource, 20.0f);
+        if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+        {
+            cache.touchDangerUntilMs = now + 2500U;
+            cache.touchReturnUntilMs = now + 5000U;
+            return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        }
+
+        return false;
+    }
+
+    if (cache.touchReturnUntilMs > now)
+    {
+        float const desiredRange = botAI->IsTank(bot) || botAI->IsMelee(bot) ? 5.0f : (botAI->IsHeal(bot) ? 28.0f : 24.0f);
+        if (bot->GetExactDist(boss) > desiredRange + 3.0f)
+        {
+            Position destination = ShadowLabyrinth::GetMurmurSafeMovePosition(bot, boss, nullptr, desiredRange);
+            if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+            {
+                return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+            }
+        }
+        else
+        {
+            cache.touchReturnUntilMs = 0;
         }
     }
     
@@ -588,36 +622,38 @@ bool MurmurMagneticPullAction::Execute(Event event)
 bool MurmurThunderingStormAction::Execute(Event event)
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "murmur");
-    if (!boss)
+    Player* bot = botAI->GetBot();
+    if (!bot || !ShadowLabyrinth::IsMurmur(boss) || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
     
-    // Thundering Storm targets players 25-100 yards away (Heroic only)
-    // Best position is either very close (<25y) or very far (>100y)
     if (boss->FindCurrentSpellBySpellId(SPELL_THUNDERING_STORM))
     {
-        float currentDist = bot->GetExactDist(boss);
-        
-        // If in danger zone (25-100 yards), move closer or farther
+        float const currentDist = bot->GetExactDist(boss);
         if (currentDist >= 25.0f && currentDist <= 100.0f)
         {
-            // Tanks and melee move in close
+            ShadowLabyrinth::MurmurCache& cache = ShadowLabyrinth::GetMurmurCache(bot->GetGUID());
+            uint32 const now = getMSTime();
             if (botAI->IsTank(bot) || botAI->IsMelee(bot))
             {
-                // Move closer to boss
-                return MoveTo(boss->GetMapId(), boss->GetPositionX(), boss->GetPositionY(), 
-                                 boss->GetPositionZ(), false, false, false, true, 
-                                 MovementPriority::MOVEMENT_FORCED);
+                Position destination = ShadowLabyrinth::GetMurmurSafeMovePosition(bot, boss, nullptr, 5.0f);
+                if (!ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+                    return false;
+
+                return MoveTo(boss->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
             }
-            // Ranged try to get farther if possible
             else
             {
                 float angle = boss->GetAngle(bot) + M_PI;
-                float destX = boss->GetPositionX() + cos(angle) * 110.0f;
-                float destY = boss->GetPositionY() + sin(angle) * 110.0f;
-                return MoveTo(bot->GetMapId(), destX, destY, bot->GetPositionZ(),
-                        false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                Position destination = {boss->GetPositionX() + cos(angle) * 110.0f,
+                    boss->GetPositionY() + sin(angle) * 110.0f, bot->GetPositionZ()};
+                if (!ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+                    return false;
+
+                return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
             }
         }
     }

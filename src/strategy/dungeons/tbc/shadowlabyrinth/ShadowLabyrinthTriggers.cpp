@@ -1,7 +1,9 @@
 #include "Playerbots.h"
 #include "ShadowLabyrinthTriggers.h"
 #include "ShadowLabyrinthActions.h"
-#include "strategy/dungeons/tbc/TbcDungeonHelpers.h"
+#include "ShadowLabyrinthHelpers.h"
+
+#include "Group.h"
 
 bool HellmawCorrosiveAcidTrigger::IsActive()
 {
@@ -101,57 +103,50 @@ bool VorpilVoidTravelerTrigger::IsActive()
     {
         return false;
     }
-    
-    ObjectGuid botGuid = bot->GetGUID();
-    uint32 currentTime = getMSTime();
-    
-    // SMART TIMEOUT: Don't be active if stuck on same target too long
-    extern std::map<ObjectGuid, uint32> g_voidTraveler_lastSeenTime;
-    if (g_voidTraveler_lastSeenTime[botGuid] > 0 && 
-        (currentTime - g_voidTraveler_lastSeenTime[botGuid]) > 8000U)
-    {
-        // Force timeout - let bots resume normal combat
-        g_voidTraveler_lastSeenTime[botGuid] = 0;
+
+    return ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, bot, boss, 80.0f) != nullptr;
+}
+
+bool VorpilSpreadTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || botAI->IsTank(bot))
         return false;
-    }
-    
-    // ENHANCED DETECTION: Multi-method approach for REACT_PASSIVE creatures
-    bool voidTravelerFound = false;
 
-    // Method 1: Check hostile NPCs list first (most reliable)
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    for (auto& npc : npcs)
+    Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    if (boss->GetHealthPct() <= 12.0f)
+        return false;
+
+    Player* nearestAlly = nullptr;
+    float nearestDistance = 8.0f;
+    Group* group = bot->GetGroup();
+    if (group)
     {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_VOID_TRAVELER)
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
         {
-            voidTravelerFound = true;
-            // Update last seen time for timeout system
-            g_voidTraveler_lastSeenTime[botGuid] = currentTime;
-            break;
+            Player* member = ref->GetSource();
+            if (!member || member == bot || !member->IsAlive())
+                continue;
+
+            float const distance = bot->GetExactDist2d(member);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestAlly = member;
+            }
         }
     }
 
-    // Method 2: Direct creature search if not found in hostile list
-    if (!voidTravelerFound)
-    {
-        TbcDungeon::ForEachNearbyNpc(botAI, bot, 100.0f, [&](Unit* unit)
-        {
-            if (voidTravelerFound)
-                return;
+    if (!nearestAlly)
+        return false;
 
-            if (unit->GetEntry() == NPC_VOID_TRAVELER)
-            {
-                voidTravelerFound = true;
-                g_voidTraveler_lastSeenTime[botGuid] = currentTime;
-            }
-        });
-    }
-    
-    return voidTravelerFound;
+    if (ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, bot, boss, 80.0f))
+        return false;
+
+    return true;
 }
 
 bool VorpilRainOfFireTrigger::IsActive()
@@ -161,15 +156,7 @@ bool VorpilRainOfFireTrigger::IsActive()
     {
         return false;
     }
-    
-    if (boss->HasAura(SPELL_RAIN_OF_FIRE) || boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE))
-    {
-        Position centerPos = {-253.548f, -263.646f, 17.0864f};
-        float distance = bot->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY());
-        return distance < 12.0f;
-    }
-    
-    return false;
+    return boss->HasAura(SPELL_RAIN_OF_FIRE) || boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE);
 }
 
 bool VorpilDrawShadowsTrigger::IsActive()
@@ -179,25 +166,32 @@ bool VorpilDrawShadowsTrigger::IsActive()
     {
         return false;
     }
-    
+
     return boss->HasAura(SPELL_DRAW_SHADOWS) || boss->FindCurrentSpellBySpellId(SPELL_DRAW_SHADOWS);
 }
 
 bool MurmurSonicBoomTrigger::IsActive()
 {
-    Unit* boss = AI_VALUE2(Unit*, "find target", "murmur");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-    {
+    Player* bot = botAI->GetBot();
+    if (!bot)
         return false;
-    }
-    
-    if (boss->HasAura(SPELL_SONIC_BOOM_CAST) || boss->FindCurrentSpellBySpellId(SPELL_SONIC_BOOM_CAST))
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "murmur");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat() || !ShadowLabyrinth::IsMurmur(boss))
+        return false;
+
+    ShadowLabyrinth::MurmurCache& cache = ShadowLabyrinth::GetMurmurCache(bot->GetGUID());
+    uint32 const now = getMSTime();
+    if (ShadowLabyrinth::IsMurmurCastingSonicBoom(boss))
     {
-        float distance = bot->GetExactDist2d(boss);
-        return distance < 34.0f;
+        cache.sonicBoomDangerUntilMs = now + 4000U;
+        cache.sonicBoomReturnUntilMs = now + 7000U;
     }
-    
-    return false;
+
+    if (cache.sonicBoomDangerUntilMs > now)
+        return bot->GetExactDist2d(boss) < 48.0f;
+
+    return cache.sonicBoomReturnUntilMs > now;
 }
 
 bool MurmurResonanceTrigger::IsActive()
@@ -207,23 +201,54 @@ bool MurmurResonanceTrigger::IsActive()
     {
         return false;
     }
-    
     return boss->HasAura(SPELL_RESONANCE) || boss->FindCurrentSpellBySpellId(SPELL_RESONANCE);
 }
 
 bool MurmurMagneticPullTrigger::IsActive()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "murmur");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
-    
-    return bot->HasAura(SL_SPELL_MAGNETIC_PULL);
+
+    ShadowLabyrinth::MurmurCache& cache = ShadowLabyrinth::GetMurmurCache(bot->GetGUID());
+    uint32 const now = getMSTime();
+    Player* touchedPlayer = ShadowLabyrinth::FindTouchedPlayerCached(botAI, bot, 18.0f);
+    if (touchedPlayer)
+    {
+        cache.touchReturnUntilMs = now + 3500U;
+        return true;
+    }
+
+    if (bot->HasAura(SL_SPELL_MAGNETIC_PULL) || ShadowLabyrinth::HasMurmursTouch(bot))
+    {
+        Aura* touch = bot->GetAura(SPELL_MURMURS_TOUCH);
+        if (!touch)
+            touch = bot->GetAura(SPELL_MURMURS_TOUCH_HEROIC);
+
+        if (touch)
+        {
+            cache.touchDangerUntilMs = std::max(cache.touchDangerUntilMs, now + static_cast<uint32>(std::max(0, touch->GetDuration())));
+            cache.touchReturnUntilMs = std::max(cache.touchReturnUntilMs, cache.touchDangerUntilMs + 2000U);
+        }
+
+        return true;
+    }
+
+    return cache.touchReturnUntilMs > now;
 }
 
 bool MurmurThunderingStormTrigger::IsActive()
 {
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
     Unit* boss = AI_VALUE2(Unit*, "find target", "murmur");
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
     {
