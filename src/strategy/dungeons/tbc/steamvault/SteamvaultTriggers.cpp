@@ -43,7 +43,7 @@ bool ThespiaWaterElementalActiveTrigger::IsActive()
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_THESPIA_WATER_ELEMENTAL && unit->IsInCombat())
+        if (unit->GetEntry() == NPC_THESPIA_WATER_ELEMENTAL)
             return true;
     }
     return false;

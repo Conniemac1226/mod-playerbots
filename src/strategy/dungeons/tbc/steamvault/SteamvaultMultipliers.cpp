@@ -13,21 +13,25 @@ float SteamvaultMultiplier::GetValue(Action* action)
 
 float ThespiaWaterElementalMultiplier::GetValue(Action* action)
 {
-    if (!action || action->getName() != "dps assist")
+    if (!action)
         return 1.0f;
 
     Player* bot = botAI->GetBot();
     if (!bot)
         return 1.0f;
 
-    // WotLK pattern - check for Water Elemental add present
+    // Thespia elementals start the fight already present and should be killed,
+    // but they should not suppress normal boss damage if the add focus is delayed.
+    if (action->getName() != "attack water elemental")
+        return 1.0f;
+
     GuidVector targets = AI_VALUE(GuidVector, "possible targets");
     for (auto& target : targets)
     {
         Unit* unit = botAI->GetUnit(target);
         if (unit && unit->IsInCombat() && unit->GetEntry() == NPC_THESPIA_WATER_ELEMENTAL)
         {
-            return 0.0f; // Block DpsAssist when Water Elemental present
+            return 3.0f; // Prefer the elemental when it is actually present
         }
     }
     return 1.0f;
