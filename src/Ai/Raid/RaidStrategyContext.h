@@ -11,7 +11,7 @@
 #include "RaidNaxxStrategy.h"
 #include "RaidSSCStrategy.h"
 #include "RaidTempestKeepStrategy.h"
-#include "RaidHyjalSummitStrategy.h"
+#include "HyjalSummit/Strategy/RaidHyjalSummitStrategy.h"
 #include "RaidZulAmanStrategy.h"
 #include "RaidOsStrategy.h"
 #include "RaidEoEStrategy.h"

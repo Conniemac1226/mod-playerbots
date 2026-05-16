@@ -6,7 +6,7 @@
 #ifndef _PLAYERBOT_RAIDHYJALSUMMITACTIONCONTEXT_H
 #define _PLAYERBOT_RAIDHYJALSUMMITACTIONCONTEXT_H
 
-#include "RaidHyjalSummitActions.h"
+#include "Action/RaidHyjalSummitActions.h"
 #include "NamedObjectContext.h"
 
 class RaidHyjalSummitActionContext : public NamedObjectContext<Action>
