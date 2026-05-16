@@ -1,6 +1,7 @@
 #include <unordered_map>
 #include <ctime>
 
+#include "Log.h"
 #include "RaidMagtheridonMultipliers.h"
 #include "RaidMagtheridonActions.h"
 #include "RaidMagtheridonHelpers.h"
@@ -11,6 +12,27 @@
 #include "WipeAction.h"
 
 using namespace MagtheridonHelpers;
+
+namespace
+{
+    std::string DescribeMagtheridonAction(Action* action)
+    {
+        if (!action)
+            return "action=none";
+
+        std::string type = "other";
+        if (dynamic_cast<AttackAction*>(action))
+            type = "attack";
+        else if (dynamic_cast<CastSpellAction*>(action))
+            type = "cast";
+        else if (dynamic_cast<MovementAction*>(action))
+            type = "move";
+        else if (dynamic_cast<WipeAction*>(action))
+            type = "wipe";
+
+        return "action_name=" + action->getName() + " action_type=" + type;
+    }
+}
 
 // Don't do anything other than clicking cubes when Magtheridon is casting Blast Nova
 float MagtheridonUseManticronCubeMultiplier::GetValue(Action* action)
@@ -28,7 +50,13 @@ float MagtheridonUseManticronCubeMultiplier::GetValue(Action* action)
             if (dynamic_cast<WipeAction*>(action))
                 return 1.0f;
             else if (!dynamic_cast<MagtheridonUseManticronCubeAction*>(action))
+            {
+                LogMagtheridonDebug(botAI, bot, "multiplier_cube_block",
+                    DescribeMagtheridonAction(action) + " reason=blast_nova_active " +
+                    GetMagtheridonTargetDecisionFields(botAI ? botAI->GetUnit(bot->GetTarget()) : nullptr, magtheridon, nullptr, "multiplier_cube_block", "non_cube_action"),
+                    magtheridon, 5);
                 return 0.0f;
+            }
         }
     }
 
@@ -52,7 +80,13 @@ float MagtheridonWaitToAttackMultiplier::GetValue(Action* action)
     {
         if (dynamic_cast<AttackAction*>(action) ||
             (!botAI->IsHeal(bot) && dynamic_cast<CastSpellAction*>(action)))
+        {
+            LogMagtheridonDebug(botAI, bot, "multiplier_wait_block",
+                DescribeMagtheridonAction(action) + " reason=wait_to_attack " +
+                GetMagtheridonTargetDecisionFields(botAI ? botAI->GetUnit(bot->GetTarget()) : nullptr, magtheridon, nullptr, "multiplier_wait_block", "attack_or_cast"),
+                magtheridon, 5);
             return 0.0f;
+        }
     }
 
     return 1.0f;
@@ -90,7 +124,13 @@ float MagtheridonChannelerTargetMultiplier::GetValue(Action* action)
 
     if (channelerAlive &&
         (dynamic_cast<DpsAssistAction*>(action) || dynamic_cast<TankAssistAction*>(action)))
+    {
+        LogMagtheridonDebug(botAI, bot, "multiplier_channeler_block",
+            DescribeMagtheridonAction(action) + " reason=channelers_alive " +
+            GetMagtheridonTargetDecisionFields(botAI ? botAI->GetUnit(bot->GetTarget()) : nullptr, magtheridon, nullptr, "multiplier_channeler_block", "dps_or_tank_assist"),
+            magtheridon, 5);
         return 0.0f;
+    }
 
     return 1.0f;
 }

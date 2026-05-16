@@ -4,6 +4,7 @@
 #include <ctime>
 #include <unordered_map>
 #include <vector>
+#include <string>
 
 #include "Group.h"
 #include "ObjectGuid.h"
@@ -56,6 +57,16 @@ namespace MagtheridonHelpers
     extern const Position NE_CHANNELER_TANK_POSITION;
     extern const Position RANGED_SPREAD_POSITION;
     extern const Position HEALER_SPREAD_POSITION;
+    std::string GetMagtheridonDebugRole(PlayerbotAI* botAI, Player* bot);
+    std::string GetMagtheridonBotRole(PlayerbotAI* botAI, Player* bot);
+    std::string GetMagtheridonDebugUnit(Player* bot, Unit* unit);
+    std::string GetMagtheridonTargetIdentityFields(std::string const& prefix, Unit* unit);
+    std::string GetMagtheridonTargetDecisionFields(Unit* previousTarget, Unit* selectedTarget, Unit* rejectedTarget, std::string const& actionThatWon, std::string const& actionThatLostOrWasSuppressed);
+    std::string GetMagtheridonEncounterDebug(PlayerbotAI* botAI, Player* bot, Unit* magtheridon = nullptr);
+    bool ShouldLogMagtheridonDebug(Player* bot, std::string const& key, uint32 throttleSeconds = 5);
+    void LogMagtheridonDebug(PlayerbotAI* botAI, Player* bot, std::string const& event, std::string const& details = "", Unit* magtheridon = nullptr, uint32 throttleSeconds = 5);
+    void MarkMagtheridonDebugActivity(Player* bot, std::string const& event);
+    std::string GetMagtheridonDebugActivity(Player* bot);
 
     struct CubeInfo
     {
