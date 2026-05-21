@@ -11,6 +11,7 @@
 #include "PlayerbotAI.h"
 #include "RaceMgr.h"
 #include "ScriptMgr.h"
+#include "SpellMgr.h"
 #include "SharedDefines.h"
 #include "SocialMgr.h"
 #include "Timer.h"
@@ -164,7 +165,8 @@ Player* RandomPlayerbotFactory::CreateRandomBot(WorldSession* session, uint8 cls
 
     if (cls == CLASS_DEATH_KNIGHT)
     {
-        player->learnSpell(50977, false);
+        if (sSpellMgr->GetSpellInfo(50977))
+            player->learnSpell(50977, false);
     }
 
     LOG_DEBUG("playerbots", "Random bot created - name: \"{}\", race: {}, class: {}",

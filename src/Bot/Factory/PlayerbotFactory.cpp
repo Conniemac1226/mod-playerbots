@@ -61,6 +61,25 @@ std::vector<uint32> PlayerbotFactory::enchantGemIdCache;
 std::unordered_map<uint32, std::vector<uint32>> PlayerbotFactory::trainerIdCache;
 std::vector<uint32> PlayerbotFactory::ccBreakTrinketCache;
 
+namespace
+{
+void LearnSpellIfAvailable(Player* bot, uint32 spellId, bool temporary = false, bool learnFromSkill = false)
+{
+    if (!spellId || !sSpellMgr->GetSpellInfo(spellId))
+        return;
+
+    bot->learnSpell(spellId, temporary, learnFromSkill);
+}
+
+void CastSpellIfAvailable(Player* bot, uint32 spellId)
+{
+    if (!spellId || !sSpellMgr->GetSpellInfo(spellId))
+        return;
+
+    bot->CastSpell(bot, spellId, true);
+}
+} // namespace
+
 bool PlayerbotFactory::IsPrimaryTradeSkill(uint16 skillId)
 {
     SkillLineEntry const* skillLine = sSkillLineStore.LookupEntry(skillId);
@@ -315,7 +334,7 @@ bool PlayerbotFactory::LearnProfessionSpecialization(Player* bot,
     if (bot->HasSpell(knownSpellId) || !sSpellMgr->GetSpellInfo(learnSpellId))
         return false;
 
-    bot->CastSpell(bot, learnSpellId, true);
+    CastSpellIfAvailable(bot, learnSpellId);
     return bot->HasSpell(knownSpellId);
 }
 
@@ -2755,7 +2774,7 @@ void PlayerbotFactory::InitTradeSkills()
             !(keepExistingProfessionPair && bot->HasSkill(skillId)))
             continue;
 
-        bot->learnSpell(spellId, false);
+        LearnSpellIfAvailable(bot, spellId, false);
     }
 
     InitTradeSpecializations();
@@ -2954,13 +2973,13 @@ void PlayerbotFactory::InitSkills()
 
     bot->SetSkill(SKILL_RIDING, 0, 0, 0);
     if (bot->GetLevel() >= sPlayerbotAIConfig.useGroundMountAtMinLevel)
-        bot->learnSpell(33388);
+        LearnSpellIfAvailable(bot, 33388);
     if (bot->GetLevel() >= sPlayerbotAIConfig.useFastGroundMountAtMinLevel)
-        bot->learnSpell(33391);
+        LearnSpellIfAvailable(bot, 33391);
     if (bot->GetLevel() >= sPlayerbotAIConfig.useFlyMountAtMinLevel)
-        bot->learnSpell(34090);
+        LearnSpellIfAvailable(bot, 34090);
     if (bot->GetLevel() >= sPlayerbotAIConfig.useFastFlyMountAtMinLevel)
-        bot->learnSpell(34091);
+        LearnSpellIfAvailable(bot, 34091);
 
     uint32 skillLevel = bot->GetLevel() < 40 ? 0 : 1;
     uint32 dualWieldLevel = bot->GetLevel() < 20 ? 0 : 1;
@@ -3159,7 +3178,7 @@ void PlayerbotFactory::InitAvailableSpells()
             if (trainerSpell->IsCastable())
                 bot->CastSpell(bot, trainerSpell->SpellId, true);
             else
-                bot->learnSpell(trainerSpell->SpellId, false);
+                LearnSpellIfAvailable(bot, trainerSpell->SpellId, false);
         }
     }
 }
@@ -3170,91 +3189,91 @@ void PlayerbotFactory::InitClassSpells()
     switch (bot->getClass())
     {
         case CLASS_WARRIOR:
-            bot->learnSpell(78, true);
-            bot->learnSpell(2457, true);
+            LearnSpellIfAvailable(bot, 78, true);
+            LearnSpellIfAvailable(bot, 2457, true);
             if (level >= 10)
             {
-                bot->learnSpell(71, false);    // Defensive Stance
-                bot->learnSpell(355, false);   // Taunt
-                bot->learnSpell(7386, false);  // Sunder Armor
+                LearnSpellIfAvailable(bot, 71, false);    // Defensive Stance
+                LearnSpellIfAvailable(bot, 355, false);   // Taunt
+                LearnSpellIfAvailable(bot, 7386, false);  // Sunder Armor
             }
             if (level >= 30)
-                bot->learnSpell(2458, false);  // Berserker Stance
+                LearnSpellIfAvailable(bot, 2458, false);  // Berserker Stance
             break;
         case CLASS_PALADIN:
-            bot->learnSpell(21084, true);
-            bot->learnSpell(635, true);
+            LearnSpellIfAvailable(bot, 21084, true);
+            LearnSpellIfAvailable(bot, 635, true);
             if (level >= 12)
-                bot->learnSpell(7328, false);  // Redemption
+                LearnSpellIfAvailable(bot, 7328, false);  // Redemption
             if (level >= 20)
-                bot->learnSpell(5502, false); // Sense Undead
+                LearnSpellIfAvailable(bot, 5502, false); // Sense Undead
             break;
         case CLASS_ROGUE:
-            bot->learnSpell(1752, true);
-            bot->learnSpell(2098, true);
+            LearnSpellIfAvailable(bot, 1752, true);
+            LearnSpellIfAvailable(bot, 2098, true);
             break;
         case CLASS_DEATH_KNIGHT:
-            bot->learnSpell(45477, true);
-            bot->learnSpell(47541, true);
-            bot->learnSpell(45462, true);
-            bot->learnSpell(45902, true);
+            LearnSpellIfAvailable(bot, 45477, true);
+            LearnSpellIfAvailable(bot, 47541, true);
+            LearnSpellIfAvailable(bot, 45462, true);
+            LearnSpellIfAvailable(bot, 45902, true);
             // to leave DK starting area
-            bot->learnSpell(53428, false);
-            bot->learnSpell(50977, false);
-            bot->learnSpell(49142, false);
-            bot->learnSpell(48778, false);
+            LearnSpellIfAvailable(bot, 53428, false);
+            LearnSpellIfAvailable(bot, 50977, false);
+            LearnSpellIfAvailable(bot, 49142, false);
+            LearnSpellIfAvailable(bot, 48778, false);
             break;
         case CLASS_HUNTER:
-            bot->learnSpell(2973, true);
-            bot->learnSpell(75, true);
+            LearnSpellIfAvailable(bot, 2973, true);
+            LearnSpellIfAvailable(bot, 75, true);
             if (level >= 10)
             {
-                bot->learnSpell(883, false);   // call pet
-                bot->learnSpell(1515, false);  // tame pet
-                bot->learnSpell(6991, false);  // feed pet
-                bot->learnSpell(982, false);   // revive pet
-                bot->learnSpell(2641, false);  // dismiss pet
+                LearnSpellIfAvailable(bot, 883, false);   // call pet
+                LearnSpellIfAvailable(bot, 1515, false);  // tame pet
+                LearnSpellIfAvailable(bot, 6991, false);  // feed pet
+                LearnSpellIfAvailable(bot, 982, false);   // revive pet
+                LearnSpellIfAvailable(bot, 2641, false);  // dismiss pet
             }
             break;
         case CLASS_PRIEST:
-            bot->learnSpell(585, true);
-            bot->learnSpell(2050, true);
+            LearnSpellIfAvailable(bot, 585, true);
+            LearnSpellIfAvailable(bot, 2050, true);
             break;
         case CLASS_MAGE:
-            bot->learnSpell(133, true);
-            bot->learnSpell(168, true);
+            LearnSpellIfAvailable(bot, 133, true);
+            LearnSpellIfAvailable(bot, 168, true);
             break;
         case CLASS_WARLOCK:
-            bot->learnSpell(687, true);
-            bot->learnSpell(686, true);
-            bot->learnSpell(688, false);  // summon imp
+            LearnSpellIfAvailable(bot, 687, true);
+            LearnSpellIfAvailable(bot, 686, true);
+            LearnSpellIfAvailable(bot, 688, false);  // summon imp
             if (level >= 10)
-                bot->learnSpell(697, false);  // summon voidwalker
+                LearnSpellIfAvailable(bot, 697, false);  // summon voidwalker
             if (level >= 20)
-                bot->learnSpell(712, false);  // summon succubus
+                LearnSpellIfAvailable(bot, 712, false);  // summon succubus
             if (level >= 30)
-                bot->learnSpell(691, false);  // summon felhunter
+                LearnSpellIfAvailable(bot, 691, false);  // summon felhunter
             break;
         case CLASS_DRUID:
-            bot->learnSpell(5176, true);
-            bot->learnSpell(5185, true);
+            LearnSpellIfAvailable(bot, 5176, true);
+            LearnSpellIfAvailable(bot, 5185, true);
             if (level >= 10)
             {
-                bot->learnSpell(5487, false);  // bear form
-                bot->learnSpell(6795, false);  // Growl
-                bot->learnSpell(6807, false);  // Maul
+                LearnSpellIfAvailable(bot, 5487, false);  // bear form
+                LearnSpellIfAvailable(bot, 6795, false);  // Growl
+                LearnSpellIfAvailable(bot, 6807, false);  // Maul
             }
             break;
         case CLASS_SHAMAN:
-            bot->learnSpell(403, true);
-            bot->learnSpell(331, true);
-            // bot->learnSpell(66747, true); // Totem of the Earthen Ring
+            LearnSpellIfAvailable(bot, 403, true);
+            LearnSpellIfAvailable(bot, 331, true);
+            // LearnSpellIfAvailable(bot, 66747, true); // Totem of the Earthen Ring
             if (level >= 4)
-                bot->learnSpell(8071, false);  // stoneskin totem
+                LearnSpellIfAvailable(bot, 8071, false);  // stoneskin totem
             if (level >= 10)
-                bot->learnSpell(3599, false);  // searing totem
+                LearnSpellIfAvailable(bot, 3599, false);  // searing totem
             if (level >= 20)
-                bot->learnSpell(5394, false);  // healing stream totem
+                LearnSpellIfAvailable(bot, 5394, false);  // healing stream totem
             break;
         default:
             break;
@@ -3267,12 +3286,12 @@ void PlayerbotFactory::InitSpecialSpells()
          i != sPlayerbotAIConfig.randomBotSpellIds.end(); ++i)
     {
         uint32 spellId = *i;
-        bot->learnSpell(spellId);
+        LearnSpellIfAvailable(bot, spellId);
     }
     // to leave DK starting area
     if (bot->getClass() == CLASS_DEATH_KNIGHT)
     {
-        bot->learnSpell(50977, false);
+        LearnSpellIfAvailable(bot, 50977, false);
     }
 }
 
@@ -3717,7 +3736,7 @@ void PlayerbotFactory::InitMounts()
         uint32 spell = mounts[bot->getRace()][type][index];
         if (spell)
         {
-            bot->learnSpell(spell);
+            LearnSpellIfAvailable(bot, spell);
             LOG_DEBUG("playerbots", "Bot {} ({}) learned {} mount {}", bot->GetGUID().ToString().c_str(),
                       bot->GetLevel(), type == 0 ? "slow" : (type == 1 ? "fast" : "flying"), spell);
         }
