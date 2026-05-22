@@ -63,10 +63,46 @@ std::vector<uint32> PlayerbotFactory::ccBreakTrinketCache;
 
 namespace
 {
-void LearnSpellIfAvailable(Player* bot, uint32 spellId, bool temporary = false, bool learnFromSkill = false)
+bool IsRndBotAccount(Player* bot, std::string& accountNameOut)
 {
-    if (!spellId || !sSpellMgr->GetSpellInfo(spellId))
+    if (!bot || !bot->GetSession())
+        return false;
+
+    uint32 accountId = bot->GetSession()->GetAccountId();
+    std::string accountName;
+    if (!AccountMgr::GetName(accountId, accountName))
+        return false;
+
+    if (accountName.rfind("RNDBOT", 0) == 0)
+    {
+        accountNameOut = accountName;
+        return true;
+    }
+
+    return false;
+}
+
+void LearnSpellIfAvailable(Player* bot, uint32 spellId, bool temporary = false, bool learnFromSkill = false, char const* sourcePath = "unknown")
+{
+    SpellInfo const* spellInfo = (spellId ? sSpellMgr->GetSpellInfo(spellId) : nullptr);
+    std::string rndbotAccount;
+    bool isRndBot = IsRndBotAccount(bot, rndbotAccount);
+
+    if (!spellId || !spellInfo)
+    {
+        if (isRndBot)
+        {
+            LOG_ERROR("playerbots", "[RNDBOT][SpellGuard] Blocked learnSpell for missing SpellStore id {} bot={} guid={} account={} source={}",
+                spellId, bot ? bot->GetName() : "<null>", bot ? bot->GetGUID().ToString() : "<null>", rndbotAccount, sourcePath);
+        }
         return;
+    }
+
+    if (isRndBot)
+    {
+        LOG_DEBUG("playerbots", "[RNDBOT][SpellGuard] learnSpell id {} bot={} guid={} account={} source={}",
+            spellId, bot->GetName(), bot->GetGUID().ToString(), rndbotAccount, sourcePath);
+    }
 
     bot->learnSpell(spellId, temporary, learnFromSkill);
 }
@@ -2774,7 +2810,7 @@ void PlayerbotFactory::InitTradeSkills()
             !(keepExistingProfessionPair && bot->HasSkill(skillId)))
             continue;
 
-        LearnSpellIfAvailable(bot, spellId, false);
+        LearnSpellIfAvailable(bot, spellId, false, false, "PlayerbotFactory::InitTradeSkills");
     }
 
     InitTradeSpecializations();
