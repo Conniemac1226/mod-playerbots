@@ -12,7 +12,9 @@
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
+#include <sstream>
 #include <random>
+#include <tuple>
 
 #include "AiFactory.h"
 #include "Battleground.h"
@@ -86,6 +88,135 @@ void activateCheckPlayersThread()
 {
     boost::thread t(CheckPlayersThread);
     t.detach();
+}
+
+namespace
+{
+    std::vector<uint8> const kMajorEquipSlots = {0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 15, 16, 17};
+
+    struct GearIssueStats
+    {
+        uint32 invalidRows = 0;
+        uint32 missingCritical = 0;
+        uint32 missingOptional = 0;
+    };
+
+    bool IsCriticalSlotForBot(Player* bot, uint8 slot)
+    {
+        if (!bot)
+            return false;
+
+        // Critical baseline armor/weapon coverage for visible \"naked\" bots.
+        switch (slot)
+        {
+            case EQUIPMENT_SLOT_CHEST:    // 4
+            case EQUIPMENT_SLOT_LEGS:     // 6
+            case EQUIPMENT_SLOT_FEET:     // 7
+            case EQUIPMENT_SLOT_HANDS:    // 9
+            case EQUIPMENT_SLOT_WAIST:    // 5
+            case EQUIPMENT_SLOT_WRISTS:   // 8
+            case EQUIPMENT_SLOT_MAINHAND: // 15
+                return true;
+            case EQUIPMENT_SLOT_SHOULDERS: // 2
+                return bot->GetLevel() >= 10;
+            case EQUIPMENT_SLOT_HEAD: // 0
+                return bot->GetLevel() >= 30;
+            default:
+                return false;
+        }
+    }
+
+    GearIssueStats GetOnlineBotGearIssueStats(Player* bot)
+    {
+        GearIssueStats stats;
+        if (!bot)
+            return stats;
+
+        uint32 levelCap = std::max<uint32>(1, static_cast<uint32>(sPlayerbotAIConfig.randomBotMaxLevel));
+        for (uint8 slot : kMajorEquipSlots)
+        {
+            Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (!item)
+            {
+                if (IsCriticalSlotForBot(bot, slot))
+                    ++stats.missingCritical;
+                else
+                    ++stats.missingOptional;
+                continue;
+            }
+
+            ItemTemplate const* it = item->GetTemplate();
+            if (!it)
+                continue;
+
+            if (it->RequiredLevel > bot->GetLevel() || it->RequiredLevel > levelCap)
+                ++stats.invalidRows;
+        }
+
+        return stats;
+    }
+
+    uint32 RemoveInvalidEquippedMajorItems(Player* bot)
+    {
+        if (!bot)
+            return 0;
+
+        uint32 removed = 0;
+        uint32 levelCap = std::max<uint32>(1, static_cast<uint32>(sPlayerbotAIConfig.randomBotMaxLevel));
+        for (uint8 slot : kMajorEquipSlots)
+        {
+            Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
+            if (!item)
+                continue;
+
+            ItemTemplate const* it = item->GetTemplate();
+            if (!it)
+                continue;
+
+            if (it->RequiredLevel > bot->GetLevel() || it->RequiredLevel > levelCap)
+            {
+                // Equipment-only repair scope: only remove invalid equipped major-slot items.
+                bot->DestroyItem(INVENTORY_SLOT_BAG_0, slot, true);
+                ++removed;
+            }
+        }
+        return removed;
+    }
+
+    bool RepairRandomBotGear(Player* bot, GearIssueStats* before = nullptr, GearIssueStats* after = nullptr,
+                             uint32* removedInvalid = nullptr)
+    {
+        if (!bot)
+            return false;
+
+        GearIssueStats pre = GetOnlineBotGearIssueStats(bot);
+        if (before)
+            *before = pre;
+
+        uint32 removed = RemoveInvalidEquippedMajorItems(bot);
+        if (removedInvalid)
+            *removedInvalid = removed;
+
+        // Keep this command equipment-only: do not randomize level/talents/quests/progression state.
+        uint32 gs = sPlayerbotAIConfig.autoGearScoreLimit == 0
+            ? 0
+            : PlayerbotFactory::CalcMixedGearScore(
+                sPlayerbotAIConfig.autoGearScoreLimit, sPlayerbotAIConfig.autoGearQualityLimit);
+
+        PlayerbotFactory factory(bot, bot->GetLevel(), sPlayerbotAIConfig.autoGearQualityLimit, gs);
+        factory.InitEquipment(true);
+        factory.InitAmmo();
+        if (bot->GetLevel() >= sPlayerbotAIConfig.minEnchantingBotLevel)
+            factory.ApplyEnchantAndGemsNew();
+
+        bot->DurabilityRepairAll(false, 1.0f, false);
+        bot->SaveToDB(false, false);
+
+        GearIssueStats post = GetOnlineBotGearIssueStats(bot);
+        if (after)
+            *after = post;
+        return true;
+    }
 }
 
 class botPIDImpl
@@ -2372,7 +2503,7 @@ bool RandomPlayerbotMgr::HandlePlayerbotConsoleCommand(ChatHandler* handler, cha
 
     if (!args || !*args)
     {
-        LOG_ERROR("playerbots", "Usage: rndbot stats/update/reset/init/refresh/add/remove");
+        LOG_ERROR("playerbots", "Usage: rndbot stats/update/reset/init/refresh/add/remove/repairgear");
         return false;
     }
 
@@ -2403,6 +2534,386 @@ bool RandomPlayerbotMgr::HandlePlayerbotConsoleCommand(ChatHandler* handler, cha
     {
         sRandomPlayerbotMgr.UpdateAIInternal(0);
         return true;
+    }
+
+    if (cmd.find("repairgear") == 0)
+    {
+        auto Report = [&](std::string const& msg)
+        {
+            if (handler)
+                handler->SendSysMessage(msg.c_str());
+            LOG_INFO("playerbots", "{}", msg);
+        };
+        auto ReportError = [&](std::string const& msg)
+        {
+            if (handler)
+                handler->SendSysMessage(msg.c_str());
+            LOG_ERROR("playerbots", "{}", msg);
+        };
+
+        std::istringstream iss(cmd);
+        std::string root;
+        std::string subcmd;
+        iss >> root >> subcmd;
+
+        if (subcmd.empty())
+        {
+            ReportError("Usage: rndbot repairgear check | invalid limit <count> | missing limit <count> | bot <name>");
+            return false;
+        }
+
+        std::string const invalidRowsQuery =
+            "SELECT COUNT(*) "
+            "FROM (SELECT DISTINCT bot FROM playerbots_random_bots) rb "
+            "JOIN characters c ON c.guid = rb.bot "
+            "JOIN character_inventory ci ON ci.guid = c.guid "
+            "  AND ci.bag = 0 AND ci.slot IN (0,1,2,4,5,6,7,8,9,10,15,16,17) "
+            "JOIN item_instance ii ON ii.guid = ci.item "
+            "JOIN acore_world_progression.item_template it ON it.entry = ii.itemEntry "
+            "WHERE c.level <= 70 "
+            "  AND (it.RequiredLevel > c.level OR it.RequiredLevel > " +
+            std::to_string(sPlayerbotAIConfig.randomBotMaxLevel) + ")";
+
+        if (subcmd == "check")
+        {
+            uint32 invalidRowCount = 0;
+            uint32 onlineRandomBots = 0;
+            uint32 onlineInvalidRows = 0;
+            uint32 onlineInvalidBots = 0;
+            uint32 onlineCriticalMissingBots = 0;
+            uint32 onlineOptionalMissingBots = 0;
+            std::vector<std::string> invalidSamples;
+            std::vector<std::string> criticalSamples;
+
+            if (QueryResult rows = CharacterDatabase.Query(invalidRowsQuery))
+                invalidRowCount = rows->Fetch()[0].Get<uint32>();
+
+            for (PlayerBotMap::const_iterator it = sRandomPlayerbotMgr.GetPlayerBotsBegin();
+                 it != sRandomPlayerbotMgr.GetPlayerBotsEnd(); ++it)
+            {
+                Player* bot = it->second;
+                if (!bot || !bot->IsInWorld() || !sRandomPlayerbotMgr.IsRandomBot(bot->GetGUID().GetCounter()))
+                    continue;
+
+                ++onlineRandomBots;
+                GearIssueStats st = GetOnlineBotGearIssueStats(bot);
+                if (st.invalidRows > 0)
+                {
+                    ++onlineInvalidBots;
+                    onlineInvalidRows += st.invalidRows;
+                    if (invalidSamples.size() < 10)
+                        invalidSamples.push_back(bot->GetName() + " (invalid=" + std::to_string(st.invalidRows) + ")");
+                }
+                if (st.missingCritical > 0)
+                {
+                    ++onlineCriticalMissingBots;
+                    if (criticalSamples.size() < 10)
+                        criticalSamples.push_back(bot->GetName() + " (criticalMissing=" +
+                                                  std::to_string(st.missingCritical) + ", optionalMissing=" +
+                                                  std::to_string(st.missingOptional) + ")");
+                }
+                if (st.missingOptional > 0)
+                    ++onlineOptionalMissingBots;
+            }
+
+            Report("rndbot repairgear check:");
+            Report("  online random bots scanned: " + std::to_string(onlineRandomBots));
+            Report("  invalid-equipped repair targets (online bots): " + std::to_string(onlineInvalidBots));
+            Report("  invalid-equipped rows (online): " + std::to_string(onlineInvalidRows));
+            Report("  critical-missing repair targets (online bots): " + std::to_string(onlineCriticalMissingBots));
+            Report("  optional-missing bots (online informational): " + std::to_string(onlineOptionalMissingBots));
+            Report("  note: optional missing slots are informational, not repair target");
+            Report("  invalid equipped item rows found (global db): " + std::to_string(invalidRowCount));
+            if (!invalidSamples.empty())
+            {
+                Report("  first invalid-equipped targets:");
+                for (std::string const& s : invalidSamples)
+                    Report("    - " + s);
+            }
+            else
+            {
+                Report("  first invalid-equipped targets: none");
+            }
+            if (!criticalSamples.empty())
+            {
+                Report("  first critical-missing targets:");
+                for (std::string const& s : criticalSamples)
+                    Report("    - " + s);
+            }
+            else
+            {
+                Report("  first critical-missing targets: none");
+            }
+            return true;
+        }
+
+        if (subcmd == "bot")
+        {
+            std::string name;
+            iss >> name;
+            if (name.empty())
+            {
+                ReportError("Usage: rndbot repairgear bot <name>");
+                return false;
+            }
+
+            QueryResult q = CharacterDatabase.Query(
+                "SELECT guid FROM characters WHERE name = '{}' LIMIT 1", name.c_str());
+            if (!q)
+            {
+                ReportError("rndbot repairgear bot: character " + name + " not found");
+                return false;
+            }
+
+            uint32 guidLow = q->Fetch()[0].Get<uint32>();
+            ObjectGuid guid = ObjectGuid::Create<HighGuid::Player>(guidLow);
+
+            if (!sRandomPlayerbotMgr.IsRandomBot(guidLow))
+            {
+                ReportError("rndbot repairgear bot: " + name + " is not a random bot");
+                return false;
+            }
+
+            Player* bot = ObjectAccessor::FindPlayer(guid);
+            if (!bot)
+            {
+                ReportError("rndbot repairgear bot: " + name + " is offline (online only)");
+                return false;
+            }
+
+            if (bot->IsInCombat() || !bot->IsInWorld())
+            {
+                ReportError("rndbot repairgear bot: " + name + " skipped (combat/inactive world state)");
+                return false;
+            }
+
+            uint32 beforeLevel = bot->GetLevel();
+            GearIssueStats beforeStats;
+            GearIssueStats afterStats;
+            uint32 removedInvalid = 0;
+            bool ok = RepairRandomBotGear(bot, &beforeStats, &afterStats, &removedInvalid);
+            uint32 afterLevel = bot->GetLevel();
+
+            Report(std::string("rndbot repairgear bot: ") + bot->GetName() + " repaired=" + (ok ? "1" : "0") +
+                   ", level " + std::to_string(beforeLevel) + "->" + std::to_string(afterLevel) +
+                   ", invalid " + std::to_string(beforeStats.invalidRows) + "->" +
+                   std::to_string(afterStats.invalidRows) + ", criticalMissing " +
+                   std::to_string(beforeStats.missingCritical) + "->" +
+                   std::to_string(afterStats.missingCritical) + ", optionalMissing " +
+                   std::to_string(beforeStats.missingOptional) + "->" +
+                   std::to_string(afterStats.missingOptional) +
+                   ", removedInvalid=" + std::to_string(removedInvalid));
+            return ok;
+        }
+
+        if (subcmd == "limit")
+        {
+            ReportError("Usage: rndbot repairgear invalid limit <count> | missing limit <count>");
+            return false;
+        }
+
+        if (subcmd == "invalid" || subcmd == "missing")
+        {
+            std::string limitWord;
+            uint32 limit = 0;
+            iss >> limitWord >> limit;
+            if (limitWord != "limit" || limit == 0)
+            {
+                ReportError("Usage: rndbot repairgear " + subcmd + " limit <count>");
+                return false;
+            }
+
+            bool targetInvalid = (subcmd == "invalid");
+            uint32 onlineRandomBots = 0;
+            uint32 scannedCandidates = 0;
+            uint32 attempted = 0;
+            uint32 repaired = 0;
+            uint32 improved = 0;
+            uint32 unchanged = 0;
+            uint32 skippedOffline = 0;
+            uint32 skippedNotRandom = 0;
+            uint32 skippedBusy = 0;
+            uint32 skippedNoTarget = 0;
+            uint32 repairFailed = 0;
+            uint32 beforeInvalidRows = 0;
+            uint32 afterInvalidRows = 0;
+            uint32 beforeInvalidRowsGlobal = 0;
+            uint32 afterInvalidRowsGlobal = 0;
+            uint32 beforeCriticalMissing = 0;
+            uint32 afterCriticalMissing = 0;
+            uint32 beforeOptionalMissing = 0;
+            uint32 afterOptionalMissing = 0;
+            std::vector<std::string> detail;
+
+            std::vector<std::pair<uint32, Player*>> candidates;
+            for (PlayerBotMap::const_iterator it = sRandomPlayerbotMgr.GetPlayerBotsBegin();
+                 it != sRandomPlayerbotMgr.GetPlayerBotsEnd(); ++it)
+            {
+                Player* bot = it->second;
+                if (!bot || !bot->IsInWorld() || !sRandomPlayerbotMgr.IsRandomBot(bot->GetGUID().GetCounter()))
+                    continue;
+
+                ++onlineRandomBots;
+                GearIssueStats st = GetOnlineBotGearIssueStats(bot);
+                beforeInvalidRows += st.invalidRows;
+                beforeCriticalMissing += st.missingCritical;
+                beforeOptionalMissing += st.missingOptional;
+
+                bool isTarget = targetInvalid ? (st.invalidRows > 0) : (st.missingCritical > 0);
+                if (isTarget)
+                {
+                    uint32 pri = targetInvalid ? st.invalidRows : st.missingCritical;
+                    candidates.push_back({pri, bot});
+                }
+            }
+
+            if (QueryResult rows = CharacterDatabase.Query(invalidRowsQuery))
+                beforeInvalidRowsGlobal = rows->Fetch()[0].Get<uint32>();
+
+            std::sort(candidates.begin(), candidates.end(), [](std::pair<uint32, Player*> const& a,
+                                                               std::pair<uint32, Player*> const& b)
+            {
+                if (a.first != b.first)
+                    return a.first > b.first;
+                return a.second->GetGUID().GetCounter() < b.second->GetGUID().GetCounter();
+            });
+
+            scannedCandidates = candidates.size();
+            if (candidates.empty())
+            {
+                Report("rndbot repairgear limit summary:");
+                Report("  mode: " + subcmd);
+                Report("  requested limit: " + std::to_string(limit));
+                Report("  online random bots scanned: " + std::to_string(onlineRandomBots));
+                Report("  no repairable online bots found for mode: " + subcmd);
+                Report("  invalid rows before/after (online): " + std::to_string(beforeInvalidRows) + " -> " +
+                       std::to_string(beforeInvalidRows));
+                Report("  critical missing before/after (online): " + std::to_string(beforeCriticalMissing) + " -> " +
+                       std::to_string(beforeCriticalMissing));
+                if (QueryResult rows = CharacterDatabase.Query(invalidRowsQuery))
+                    beforeInvalidRowsGlobal = rows->Fetch()[0].Get<uint32>();
+                Report("  invalid rows currently in global db: " + std::to_string(beforeInvalidRowsGlobal));
+                Report("  note: remaining global invalid rows are typically offline bots; missing mode is online-only");
+                return true;
+            }
+
+            for (std::pair<uint32, Player*> const& cand : candidates)
+            {
+                if (attempted >= limit)
+                    break;
+
+                Player* bot = cand.second;
+                uint32 guidLow = bot ? bot->GetGUID().GetCounter() : 0;
+                if (!bot)
+                {
+                    ++skippedOffline;
+                    continue;
+                }
+                if (!sRandomPlayerbotMgr.IsRandomBot(guidLow))
+                {
+                    ++skippedNotRandom;
+                    continue;
+                }
+                if (bot->IsInCombat() || !bot->IsInWorld())
+                {
+                    ++skippedBusy;
+                    if (detail.size() < 10)
+                        detail.push_back(bot->GetName() + ": skipped busy [" + subcmd + "]");
+                    continue;
+                }
+
+                GearIssueStats preStats = GetOnlineBotGearIssueStats(bot);
+                bool stillTarget = targetInvalid ? (preStats.invalidRows > 0) : (preStats.missingCritical > 0);
+                if (!stillTarget)
+                {
+                    ++skippedNoTarget;
+                    continue;
+                }
+
+                ++attempted;
+                GearIssueStats postStats;
+                uint32 removedInvalid = 0;
+                if (RepairRandomBotGear(bot, &preStats, &postStats, &removedInvalid))
+                {
+                    ++repaired;
+                    bool botImproved = targetInvalid ? (postStats.invalidRows < preStats.invalidRows)
+                                                     : (postStats.missingCritical < preStats.missingCritical);
+                    if (botImproved)
+                        ++improved;
+                    else
+                        ++unchanged;
+                    if (detail.size() < 10)
+                        detail.push_back(bot->GetName() + ": repaired (invalidRows=" +
+                                         std::to_string(preStats.invalidRows) + "->" +
+                                         std::to_string(postStats.invalidRows) + ", missing=" +
+                                         std::to_string(preStats.missingCritical) + "/" +
+                                         std::to_string(preStats.missingOptional) + "->" +
+                                         std::to_string(postStats.missingCritical) + "/" +
+                                         std::to_string(postStats.missingOptional) + ", removed=" +
+                                         std::to_string(removedInvalid) + ") [" + subcmd + "]");
+                }
+                else
+                {
+                    ++repairFailed;
+                    if (detail.size() < 10)
+                        detail.push_back(bot->GetName() + ": repair failed [" + subcmd + "]");
+                }
+            }
+
+            // Recompute online counters after repairs.
+            for (PlayerBotMap::const_iterator it = sRandomPlayerbotMgr.GetPlayerBotsBegin();
+                 it != sRandomPlayerbotMgr.GetPlayerBotsEnd(); ++it)
+            {
+                Player* bot = it->second;
+                if (!bot || !bot->IsInWorld() || !sRandomPlayerbotMgr.IsRandomBot(bot->GetGUID().GetCounter()))
+                    continue;
+
+                GearIssueStats st = GetOnlineBotGearIssueStats(bot);
+                afterInvalidRows += st.invalidRows;
+                afterCriticalMissing += st.missingCritical;
+                afterOptionalMissing += st.missingOptional;
+            }
+
+            if (QueryResult rows = CharacterDatabase.Query(invalidRowsQuery))
+                afterInvalidRowsGlobal = rows->Fetch()[0].Get<uint32>();
+
+            Report("rndbot repairgear limit summary:");
+            Report("  mode: " + subcmd);
+            Report("  requested limit: " + std::to_string(limit));
+            Report("  online random bots scanned: " + std::to_string(onlineRandomBots));
+            Report("  candidate bots scanned: " + std::to_string(scannedCandidates));
+            Report("  bots attempted: " + std::to_string(attempted));
+            Report("  bots repaired: " + std::to_string(repaired));
+            Report("  bots improved: " + std::to_string(improved));
+            Report("  bots unchanged: " + std::to_string(unchanged));
+            Report("  skipped not online: " + std::to_string(skippedOffline));
+            Report("  skipped not random: " + std::to_string(skippedNotRandom));
+            Report("  skipped in combat/busy: " + std::to_string(skippedBusy));
+            Report("  skipped no target state: " + std::to_string(skippedNoTarget));
+            Report("  repair failed: " + std::to_string(repairFailed));
+            Report("  invalid rows before/after (online): " + std::to_string(beforeInvalidRows) + " -> " +
+                   std::to_string(afterInvalidRows));
+            Report("  critical missing before/after (online): " + std::to_string(beforeCriticalMissing) + " -> " +
+                   std::to_string(afterCriticalMissing));
+            Report("  optional missing before/after (online informational): " + std::to_string(beforeOptionalMissing) +
+                   " -> " + std::to_string(afterOptionalMissing));
+            Report("  invalid rows before/after (global db): " + std::to_string(beforeInvalidRowsGlobal) +
+                   " -> " + std::to_string(afterInvalidRowsGlobal));
+            if (!detail.empty())
+            {
+                Report("  per-bot detail (first 10):");
+                for (std::string const& s : detail)
+                    Report("    - " + s);
+            }
+            else
+            {
+                Report("  per-bot detail: none");
+            }
+            return true;
+        }
+
+        ReportError("Usage: rndbot repairgear check | invalid limit <count> | missing limit <count> | bot <name>");
+        return false;
     }
 
     std::map<std::string, ConsoleCommandHandler> handlers;
