@@ -7,7 +7,7 @@
 #define _PLAYERBOT_RAIDBLACKTEMPLEACTIONCONTEXT_H
 
 #include "NamedObjectContext.h"
-#include "RaidBlackTempleActions.h"
+#include "Action/RaidBlackTempleActions.h"
 
 class RaidBlackTempleActionContext : public NamedObjectContext<Action>
 {
