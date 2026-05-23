@@ -9,7 +9,7 @@
 
 #include "CreatureAI.h"
 #include "Playerbots.h"
-#include "RaidBlackTempleHelpers.h"
+#include "../Util/RaidBlackTempleHelpers.h"
 #include "RaidBossHelpers.h"
 
 using namespace BlackTempleHelpers;

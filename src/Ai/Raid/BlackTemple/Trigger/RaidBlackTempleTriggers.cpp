@@ -7,8 +7,8 @@
 
 #include "AiFactory.h"
 #include "Playerbots.h"
-#include "RaidBlackTempleActions.h"
-#include "RaidBlackTempleHelpers.h"
+#include "../Action/RaidBlackTempleActions.h"
+#include "../Util/RaidBlackTempleHelpers.h"
 #include "RaidBossHelpers.h"
 #include "SharedDefines.h"
 
