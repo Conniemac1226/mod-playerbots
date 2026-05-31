@@ -179,7 +179,9 @@ bool MasterLootRollAction::Execute(Event event)
     if (!group)
         return false;
 
-    group->CountRollVote(bot->GetGUID(), creatureGuid, CalculateRollVote(proto));
+    RollVote vote = CalculateRollVote(proto);
+    OnPlayerbotBeforeLootRoll(bot, proto, vote);
+    group->CountRollVote(bot->GetGUID(), creatureGuid, vote);
 
     return true;
 }
