@@ -13,6 +13,13 @@ void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // Darkweaver Syth: keep non-tanks near melee range between elemental waves.
     triggers.push_back(new TriggerNode("syth no elementals",
              NextAction::array(0, new NextAction("stack for syth", ACTION_MOVE + 2), nullptr)));
+
+    // Trash: keep tank protected from fear without changing global class behavior.
+    triggers.push_back(new TriggerNode("sethekk anti fear needed",
+             NextAction::array(0,
+                new NextAction("sethekk fear ward tank", ACTION_HIGH + 4),
+                new NextAction("sethekk tremor totem", ACTION_HIGH + 3),
+                nullptr)));
     
     // Trash: Time-Lost Controller - ICC Pattern: Skull mark Charming Totem
     // RESEARCHED: RaidIccActions.cpp:1276-1297 (UpdateSkullMarker pattern)
@@ -30,6 +37,9 @@ void TbcDungeonSHStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     
     triggers.push_back(new TriggerNode("ikiss arcane explosion ended",
              NextAction::array(0, new NextAction("ikiss return position", ACTION_MOVE + 3), nullptr)));
+
+    triggers.push_back(new TriggerNode("ikiss tank pillar position needed",
+             NextAction::array(0, new NextAction("ikiss tank pillar position", ACTION_MOVE + 2), nullptr)));
 
     // Boss: Anzu - Priority add targeting (banish phases at 66% and 33%)
     triggers.push_back(new TriggerNode("brood of anzu nearby",

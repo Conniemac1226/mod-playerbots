@@ -41,11 +41,15 @@
 #define SETHEKK_SPIRIT_SAFE_RANGE    8.5f
 #define SETHEKK_SPIRIT_FLEE_STEP     5.0f
 #define SYTH_STACK_RANGE             6.0f
+#define SETHEKK_ANTI_FEAR_RANGE     45.0f
+#define IKISS_TANK_ANCHOR_RANGE      3.5f
 #define AUTO_PULL_SEARCH_RANGE      45.0f
 #define AUTO_PULL_GROUP_RANGE       35.0f
 #define AUTO_PULL_HEALER_MANA_PCT   45.0f
 #define AUTO_PULL_MEMBER_HP_PCT     60.0f
 #define AUTO_PULL_TANK_HP_PCT       75.0f
+
+const Position IKISS_TANK_ANCHOR_POSITION(28.0f, 306.5f, 26.4f);
 
 const Position IKISS_LOS_SAFE_POSITIONS[4] =
 {
@@ -131,6 +135,28 @@ class StackForSythAction : public MovementAction
 {
 public:
     StackForSythAction(PlayerbotAI* ai) : MovementAction(ai, "stack for syth") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class SethekkFearWardTankAction : public Action
+{
+public:
+    SethekkFearWardTankAction(PlayerbotAI* ai) : Action(ai, "sethekk fear ward tank") {}
+    bool Execute(Event event) override;
+};
+
+class SethekkTremorTotemAction : public Action
+{
+public:
+    SethekkTremorTotemAction(PlayerbotAI* ai) : Action(ai, "sethekk tremor totem") {}
+    bool Execute(Event event) override;
+};
+
+class IkissTankPillarPositionAction : public MovementAction
+{
+public:
+    IkissTankPillarPositionAction(PlayerbotAI* ai) : MovementAction(ai, "ikiss tank pillar position") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

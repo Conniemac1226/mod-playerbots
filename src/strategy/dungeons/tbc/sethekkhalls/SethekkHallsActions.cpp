@@ -75,6 +75,52 @@ bool HasActiveSythElementals(PlayerbotAI* botAI, Player* bot)
     return hasElementals;
 }
 
+Player* FindMainTank(PlayerbotAI* botAI, Player* bot)
+{
+    if (!botAI || !bot)
+        return nullptr;
+
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (member && member->IsAlive() && member->GetMapId() == bot->GetMapId() && botAI->IsMainTank(member))
+                return member;
+        }
+    }
+
+    return botAI->IsMainTank(bot) ? bot : nullptr;
+}
+
+Unit* FindIkiss(PlayerbotAI* botAI)
+{
+    if (!botAI)
+        return nullptr;
+
+    AiObjectContext* context = botAI->GetAiObjectContext();
+    if (!context)
+        return nullptr;
+
+    if (Unit* boss = context->GetValue<Unit*>("find target", "talon king ikiss")->Get())
+        return boss->IsAlive() ? boss : nullptr;
+
+    if (Value<ObjectGuid>* targetValue = context->GetValue<ObjectGuid>("current target"))
+    {
+        ObjectGuid targetGuid = targetValue->Get();
+        if (targetGuid)
+        {
+            if (Unit* target = botAI->GetUnit(targetGuid))
+            {
+                if (target->GetEntry() == NPC_TALON_KING_IKISS && target->IsAlive())
+                    return target;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
 bool IsGroupReadyForAdvancePull(PlayerbotAI* botAI, Player* bot)
 {
     if (!botAI || !bot || !bot->GetMap() || !bot->GetMap()->IsDungeon())
@@ -436,11 +482,9 @@ bool IkissReturnPositionAction::Execute(Event event)
     bool isTank = botAI->IsTank(bot);
     
     if (isTank) {
-        float centerX = 46.5f;  // Center of Ikiss room
-        float centerY = 287.0f; // Center of Ikiss room  
-        float centerZ = z;
-        
-        return MoveTo(bot->GetMapId(), centerX, centerY, centerZ, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        return MoveTo(bot->GetMapId(), IKISS_TANK_ANCHOR_POSITION.GetPositionX(),
+                      IKISS_TANK_ANCHOR_POSITION.GetPositionY(), IKISS_TANK_ANCHOR_POSITION.GetPositionZ(),
+                      false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     }
     else {
         float range;
@@ -780,6 +824,69 @@ bool StackForSythAction::isUseful()
 
     float stackRange = botAI->IsRanged(bot) || botAI->IsHeal(bot) ? SYTH_STACK_RANGE : 4.0f;
     return bot->GetExactDist2d(syth) > stackRange + 1.0f;
+}
+
+bool SethekkFearWardTankAction::Execute(Event /*event*/)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || bot->getClass() != CLASS_PRIEST)
+        return false;
+
+    Player* tank = FindMainTank(botAI, bot);
+    if (!tank || tank->HasAura(6346) || bot->GetDistance(tank) > SETHEKK_ANTI_FEAR_RANGE)
+        return false;
+
+    if (botAI->CanCastSpell("fear ward", tank))
+        return botAI->CastSpell("fear ward", tank);
+
+    return false;
+}
+
+bool SethekkTremorTotemAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || bot->getClass() != CLASS_SHAMAN)
+        return false;
+
+    if (AI_VALUE2(bool, "has totem", "tremor"))
+        return false;
+
+    if (botAI->DoSpecificAction("tremor totem", event, true))
+        return true;
+
+    if (botAI->CanCastSpell(8143, bot, false))
+        return botAI->CastSpell(8143, bot);
+
+    return false;
+}
+
+bool IkissTankPillarPositionAction::Execute(Event /*event*/)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI->IsMainTank(bot))
+        return false;
+
+    Unit* boss = FindIkiss(botAI);
+    if (!boss || !boss->IsInCombat() || boss->HasAura(SPELL_ARCANE_BUBBLE))
+        return false;
+
+    if (bot->GetExactDist2d(IKISS_TANK_ANCHOR_POSITION) <= IKISS_TANK_ANCHOR_RANGE)
+        return false;
+
+    return MoveTo(bot->GetMapId(), IKISS_TANK_ANCHOR_POSITION.GetPositionX(),
+                  IKISS_TANK_ANCHOR_POSITION.GetPositionY(), IKISS_TANK_ANCHOR_POSITION.GetPositionZ(),
+                  false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+}
+
+bool IkissTankPillarPositionAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !bot->IsAlive() || !botAI->IsMainTank(bot))
+        return false;
+
+    Unit* boss = FindIkiss(botAI);
+    return boss && boss->IsInCombat() && !boss->HasAura(SPELL_ARCANE_BUBBLE) &&
+           bot->GetExactDist2d(IKISS_TANK_ANCHOR_POSITION) > IKISS_TANK_ANCHOR_RANGE;
 }
 
 bool SethekkTankAdvancePullAction::Execute(Event event)

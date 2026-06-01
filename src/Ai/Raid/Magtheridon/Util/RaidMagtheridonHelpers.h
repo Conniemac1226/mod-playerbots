@@ -48,6 +48,8 @@ namespace MagtheridonHelpers
     bool IsMagtheridonEncounterPullAllowed(PlayerbotAI* botAI, Player* bot);
     bool IsMagtheridonChannelerPhaseActive(PlayerbotAI* botAI, Player* bot);
     bool HasRemainingMagtheridonTrash(PlayerbotAI* botAI, Player* bot);
+    bool HasAliveMagtheridonChanneler(Player* bot);
+    bool HasAliveBurningAbyssal(PlayerbotAI* botAI, Player* bot);
     Unit* SelectMagtheridonTrashPullTarget(PlayerbotAI* botAI, Player* bot);
     Creature* GetChanneler(Player* bot, uint32 dbGuid);
     bool IsSafeFromMagtheridonHazards(PlayerbotAI* botAI, Player* bot, float x, float y, float z);

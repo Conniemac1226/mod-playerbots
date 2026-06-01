@@ -115,18 +115,20 @@ float MagtheridonChannelerTargetMultiplier::GetValue(Action* action)
         !IsMagtheridonChannelerPhaseActive(botAI, bot))
         return 1.0f;
 
-    bool channelerAlive =
-        GetChanneler(bot, SOUTH_CHANNELER) ||
-        GetChanneler(bot, WEST_CHANNELER) ||
-        GetChanneler(bot, EAST_CHANNELER) ||
-        GetChanneler(bot, NORTHWEST_CHANNELER) ||
-        GetChanneler(bot, NORTHEAST_CHANNELER);
+    bool const genericAssist =
+        dynamic_cast<DpsAssistAction*>(action) || dynamic_cast<TankAssistAction*>(action);
+    if (!genericAssist)
+        return 1.0f;
 
-    if (channelerAlive &&
-        (dynamic_cast<DpsAssistAction*>(action) || dynamic_cast<TankAssistAction*>(action)))
+    bool const channelerAlive = HasAliveMagtheridonChanneler(bot);
+    bool const bossActive = !magtheridon->HasAura(SPELL_SHADOW_CAGE);
+    bool const abyssalAlive = HasAliveBurningAbyssal(botAI, bot);
+
+    if (channelerAlive || (bossActive && abyssalAlive))
     {
+        std::string const reason = channelerAlive ? "channelers_alive" : "boss_priority_while_abyssals_alive";
         LogMagtheridonDebug(botAI, bot, "multiplier_channeler_block",
-            DescribeMagtheridonAction(action) + " reason=channelers_alive " +
+            DescribeMagtheridonAction(action) + " reason=" + reason + " " +
             GetMagtheridonTargetDecisionFields(botAI ? botAI->GetUnit(bot->GetTarget()) : nullptr, magtheridon, nullptr, "multiplier_channeler_block", "dps_or_tank_assist"),
             magtheridon, 5);
         return 0.0f;

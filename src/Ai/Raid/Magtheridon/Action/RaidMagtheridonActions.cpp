@@ -25,6 +25,11 @@ namespace
 
         return false;
     }
+
+    bool ShouldAttackPriorityTarget(Player* bot, Unit* target)
+    {
+        return bot && target && (bot->GetTarget() != target->GetGUID() || bot->GetVictim() != target);
+    }
 }
 
 bool MagtheridonAutoPullTrashAction::Execute(Event event)
@@ -410,6 +415,8 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
 
     Group* group = bot->GetGroup();
     bool hasHunterSupport = HasLivingHunterBotSupport(group);
+    Unit* magtheridon = FindMagtheridon(botAI, bot);
+    bool magtheridonActive = magtheridon && !magtheridon->HasAura(SPELL_SHADOW_CAGE);
 
     // Listed in order of priority
     Creature* channelerSquare   = GetChanneler(bot, SOUTH_CHANNELER);
@@ -425,6 +432,15 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
             return Attack(channelerSquare);
         }
 
+        if (ShouldAttackPriorityTarget(bot, channelerSquare))
+        {
+            LogMagtheridonDebug(botAI, bot, "dps_priority_attack",
+                "priority=square reason=target_selected_not_engaged " +
+                GetMagtheridonTargetDecisionFields(previousTarget, channelerSquare, nullptr, "dps_priority_attack", "dps_priority_hold"),
+                magtheridon, 0);
+            return Attack(channelerSquare);
+        }
+
         LogMagtheridonDebug(botAI, bot, "dps_priority_hold",
             "priority=square reason=already_on_target " + GetMagtheridonTargetDecisionFields(previousTarget, channelerSquare, nullptr, "dps_priority_hold", "dps_priority_attack"),
             FindMagtheridon(botAI, bot), 8);
@@ -434,7 +450,7 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
     Creature* channelerStar = GetChanneler(bot, WEST_CHANNELER);
     if (channelerStar)
     {
-        if (!hasHunterSupport && !channelerStar->IsInCombat())
+        if (!magtheridonActive && !hasHunterSupport && !channelerStar->IsInCombat())
         {
             LogMagtheridonDebug(botAI, bot, "dps_priority_hold",
                 "priority=star reason=waiting_for_hunter_support " + GetMagtheridonDebugUnit(bot, channelerStar), FindMagtheridon(botAI, bot), 8);
@@ -451,6 +467,15 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
             return Attack(channelerStar);
         }
 
+        if (ShouldAttackPriorityTarget(bot, channelerStar))
+        {
+            LogMagtheridonDebug(botAI, bot, "dps_priority_attack",
+                "priority=star reason=target_selected_not_engaged " +
+                GetMagtheridonTargetDecisionFields(previousTarget, channelerStar, nullptr, "dps_priority_attack", "dps_priority_hold"),
+                magtheridon, 0);
+            return Attack(channelerStar);
+        }
+
         LogMagtheridonDebug(botAI, bot, "dps_priority_hold",
             "priority=star reason=already_on_target " + GetMagtheridonTargetDecisionFields(previousTarget, channelerStar, nullptr, "dps_priority_hold", "dps_priority_attack"),
             FindMagtheridon(botAI, bot), 8);
@@ -460,7 +485,7 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
     Creature* channelerCircle = GetChanneler(bot, EAST_CHANNELER);
     if (channelerCircle)
     {
-        if (!hasHunterSupport && !channelerCircle->IsInCombat())
+        if (!magtheridonActive && !hasHunterSupport && !channelerCircle->IsInCombat())
         {
             LogMagtheridonDebug(botAI, bot, "dps_priority_hold",
                 "priority=circle reason=waiting_for_hunter_support " + GetMagtheridonDebugUnit(bot, channelerCircle), FindMagtheridon(botAI, bot), 8);
@@ -474,6 +499,15 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
             LogMagtheridonDebug(botAI, bot, "dps_priority_attack",
                 "priority=circle " + GetMagtheridonTargetDecisionFields(previousTarget, channelerCircle, nullptr, "dps_priority_attack", "none"),
                 FindMagtheridon(botAI, bot), 0);
+            return Attack(channelerCircle);
+        }
+
+        if (ShouldAttackPriorityTarget(bot, channelerCircle))
+        {
+            LogMagtheridonDebug(botAI, bot, "dps_priority_attack",
+                "priority=circle reason=target_selected_not_engaged " +
+                GetMagtheridonTargetDecisionFields(previousTarget, channelerCircle, nullptr, "dps_priority_attack", "dps_priority_hold"),
+                magtheridon, 0);
             return Attack(channelerCircle);
         }
 
@@ -496,6 +530,15 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
             return Attack(channelerDiamond);
         }
 
+        if (ShouldAttackPriorityTarget(bot, channelerDiamond))
+        {
+            LogMagtheridonDebug(botAI, bot, "dps_priority_attack",
+                "priority=diamond reason=target_selected_not_engaged " +
+                GetMagtheridonTargetDecisionFields(previousTarget, channelerDiamond, nullptr, "dps_priority_attack", "dps_priority_hold"),
+                magtheridon, 0);
+            return Attack(channelerDiamond);
+        }
+
         LogMagtheridonDebug(botAI, bot, "dps_priority_hold",
             "priority=diamond reason=already_on_target " + GetMagtheridonTargetDecisionFields(previousTarget, channelerDiamond, nullptr, "dps_priority_hold", "dps_priority_attack"),
             FindMagtheridon(botAI, bot), 8);
@@ -515,13 +558,21 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
             return Attack(channelerTriangle);
         }
 
+        if (ShouldAttackPriorityTarget(bot, channelerTriangle))
+        {
+            LogMagtheridonDebug(botAI, bot, "dps_priority_attack",
+                "priority=triangle reason=target_selected_not_engaged " +
+                GetMagtheridonTargetDecisionFields(previousTarget, channelerTriangle, nullptr, "dps_priority_attack", "dps_priority_hold"),
+                magtheridon, 0);
+            return Attack(channelerTriangle);
+        }
+
         LogMagtheridonDebug(botAI, bot, "dps_priority_hold",
             "priority=triangle reason=already_on_target " + GetMagtheridonTargetDecisionFields(previousTarget, channelerTriangle, nullptr, "dps_priority_hold", "dps_priority_attack"),
             FindMagtheridon(botAI, bot), 8);
         return false;
     }
 
-    Unit* magtheridon = FindMagtheridon(botAI, bot);
     if (magtheridon && !magtheridon->HasAura(SPELL_SHADOW_CAGE) &&
         !channelerSquare && !channelerStar && !channelerCircle &&
         !channelerDiamond && !channelerTriangle)
@@ -532,6 +583,15 @@ bool MagtheridonAssignDPSPriorityAction::Execute(Event /*event*/)
         {
             LogMagtheridonDebug(botAI, bot, "dps_priority_attack",
                 "priority=cross " + GetMagtheridonTargetDecisionFields(previousTarget, magtheridon, nullptr, "dps_priority_attack", "none"),
+                magtheridon, 0);
+            return Attack(magtheridon);
+        }
+
+        if (ShouldAttackPriorityTarget(bot, magtheridon))
+        {
+            LogMagtheridonDebug(botAI, bot, "dps_priority_attack",
+                "priority=cross reason=target_selected_not_engaged " +
+                GetMagtheridonTargetDecisionFields(previousTarget, magtheridon, nullptr, "dps_priority_attack", "dps_priority_hold"),
                 magtheridon, 0);
             return Attack(magtheridon);
         }

@@ -82,6 +82,20 @@ public:
     bool IsActive() override;
 };
 
+class SethekkAntiFearNeededTrigger : public Trigger
+{
+public:
+    SethekkAntiFearNeededTrigger(PlayerbotAI* ai) : Trigger(ai, "sethekk anti fear needed", 2) {}
+    bool IsActive() override;
+};
+
+class IkissTankPillarPositionNeededTrigger : public Trigger
+{
+public:
+    IkissTankPillarPositionNeededTrigger(PlayerbotAI* ai) : Trigger(ai, "ikiss tank pillar position needed", 2) {}
+    bool IsActive() override;
+};
+
 class BroodOfAnzuNearbyTrigger : public Trigger
 {
 public:

@@ -774,6 +774,50 @@ namespace MagtheridonHelpers
         return channeler;
     }
 
+    bool HasAliveMagtheridonChanneler(Player* bot)
+    {
+        if (!bot)
+            return false;
+
+        for (uint32 channelerGuid : {
+                 SOUTH_CHANNELER,
+                 WEST_CHANNELER,
+                 NORTHWEST_CHANNELER,
+                 EAST_CHANNELER,
+                 NORTHEAST_CHANNELER
+             })
+        {
+            if (GetChanneler(bot, channelerGuid))
+                return true;
+        }
+
+        return false;
+    }
+
+    bool HasAliveBurningAbyssal(PlayerbotAI* botAI, Player* bot)
+    {
+        if (!botAI || !bot)
+            return false;
+
+        auto hasAbyssalInValue = [&](std::string const& valueName) -> bool
+        {
+            if (Value<GuidVector>* units = botAI->GetAiObjectContext()->GetValue<GuidVector>(valueName))
+            {
+                for (ObjectGuid const& guid : units->Get())
+                {
+                    Unit* unit = botAI->GetUnit(guid);
+                    if (unit && unit->IsAlive() && unit->GetMapId() == bot->GetMapId() &&
+                        unit->GetEntry() == NPC_BURNING_ABYSSAL)
+                        return true;
+                }
+            }
+
+            return false;
+        };
+
+        return hasAbyssalInValue("nearest hostile npcs") || hasAbyssalInValue("nearest npcs");
+    }
+
     const std::vector<uint32> MANTICRON_CUBE_DB_GUIDS = { 43157, 43158, 43159, 43160, 43161 };
 
     // Get the positions of all Manticron Cubes by their database GUIDs

@@ -92,6 +92,94 @@ bool HasAutoPullCandidate(PlayerbotAI* botAI, Player* bot)
 
     return hasCandidate;
 }
+
+Player* FindMainTank(PlayerbotAI* botAI, Player* bot)
+{
+    if (!botAI || !bot)
+        return nullptr;
+
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+        {
+            Player* member = ref->GetSource();
+            if (member && member->IsAlive() && member->GetMapId() == bot->GetMapId() && botAI->IsMainTank(member))
+                return member;
+        }
+    }
+
+    return botAI->IsMainTank(bot) ? bot : nullptr;
+}
+
+Unit* FindIkiss(PlayerbotAI* botAI)
+{
+    if (!botAI)
+        return nullptr;
+
+    AiObjectContext* context = botAI->GetAiObjectContext();
+    if (!context)
+        return nullptr;
+
+    if (Unit* boss = context->GetValue<Unit*>("find target", "talon king ikiss")->Get())
+        return boss->IsAlive() ? boss : nullptr;
+
+    if (Value<ObjectGuid>* targetValue = context->GetValue<ObjectGuid>("current target"))
+    {
+        ObjectGuid targetGuid = targetValue->Get();
+        if (targetGuid)
+        {
+            if (Unit* target = botAI->GetUnit(targetGuid))
+            {
+                if (target->GetEntry() == NPC_TALON_KING_IKISS && target->IsAlive())
+                    return target;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
+bool IsSethekkAntiFearTrash(Unit* unit)
+{
+    if (!unit || !unit->IsAlive())
+        return false;
+
+    switch (unit->GetEntry())
+    {
+        case NPC_TALON_KING_IKISS:
+        case NPC_ANZU:
+        case NPC_BROOD_OF_ANZU:
+        case NPC_SETHEKK_SPIRIT:
+            return false;
+        default:
+            return true;
+    }
+}
+
+bool HasSethekkTrashPressure(PlayerbotAI* botAI, Player* bot, Player* tank, bool requireCombat)
+{
+    if (!botAI || !bot || !tank || !tank->IsAlive() || bot->GetMapId() != tank->GetMapId())
+        return false;
+
+    bool foundTrash = false;
+    TbcDungeon::ForEachNearbyNpc(botAI, bot, SETHEKK_ANTI_FEAR_RANGE, [&](Unit* unit)
+    {
+        if (foundTrash || !IsSethekkAntiFearTrash(unit))
+            return;
+
+        if (!AttackersValue::IsPossibleTarget(unit, bot) && !AttackersValue::IsValidTarget(unit, bot))
+            return;
+
+        bool const engaged = unit->IsInCombat() || unit->GetVictim() == tank ||
+            unit->GetTarget() == tank->GetGUID() || unit->GetVictim() == bot;
+        if (requireCombat && !engaged)
+            return;
+
+        foundTrash = true;
+    });
+
+    return foundTrash;
+}
 }
 
 bool CharmingTotemSpawnedTrigger::IsActive()
@@ -292,6 +380,43 @@ bool SythNoElementalsTrigger::IsActive()
     });
 
     return !hasElementals;
+}
+
+bool SethekkAntiFearNeededTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !bot->IsAlive())
+        return false;
+
+    Player* tank = FindMainTank(botAI, bot);
+    if (!tank || bot->GetDistance(tank) > SETHEKK_ANTI_FEAR_RANGE)
+        return false;
+
+    if (bot->getClass() == CLASS_PRIEST)
+    {
+        return !tank->HasAura(6346) && HasSethekkTrashPressure(botAI, bot, tank, false) &&
+               botAI->CanCastSpell("fear ward", tank);
+    }
+
+    if (bot->getClass() == CLASS_SHAMAN)
+    {
+        return HasSethekkTrashPressure(botAI, bot, tank, true) &&
+               !AI_VALUE2(bool, "has totem", "tremor") &&
+               botAI->CanCastSpell(8143, bot, false);
+    }
+
+    return false;
+}
+
+bool IkissTankPillarPositionNeededTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !bot->IsAlive() || !botAI->IsMainTank(bot))
+        return false;
+
+    Unit* boss = FindIkiss(botAI);
+    return boss && boss->IsInCombat() && !boss->HasAura(SPELL_ARCANE_BUBBLE) &&
+           bot->GetExactDist2d(IKISS_TANK_ANCHOR_POSITION) > IKISS_TANK_ANCHOR_RANGE;
 }
 
 bool BroodOfAnzuNearbyTrigger::IsActive()
