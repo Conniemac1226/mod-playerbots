@@ -12,6 +12,26 @@ static std::map<ObjectGuid, bool> g_dalliah_inSafePosition;
 
 namespace
 {
+    Unit* FindAttackableSkyrissIllusion(PlayerbotAI* botAI, Player* bot, char const* targetList)
+    {
+        if (!botAI || !bot)
+            return nullptr;
+
+        AiObjectContext* context = botAI->GetAiObjectContext();
+        if (!context)
+            return nullptr;
+
+        GuidVector targets = context->GetValue<GuidVector>(targetList)->Get();
+        for (ObjectGuid const& targetGuid : targets)
+        {
+            Unit* unit = botAI->GetUnit(targetGuid);
+            if (unit && unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive() && bot->IsValidAttackTarget(unit))
+                return unit;
+        }
+
+        return nullptr;
+    }
+
     void FocusPriorityTarget(PlayerbotAI* botAI, Unit* unit)
     {
         if (!botAI || !unit)
@@ -497,40 +517,16 @@ bool SkyrissIllusionAction::Execute(Event event)
     {
         return false;
     }
-    
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || unit->GetEntry() != NPC_HARBINGER_ILLUSION || !unit->IsAlive() || !bot->IsValidAttackTarget(unit))
-            continue;
 
-        FocusPriorityTarget(botAI, unit);
+    Unit* illusion = FindAttackableSkyrissIllusion(botAI, bot, "possible targets");
+    if (!illusion)
+        illusion = FindAttackableSkyrissIllusion(botAI, bot, "nearest hostile npcs");
 
-        if (Attack(unit))
-            return true;
-    }
+    if (!illusion)
+        return false;
 
-    const GuidVector possibleTargets = AI_VALUE(GuidVector, "possible targets");
-    for (auto& npc : possibleTargets)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || unit->GetEntry() != NPC_HARBINGER_ILLUSION || !unit->IsAlive() || !bot->IsValidAttackTarget(unit))
-            continue;
-
-        FocusPriorityTarget(botAI, unit);
-
-        if (Attack(unit))
-            return true;
-    }
-
-    if (boss->IsAlive() && bot->IsValidAttackTarget(boss))
-    {
-        FocusPriorityTarget(botAI, boss);
-        return Attack(boss);
-    }
-
-    return false;
+    botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets")->Set({illusion->GetGUID()});
+    return Attack(illusion);
 }
 
 bool SkyrissFearAction::Execute(Event event)

@@ -146,23 +146,7 @@ float SkyrissMultiplier::GetValue(Action* action)
     }
     
     std::string actionName = action->getName();
-    
-    // CRITICAL: Illusion targeting - highest priority
-    if (actionName == "skyriss illusion")
-    {
-        // Check if illusions are present
-        GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-        for (auto& npc : npcs)
-        {
-            Unit* unit = botAI->GetUnit(npc);
-            if (unit && unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive())
-            {
-                return 6.0f; // Critical - illusions must die first
-            }
-        }
-        return 1.0f;
-    }
-    
+
     // EMERGENCY: Fear management
     if (actionName == "skyriss fear")
     {
@@ -187,21 +171,7 @@ float SkyrissMultiplier::GetValue(Action* action)
         }
         return 1.0f;
     }
-    
-    // REDUCE: Lower regular attacks when illusions are present
-    if (actionName == "melee" || actionName == "attack" || actionName.find("attack") != std::string::npos)
-    {
-        GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-        for (auto& npc : npcs)
-        {
-            Unit* unit = botAI->GetUnit(npc);
-            if (unit && unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive())
-            {
-                return 1.0f; // Do not suppress baseline attacks; Skyriss action already prioritizes illusions
-            }
-        }
-    }
-    
+
     return 1.0f;
 }
 

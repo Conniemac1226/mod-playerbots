@@ -2,6 +2,29 @@
 #include "ArcatrazTriggers.h"
 #include "ArcatrazActions.h"
 
+namespace
+{
+    bool HasAttackableSkyrissIllusion(PlayerbotAI* botAI, Player* bot, char const* targetList)
+    {
+        if (!botAI || !bot)
+            return false;
+
+        AiObjectContext* context = botAI->GetAiObjectContext();
+        if (!context)
+            return false;
+
+        GuidVector targets = context->GetValue<GuidVector>(targetList)->Get();
+        for (ObjectGuid const& targetGuid : targets)
+        {
+            Unit* unit = botAI->GetUnit(targetGuid);
+            if (unit && unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive() && bot->IsValidAttackTarget(unit))
+                return true;
+        }
+
+        return false;
+    }
+}
+
 bool ZerekethVoidZoneTrigger::IsActive()
 {
     Unit* boss = AI_VALUE2(Unit*, "find target", "zereketh the unbound");
@@ -210,23 +233,9 @@ bool SkyrissIllusionTrigger::IsActive()
     {
         return false;
     }
-    
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit)
-        {
-            continue;
-        }
-        
-        if (unit->GetEntry() == NPC_HARBINGER_ILLUSION && unit->IsAlive() && bot->IsValidAttackTarget(unit))
-        {
-            return true;
-        }
-    }
-    
-    return false;
+
+    return HasAttackableSkyrissIllusion(botAI, bot, "possible targets") ||
+           HasAttackableSkyrissIllusion(botAI, bot, "nearest hostile npcs");
 }
 
 bool SkyrissFearTrigger::IsActive()
