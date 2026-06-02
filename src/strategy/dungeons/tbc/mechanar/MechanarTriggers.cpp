@@ -164,8 +164,9 @@ bool RagingFlamesInfernoTrigger::IsActive()
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
 
-        // Check if flame is casting Inferno OR has the Inferno aura active
-        if (flame->FindCurrentSpellBySpellId(SPELL_INFERNO) || flame->HasAura(SPELL_INFERNO))
+        // Inferno is only relevant to bots near the casting flame.
+        if ((flame->FindCurrentSpellBySpellId(SPELL_INFERNO) || flame->HasAura(SPELL_INFERNO)) &&
+            bot->GetDistance(flame) < (bot->GetMap()->IsHeroic() ? 24.0f : 20.0f))
             return true;
     }
     
@@ -198,7 +199,8 @@ bool RagingFlamesTooCloseTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check if any Raging Flames are too close (within area aura range)
+    // Chased bots use the dedicated kite action; this only keeps bystanders from
+    // drifting into a flame path.
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     for (auto& npc : npcs)
@@ -206,9 +208,10 @@ bool RagingFlamesTooCloseTrigger::IsActive()
         Unit* flame = botAI->GetUnit(npc);
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
+
+        if (flame->GetVictim() == bot)
+            return false;
             
-        // RESEARCHED: boss_nethermancer_sepethrea.cpp:146 - Raging Flames have area aura
-        // RESEARCHED: boss_nethermancer_sepethrea.cpp:151-157 - Inferno AoE every 15-25s
         if (bot->GetDistance(flame) < 15.0f) // Increased safe distance for area aura + inferno
             return true;
     }

@@ -15,8 +15,6 @@ public:
         creators["aeonus avoid cleave"] = &BlackMorassActionContext::aeonus_avoid_cleave;
         creators["aeonus position"] = &BlackMorassActionContext::aeonus_position;
         creators["avoid sand breath"] = &BlackMorassActionContext::avoid_sand_breath;
-        creators["handle time stop"] = &BlackMorassActionContext::handle_time_stop;
-        creators["handle aeonus enrage"] = &BlackMorassActionContext::handle_aeonus_enrage;
         
         // Chrono Lord Deja
         creators["avoid time lapse"] = &BlackMorassActionContext::avoid_time_lapse;
@@ -40,8 +38,6 @@ private:
     static Action* aeonus_avoid_cleave(PlayerbotAI* botAI) { return new AeonusAvoidCleaveAction(botAI); }
     static Action* aeonus_position(PlayerbotAI* botAI) { return new AeonusPositionAction(botAI); }
     static Action* avoid_sand_breath(PlayerbotAI* botAI) { return new AeonusSandBreathAction(botAI); }
-    static Action* handle_time_stop(PlayerbotAI* botAI) { return new AeonusTimeStopAction(botAI); }
-    static Action* handle_aeonus_enrage(PlayerbotAI* botAI) { return new AeonusEnrageAction(botAI); }
     
     // Chrono Lord Deja
     static Action* avoid_time_lapse(PlayerbotAI* botAI) { return new AvoidTimeLapseAction(botAI); }

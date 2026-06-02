@@ -4,6 +4,20 @@
 #include "Playerbots.h"
 #include "BlackMorassActions.h"
 
+class PortalAddActiveTrigger : public Trigger
+{
+public:
+    PortalAddActiveTrigger(PlayerbotAI* botAI) : Trigger(botAI, "portal add active") {}
+    bool IsActive() override;
+};
+
+class MedivhNeedsProtectionTrigger : public Trigger
+{
+public:
+    MedivhNeedsProtectionTrigger(PlayerbotAI* botAI) : Trigger(botAI, "medivh needs protection") {}
+    bool IsActive() override;
+};
+
 class AeonusCleaveNearbyTrigger : public Trigger
 {
 public:
@@ -32,24 +46,52 @@ public:
     bool IsActive() override;
 };
 
-class TimeLapseNearbyTrigger : public Trigger
+class SandBreathDangerTrigger : public Trigger
 {
 public:
-    TimeLapseNearbyTrigger(PlayerbotAI* botAI) : Trigger(botAI, "time lapse nearby") {}
+    SandBreathDangerTrigger(PlayerbotAI* botAI) : Trigger(botAI, "sand breath danger") {}
     bool IsActive() override;
 };
 
-class ArcaneDischargeNearbyTrigger : public Trigger
+class TimeLapseDangerTrigger : public Trigger
 {
 public:
-    ArcaneDischargeNearbyTrigger(PlayerbotAI* botAI) : Trigger(botAI, "arcane discharge nearby") {}
+    TimeLapseDangerTrigger(PlayerbotAI* botAI) : Trigger(botAI, "time lapse danger") {}
     bool IsActive() override;
 };
 
-class WingBuffetNearbyTrigger : public Trigger
+class ArcaneDischargeDangerTrigger : public Trigger
 {
 public:
-    WingBuffetNearbyTrigger(PlayerbotAI* botAI) : Trigger(botAI, "wing buffet nearby") {}
+    ArcaneDischargeDangerTrigger(PlayerbotAI* botAI) : Trigger(botAI, "arcane discharge danger") {}
+    bool IsActive() override;
+};
+
+class AttractionActiveTrigger : public Trigger
+{
+public:
+    AttractionActiveTrigger(PlayerbotAI* botAI) : Trigger(botAI, "attraction active") {}
+    bool IsActive() override;
+};
+
+class WingBuffetDangerTrigger : public Trigger
+{
+public:
+    WingBuffetDangerTrigger(PlayerbotAI* botAI) : Trigger(botAI, "wing buffet danger") {}
+    bool IsActive() override;
+};
+
+class MortalWoundActiveTrigger : public Trigger
+{
+public:
+    MortalWoundActiveTrigger(PlayerbotAI* botAI) : Trigger(botAI, "mortal wound active") {}
+    bool IsActive() override;
+};
+
+class TemporusReflectActiveTrigger : public Trigger
+{
+public:
+    TemporusReflectActiveTrigger(PlayerbotAI* botAI) : Trigger(botAI, "temporus reflect active") {}
     bool IsActive() override;
 };
 
@@ -66,13 +108,5 @@ class DejaArcaneBlastCastingTrigger : public Trigger
 {
 public:
     DejaArcaneBlastCastingTrigger(PlayerbotAI* botAI) : Trigger(botAI, "deja arcane blast casting") {}
-    bool IsActive() override;
-};
-
-// RESEARCHED: boss_aeonus.cpp:86 - ENRAGE increases damage
-class AeonusEnragedTrigger : public Trigger
-{
-public:
-    AeonusEnragedTrigger(PlayerbotAI* botAI) : Trigger(botAI, "aeonus enraged") {}
     bool IsActive() override;
 };

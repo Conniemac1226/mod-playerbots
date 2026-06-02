@@ -12,9 +12,6 @@ std::map<ObjectGuid, bool> g_capacitus_hasPositive;
 std::map<ObjectGuid, bool> g_capacitus_hasNegative;
 // Sepethrea kiting state
 static std::map<ObjectGuid, uint32> g_sepethrea_lastKiteMove;
-static std::map<ObjectGuid, float> g_sepethrea_kitePhase;
-static std::map<ObjectGuid, int> g_sepethrea_kiteDir;          // +1 clockwise, -1 counter-clockwise
-static std::map<ObjectGuid, uint32> g_sepethrea_blockedTries;  // consecutive failures
 
 // Room boundaries for safe movement - Sepethrea room
 const Position MECHANAR_SEPETHREA_CENTER = {290.52f, 11.492f, 25.39f, 0.0f};
@@ -645,22 +642,24 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     if (!targetingFlame)
         return false;
 
-    // MOVED: Spell interruption logic moved below for smarter handling
+    bool const heroic = bot->GetMap()->IsHeroic();
+    bool const isHealer = botAI->IsHeal(bot);
+    float const flameDistance = bot->GetDistance(targetingFlame);
+    float const minFlameDistance = GetMinimumFlameDistance(botAI, bot->GetPosition());
+    bool const inFire = bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA) || bot->HasAura(SPELL_INFERNO_DAMAGE);
+    bool const urgent = inFire || flameDistance < (heroic ? 15.0f : 13.0f) || minFlameDistance < (heroic ? 13.0f : 11.0f);
 
-    // Emergency: immediate escape if standing in damaging aura
-    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA) || bot->HasAura(SPELL_INFERNO) || bot->HasAura(SPELL_INFERNO_DAMAGE))
-    {
-        return FleePosition(targetingFlame->GetPosition(), 22.0f, 900U);
-    }
+    // If the fixated bot has a clean gap, let normal DPS/healing continue.
+    if (!urgent && flameDistance > (heroic ? 26.0f : 23.0f) && minFlameDistance > (heroic ? 19.0f : 16.0f))
+        return false;
 
-    // SMART KITING: Only interrupt long/unsafe casts
+    // Keep casts only when movement is not urgent.
     if (bot->IsNonMeleeSpellCast(false))
     {
         if (Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
         {
             uint32 castTime = currentSpell->GetCastTime();
-            float distanceToFlame = bot->GetDistance(targetingFlame);
-            if (castTime > 1500 || distanceToFlame < 12.0f)
+            if (urgent || castTime > 1500 || flameDistance < (heroic ? 18.0f : 15.0f))
                 botAI->InterruptSpell();
         }
         else
@@ -669,164 +668,32 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
         }
     }
 
-    // CIRCULAR KITING: pick a tangential waypoint around room center to avoid backtracking through fire
-    const Position& center = MECHANAR_SEPETHREA_CENTER;
     ObjectGuid guid = bot->GetGUID();
     uint32 now = getMSTime();
     uint32& lastMove = g_sepethrea_lastKiteMove[guid];
-    if (lastMove && now - lastMove < 400)
+    if (!urgent && lastMove && now - lastMove < 650)
         return false;
 
-    float baseAngle = atan2f(bot->GetPositionY() - center.GetPositionY(), bot->GetPositionX() - center.GetPositionX());
-    float phase = g_sepethrea_kitePhase.count(guid) ? g_sepethrea_kitePhase[guid] : float((guid.GetCounter() % 6) - 3) * 0.12f;
-    g_sepethrea_kitePhase[guid] = phase;
-    int& dir = g_sepethrea_kiteDir[guid];
-    if (dir == 0)
-        dir = (guid.GetCounter() % 2 == 0) ? 1 : -1;
-
-    const bool isHealer = botAI->IsHeal(bot);
-    const float desiredRadius = isHealer ? 24.0f : 20.0f;
-    const float minRadius = isHealer ? 16.0f : 14.0f;
-    const float radiusStep = 2.5f;
-
-    float bestScore = -1.0f;
-    Position bestPos;
-
-    auto scoreCandidate = [&](const Position& candidate) -> float
-    {
-        float minFlameDist = 1000.0f;
-        const GuidVector flameGuids = AI_VALUE(GuidVector, "nearest hostile npcs");
-        for (auto const& flameGuid : flameGuids)
-        {
-            Unit* flame = botAI->GetUnit(flameGuid);
-            if (flame && flame->IsAlive() && flame->GetEntry() == NPC_RAGING_FLAMES)
-            {
-                float d = candidate.GetExactDist2d(flame);
-                if (d < minFlameDist)
-                    minFlameDist = d;
-            }
-        }
-
-        if (minFlameDist < (isHealer ? 14.0f : 10.0f))
-            return -1.0f;
-
-        float rangePenalty = 0.0f;
-        if (isHealer)
-        {
-            float closestTank = 1e9f;
-            const GuidVector members = AI_VALUE(GuidVector, "group members");
-            for (auto const& memberGuid : members)
-            {
-                Player* member = botAI->GetPlayer(memberGuid);
-                if (member && member->IsAlive() && botAI->IsTank(member))
-                {
-                    float d = candidate.GetExactDist2d(member);
-                    if (d < closestTank)
-                        closestTank = d;
-                }
-            }
-            if (closestTank < 1e9f && closestTank > 35.0f)
-                rangePenalty = (closestTank - 35.0f) * 0.5f;
-        }
-
-        return minFlameDist - rangePenalty;
-    };
-
-    auto evaluateDirection = [&](int stepDir)
-    {
-        for (int step = 1; step <= 4; ++step)
-        {
-            float ang = baseAngle + phase + stepDir * step * 0.35f;
-            for (float r = desiredRadius; r >= minRadius; r -= radiusStep)
-            {
-                Position raw;
-                raw.m_positionX = center.GetPositionX() + cosf(ang) * r;
-                raw.m_positionY = center.GetPositionY() + sinf(ang) * r;
-                raw.m_positionZ = bot->GetPositionZ();
-
-                Position constrained = ConstrainToRoom(raw, botAI);
-                float clampDelta = fabsf(raw.m_positionX - constrained.m_positionX) + fabsf(raw.m_positionY - constrained.m_positionY);
-                if (clampDelta > 1.2f)
-                    continue;
-
-                if (!IsPositionSafe(constrained, botAI))
-                    continue;
-                if (!IsPathClear(bot->GetPosition(), constrained, botAI))
-                    continue;
-                if (!IsPathSafeFromFlames(bot->GetPosition(), constrained, botAI, 10.0f))
-                    continue;
-
-                float score = scoreCandidate(constrained);
-                if (score <= 0.0f)
-                    continue;
-
-                score -= (desiredRadius - r) * 0.6f;
-                score -= step * 0.8f;
-
-                if (score > bestScore)
-                {
-                    bestScore = score;
-                    bestPos = constrained;
-                }
-            }
-        }
-    };
-
-    evaluateDirection(dir);
-    if (bestScore <= 0.0f)
-        evaluateDirection(-dir);
-
-    if (bestScore > 0.0f)
+    Position escapePos;
+    float const preferredDistance = heroic ? (isHealer ? 24.0f : 22.0f) : (isHealer ? 21.0f : 19.0f);
+    float const requiredFlameDistance = heroic ? (urgent ? 17.0f : 15.0f) : (urgent ? 14.0f : 12.0f);
+    if (SelectSepethreaEscapePosition(botAI, bot, preferredDistance, requiredFlameDistance, escapePos, targetingFlame) ||
+        SelectSepethreaEscapePosition(botAI, bot, preferredDistance - 3.0f, requiredFlameDistance - 4.0f, escapePos, targetingFlame))
     {
         lastMove = now;
-        g_sepethrea_blockedTries[guid] = 0;
-        return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY, bestPos.m_positionZ,
+        return MoveTo(bot->GetMapId(), escapePos.m_positionX, escapePos.m_positionY, escapePos.m_positionZ,
                       false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
-    }
-
-    uint32& blocked = g_sepethrea_blockedTries[guid];
-    blocked++;
-    if (blocked > 3)
-    {
-        dir = -dir;
-        blocked = 0;
-    }
-
-    const float halfPi = 1.5707963f;
-    float fallbackAngle = bot->GetAngle(targetingFlame) + (dir > 0 ? halfPi : -halfPi);
-    for (float r = desiredRadius; r >= minRadius; r -= radiusStep)
-    {
-        Position raw;
-        raw.m_positionX = center.GetPositionX() + cosf(fallbackAngle) * r;
-        raw.m_positionY = center.GetPositionY() + sinf(fallbackAngle) * r;
-        raw.m_positionZ = bot->GetPositionZ();
-        Position constrained = ConstrainToRoom(raw, botAI);
-
-        float clampDelta = fabsf(raw.m_positionX - constrained.m_positionX) + fabsf(raw.m_positionY - constrained.m_positionY);
-        if (clampDelta > 1.2f)
-            continue;
-
-        if (IsPositionSafe(constrained, botAI) &&
-            IsPathClear(bot->GetPosition(), constrained, botAI) &&
-            IsPathSafeFromFlames(bot->GetPosition(), constrained, botAI, 8.0f))
-        {
-            lastMove = now;
-            blocked = 0;
-            return MoveTo(bot->GetMapId(), constrained.m_positionX, constrained.m_positionY, constrained.m_positionZ,
-                          false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
-        }
     }
 
     Position away;
     float awayAngle = bot->GetAngle(targetingFlame) + M_PI;
-    float awayDist = isHealer ? 22.0f : 18.0f;
+    float awayDist = heroic ? (isHealer ? 22.0f : 19.0f) : (isHealer ? 19.0f : 16.0f);
     away.m_positionX = bot->GetPositionX() + cosf(awayAngle) * awayDist;
     away.m_positionY = bot->GetPositionY() + sinf(awayAngle) * awayDist;
     away.m_positionZ = bot->GetPositionZ();
     Position safeAway = ConstrainToRoom(away, botAI);
 
     lastMove = now;
-    blocked = 0;
     return MoveTo(bot->GetMapId(), safeAway.m_positionX, safeAway.m_positionY, safeAway.m_positionZ,
                   false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
 }
@@ -871,7 +738,8 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
         if (boss->HasInArc(M_PI / 2, bot) && !botAI->IsTank(bot))
         {
             float bossOrientation = boss->GetOrientation();
-            float const sideAngles[2] = { bossOrientation - (M_PI / 2), bossOrientation + (M_PI / 2) };
+            float const halfPi = static_cast<float>(M_PI / 2);
+            float const sideAngles[2] = { bossOrientation - halfPi, bossOrientation + halfPi };
             float bestScore = -1.0f;
             Position bestPos;
 
@@ -1035,7 +903,7 @@ bool SepethreaTargetElementalAction::isUseful()
     return bot->GetSelectedUnit() != boss;
 }
 
-// UNIVERSAL RAGING FLAMES AVOIDANCE - for ALL bots (not just targeted)
+// Avoid nearby flames for bots that are not currently fixated.
 bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
@@ -1045,6 +913,12 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
     std::vector<Unit*> flames = GetActiveRagingFlames(botAI);
     if (flames.empty())
         return false;
+
+    for (Unit* flame : flames)
+    {
+        if (flame->GetVictim() == bot)
+            return false;
+    }
 
     const bool heroic = bot->GetMap()->IsHeroic();
     float const minimumFlameDistance = heroic ? 18.0f : 15.0f;
@@ -1094,7 +968,10 @@ bool SepethreaAvoidRagingFlamesAction::isUseful()
         Unit* flame = botAI->GetUnit(npc);
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
-            
+
+        if (flame->GetVictim() == bot)
+            return false;
+
         if (bot->GetDistance(flame) < (bot->GetMap()->IsHeroic() ? 18.0f : 16.0f))
             return true;
     }
@@ -1110,7 +987,8 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
 
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     Unit* infernoFlame = nullptr;
-    float closestDistance = 20.0f;
+    bool const heroic = bot->GetMap()->IsHeroic();
+    float closestDistance = heroic ? 24.0f : 20.0f;
 
     // Find closest Raging Flame casting Inferno
     for (auto& npc : npcs)
@@ -1119,7 +997,7 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
         if (!unit || !unit->IsAlive() || unit->GetEntry() != NPC_RAGING_FLAMES)
             continue;
 
-        if (unit->FindCurrentSpellBySpellId(SPELL_INFERNO))
+        if (unit->FindCurrentSpellBySpellId(SPELL_INFERNO) || unit->HasAura(SPELL_INFERNO))
         {
             float distance = bot->GetDistance(unit);
             if (distance < closestDistance)
@@ -1134,7 +1012,8 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
         return false;
 
     Position safePos;
-    if (SelectSepethreaEscapePosition(botAI, bot, 22.0f, 16.0f, safePos, infernoFlame))
+    if (SelectSepethreaEscapePosition(botAI, bot, heroic ? 22.0f : 19.0f,
+                                      heroic ? 16.0f : 13.0f, safePos, infernoFlame))
     {
         return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY, 
                      safePos.m_positionZ, false, false, false, true, 
@@ -1164,7 +1043,7 @@ bool SepethreaInfernoAvoidanceAction::isUseful()
 
         // Check for Inferno casting OR active Inferno aura (persistent damage)
         if ((unit->FindCurrentSpellBySpellId(SPELL_INFERNO) || unit->HasAura(SPELL_INFERNO)) 
-            && bot->GetDistance(unit) < 25.0f)
+            && bot->GetDistance(unit) < (bot->GetMap()->IsHeroic() ? 24.0f : 20.0f))
             return true;
     }
     

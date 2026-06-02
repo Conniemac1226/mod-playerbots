@@ -24,7 +24,11 @@ enum BlackMorassNpcs
     NPC_INFINITE_WHELP         = 21818,
     NPC_INFINITE_CHRONOMANCER  = 17892,
     NPC_INFINITE_EXECUTIONER   = 18994,
-    NPC_INFINITE_VANQUISHER    = 18995
+    NPC_INFINITE_VANQUISHER    = 18995,
+    NPC_INFINITE_ASSASSIN_2    = 21137,
+    NPC_INFINITE_CHRONOMANCER_2 = 21136,
+    NPC_INFINITE_EXECUTIONER_2 = 21138,
+    NPC_INFINITE_VANQUISHER_2  = 21139
 };
 
 // RESEARCHED FROM: boss scripts
@@ -49,9 +53,28 @@ enum BlackMorassSpells
     SPELL_REFLECT               = 38592
 };
 
-// Per-bot state management for Time Stop
-extern std::map<ObjectGuid, uint32> g_aeonus_lastTimeStopTime;
-extern std::map<ObjectGuid, bool> g_aeonus_timeStopActive;
+inline bool IsBlackMorassPortalAdd(uint32 entry)
+{
+    switch (entry)
+    {
+        case NPC_RIFT_LORD:
+        case NPC_RIFT_LORD_2:
+        case NPC_RIFT_KEEPER_WARLOCK:
+        case NPC_RIFT_KEEPER_MAGE:
+        case NPC_INFINITE_EXECUTIONER:
+        case NPC_INFINITE_EXECUTIONER_2:
+        case NPC_INFINITE_VANQUISHER:
+        case NPC_INFINITE_VANQUISHER_2:
+        case NPC_INFINITE_CHRONOMANCER:
+        case NPC_INFINITE_CHRONOMANCER_2:
+        case NPC_INFINITE_ASSASSIN:
+        case NPC_INFINITE_ASSASSIN_2:
+        case NPC_INFINITE_WHELP:
+            return true;
+        default:
+            return false;
+    }
+}
 
 // Portal/Add Management Actions
 class AttackPortalAddAction : public AttackAction
@@ -91,14 +114,6 @@ class AeonusSandBreathAction : public MovementAction
 {
 public:
     AeonusSandBreathAction(PlayerbotAI* ai) : MovementAction(ai, "avoid sand breath") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
-
-class AeonusTimeStopAction : public Action
-{
-public:
-    AeonusTimeStopAction(PlayerbotAI* ai) : Action(ai, "handle time stop") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
@@ -167,15 +182,6 @@ class DejaArcaneBlastInterruptAction : public Action
 {
 public:
     DejaArcaneBlastInterruptAction(PlayerbotAI* ai) : Action(ai, "interrupt arcane blast") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
-
-// RESEARCHED: boss_aeonus.cpp:86 - ENRAGE every 30s, increases damage
-class AeonusEnrageAction : public Action
-{
-public:
-    AeonusEnrageAction(PlayerbotAI* ai) : Action(ai, "handle aeonus enrage") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

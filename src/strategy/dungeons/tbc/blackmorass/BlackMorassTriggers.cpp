@@ -1,132 +1,177 @@
 #include "BlackMorassTriggers.h"
+#include "AiObjectContext.h"
+#include "Creature.h"
+#include "Player.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
-#include "Player.h"
 #include "Unit.h"
-#include "Creature.h"
-#include "Value.h"
-#include "AiObjectContext.h"
+
+namespace
+{
+bool IsBossCasting(Unit* boss, uint32 spellId)
+{
+    return boss && boss->IsAlive() && boss->IsInCombat() && boss->HasUnitState(UNIT_STATE_CASTING) &&
+           boss->FindCurrentSpellBySpellId(spellId);
+}
+}
+
+bool PortalAddActiveTrigger::IsActive()
+{
+    GuidVector const npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (ObjectGuid const& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (unit && unit->IsAlive() && IsBlackMorassPortalAdd(unit->GetEntry()))
+            return true;
+    }
+
+    return false;
+}
+
+bool MedivhNeedsProtectionTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* medivh = AI_VALUE2(Unit*, "find target", "medivh");
+    if (!medivh || !medivh->IsAlive())
+        return false;
+
+    if (bot->GetDistance(medivh) > 40.0f)
+        return false;
+
+    GuidVector const npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (ObjectGuid const& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (unit && unit->IsAlive() && IsBlackMorassPortalAdd(unit->GetEntry()) && unit->GetDistance(medivh) < 30.0f)
+            return true;
+    }
+
+    return medivh->GetHealthPct() < 95.0f;
+}
 
 bool AeonusCleaveNearbyTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
-    // Only trigger for non-tanks
-    if (botAI->IsTank(bot))
+    if (!bot || botAI->IsTank(bot))
         return false;
 
     Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // Pattern from Karazhan: check if in front arc and close (cleave danger)
-    float distance = bot->GetDistance(boss);
-    return distance < 10.0f && boss->HasInArc(M_PI / 2, bot);
+    return boss && boss->IsAlive() && boss->IsInCombat() && bot->GetDistance(boss) < 10.0f &&
+           boss->HasInArc(M_PI / 2, bot);
 }
 
 bool AeonusEngagedTrigger::IsActive()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
     Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
     return boss && boss->IsAlive() && boss->IsInCombat();
 }
 
 bool ChronoLordDejaEngagedTrigger::IsActive()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
     Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
     return boss && boss->IsAlive() && boss->IsInCombat();
 }
 
 bool TemporusEngagedTrigger::IsActive()
 {
-    Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
     Unit* boss = AI_VALUE2(Unit*, "find target", "temporus");
     return boss && boss->IsAlive() && boss->IsInCombat();
 }
 
-bool TimeLapseNearbyTrigger::IsActive()
+bool SandBreathDangerTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // Check if bot is in Time Lapse AoE range
-    float distance = bot->GetDistance(boss);
-    return distance < 15.0f;
+    Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
+    return bot && IsBossCasting(boss, SPELL_SAND_BREATH) && bot->GetDistance(boss) < 20.0f &&
+           boss->HasInArc(M_PI / 4, bot);
 }
 
-bool ArcaneDischargeNearbyTrigger::IsActive()
+bool TimeLapseDangerTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
     Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    if (!bot || !IsBossCasting(boss, SPELL_TIME_LAPSE))
         return false;
 
-    // Check if bot is in Arcane Discharge AoE range
-    float distance = bot->GetDistance(boss);
-    return distance < 20.0f;
+    GuidVector const members = AI_VALUE(GuidVector, "group members");
+    for (ObjectGuid const& member : members)
+    {
+        Unit* ally = botAI->GetUnit(member);
+        if (ally && ally != bot && ally->IsAlive() && bot->GetDistance(ally) < 10.0f)
+            return true;
+    }
+
+    return false;
 }
 
-bool WingBuffetNearbyTrigger::IsActive()
+bool ArcaneDischargeDangerTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
+    Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
+    return bot && IsBossCasting(boss, SPELL_ARCANE_DISCHARGE) && bot->GetDistance(boss) < 20.0f;
+}
 
+bool AttractionActiveTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    return bot && bot->HasAura(SPELL_ATTRACTION);
+}
+
+bool WingBuffetDangerTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
     Unit* boss = AI_VALUE2(Unit*, "find target", "temporus");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    float distance = bot->GetDistance(boss);
-    // Trigger when positioning is suboptimal for wing buffet
-    return distance > 5.0f && distance < 15.0f;
+    return bot && IsBossCasting(boss, SPELL_WING_BUFFET) && bot->GetDistance(boss) < 10.0f;
 }
 
-// RESEARCHED: boss_temporus.cpp:54 - HASTEN buff needs dispel
+bool MortalWoundActiveTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !botAI->IsHeal(bot))
+        return false;
+
+    GuidVector const members = AI_VALUE(GuidVector, "group members");
+    for (ObjectGuid const& member : members)
+    {
+        Unit* ally = botAI->GetUnit(member);
+        if (ally && ally->IsAlive() && ally->HasAura(SPELL_MORTAL_WOUND))
+            return true;
+    }
+
+    return false;
+}
+
+bool TemporusReflectActiveTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    Unit* boss = AI_VALUE2(Unit*, "find target", "temporus");
+    return bot && boss && boss->IsAlive() && boss->IsInCombat() && boss->HasAura(SPELL_REFLECT) &&
+           bot->IsNonMeleeSpellCast(false);
+}
+
 bool TemporusHastenActiveTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot)
         return false;
 
-    // Only trigger for classes that can dispel
-    if (bot->getClass() != CLASS_PRIEST && 
-        bot->getClass() != CLASS_SHAMAN &&
-        bot->getClass() != CLASS_WARLOCK)
+    if (bot->getClass() != CLASS_PRIEST && bot->getClass() != CLASS_SHAMAN && bot->getClass() != CLASS_WARLOCK)
         return false;
 
     Unit* boss = AI_VALUE2(Unit*, "find target", "temporus");
     return boss && boss->IsAlive() && boss->IsInCombat() && boss->HasAura(SPELL_HASTEN);
 }
 
-// RESEARCHED: boss_chrono_lord_deja.cpp:58 - ARCANE_BLAST needs interrupt  
 bool DejaArcaneBlastCastingTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot)
         return false;
 
-    // Only trigger for classes with interrupts
-    switch(bot->getClass())
+    switch (bot->getClass())
     {
         case CLASS_WARRIOR:
         case CLASS_ROGUE:
@@ -139,22 +184,5 @@ bool DejaArcaneBlastCastingTrigger::IsActive()
     }
 
     Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // Check if boss is within interrupt range and casting Arcane Blast
-    float distance = bot->GetDistance(boss);
-    return distance <= 30.0f && boss->HasUnitState(UNIT_STATE_CASTING) && 
-           boss->FindCurrentSpellBySpellId(SPELL_ARCANE_BLAST);
-}
-
-// RESEARCHED: boss_aeonus.cpp:86 - ENRAGE increases damage
-bool AeonusEnragedTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
-    return boss && boss->IsAlive() && boss->IsInCombat() && boss->HasAura(SPELL_ENRAGE);
+    return IsBossCasting(boss, SPELL_ARCANE_BLAST) && bot->GetDistance(boss) <= 30.0f;
 }

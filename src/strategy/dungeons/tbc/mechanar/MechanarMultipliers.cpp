@@ -25,30 +25,42 @@ float MechanarMultiplier::GetValue(Action* action)
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
     bool flameNearby = false;
+    Unit* chasingFlame = nullptr;
+    float chasingFlameDistance = 1000.0f;
     for (auto& npc : npcs)
     {
         Unit* flame = botAI->GetUnit(npc);
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
-            
+
+        float flameDistance = bot->GetExactDist2d(flame);
         if (flame->GetVictim() == bot)
         {
-            // Being chased - only allow instant spells
-            std::string spellName = spellAction->getSpell();
-            uint32 spellId = AI_VALUE2(uint32, "spell id", spellName);
-            
-            if (spellId > 0)
-            {
-                SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
-                if (spellInfo && spellInfo->CalcCastTime() == 0)
-                    return 1.0f; // Allow instant cast
-            }
-            
-            return 0.0f; // Block cast time spells
+            chasingFlame = flame;
+            chasingFlameDistance = flameDistance;
         }
         // Note flames in 18y for AoE suppression
-        if (!flameNearby && bot->GetExactDist2d(flame) < 18.0f)
+        if (!flameNearby && flameDistance < 18.0f)
             flameNearby = true;
+    }
+
+    if (chasingFlame)
+    {
+        std::string spellName = spellAction->getSpell();
+        uint32 spellId = AI_VALUE2(uint32, "spell id", spellName);
+        SpellInfo const* spellInfo = spellId ? sSpellMgr->GetSpellInfo(spellId) : nullptr;
+        bool const safeGap = chasingFlameDistance > (bot->GetMap()->IsHeroic() ? 26.0f : 23.0f) && !flameNearby;
+
+        if (!spellInfo)
+            return safeGap ? 1.0f : 0.0f;
+
+        uint32 castTime = spellInfo->CalcCastTime();
+        if (castTime == 0)
+            return 1.0f;
+        if (safeGap && (castTime <= 1500 || botAI->IsHeal(bot)))
+            return 1.0f;
+
+        return 0.0f;
     }
 
     // Suppress AoE/ground-targeted spells near flames (prevents stepping into danger and wasted casts)

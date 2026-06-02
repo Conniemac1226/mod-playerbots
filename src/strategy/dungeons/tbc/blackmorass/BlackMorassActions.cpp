@@ -1,11 +1,38 @@
 #include "BlackMorassActions.h"
 #include "BlackMorassTriggers.h"
+#include "AiObjectContext.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 
-// Per-bot state management for boss mechanics
-std::map<ObjectGuid, uint32> g_aeonus_lastTimeStopTime;
-std::map<ObjectGuid, bool> g_aeonus_timeStopActive;
+namespace
+{
+Unit* FindPortalAdd(PlayerbotAI* botAI, Player* bot)
+{
+    Unit* medivh = botAI->GetAiObjectContext()->GetValue<Unit*>("find target", "medivh")->Get();
+    Unit* target = nullptr;
+    float bestScore = 100.0f;
+
+    GuidVector const npcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs")->Get();
+    for (ObjectGuid const& npc : npcs)
+    {
+        Unit* unit = botAI->GetUnit(npc);
+        if (!unit || !unit->IsAlive() || !IsBlackMorassPortalAdd(unit->GetEntry()))
+            continue;
+
+        float score = bot->GetDistance(unit);
+        if (medivh && unit->GetDistance(medivh) < 30.0f)
+            score -= 20.0f;
+
+        if (score < bestScore)
+        {
+            bestScore = score;
+            target = unit;
+        }
+    }
+
+    return target;
+}
+}
 
 // ========== PORTAL/ADD MANAGEMENT ==========
 
@@ -15,55 +42,8 @@ bool AttackPortalAddAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Priority order for adds (most dangerous first)
-    const uint32 addPriority[] = {
-        NPC_RIFT_LORD, NPC_RIFT_LORD_2,           // Highest priority
-        NPC_RIFT_KEEPER_WARLOCK, NPC_RIFT_KEEPER_MAGE,
-        NPC_INFINITE_EXECUTIONER, NPC_INFINITE_VANQUISHER,
-        NPC_INFINITE_CHRONOMANCER, NPC_INFINITE_ASSASSIN,
-        NPC_INFINITE_WHELP                        // Lowest priority
-    };
-
-    // Use proven WotLK pattern
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    Unit* priorityTarget = nullptr;
-    float closestDistance = 100.0f;
-
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        for (uint32 addId : addPriority)
-        {
-            if (unit->GetEntry() == addId)
-            {
-                float distance = bot->GetDistance(unit);
-                
-                // Prioritize adds moving toward Medivh
-                Unit* medivh = AI_VALUE2(Unit*, "find target", "medivh");
-                if (medivh && unit->GetDistance(medivh) < 30.0f)
-                {
-                    distance -= 20.0f; // Higher priority for adds near Medivh
-                }
-                
-                if (distance < closestDistance)
-                {
-                    priorityTarget = unit;
-                    closestDistance = distance;
-                }
-                break;
-            }
-        }
-    }
-
-    if (priorityTarget)
-    {
-        return Attack(priorityTarget);
-    }
-
-    return false;
+    Unit* target = FindPortalAdd(botAI, bot);
+    return target && Attack(target);
 }
 
 bool AttackPortalAddAction::isUseful()
@@ -72,11 +52,7 @@ bool AttackPortalAddAction::isUseful()
     if (!bot || !botAI)
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("portal add active");
-    if (!boolValue)
-        return false;
-    
-    return boolValue->Get();
+    return FindPortalAdd(botAI, bot);
 }
 
 bool ProtectMedivhAction::Execute(Event event)
@@ -111,14 +87,14 @@ bool ProtectMedivhAction::Execute(Event event)
 bool ProtectMedivhAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot)
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("medivh needs protection");
-    if (!boolValue)
+    Unit* medivh = AI_VALUE2(Unit*, "find target", "medivh");
+    if (!medivh || !medivh->IsAlive())
         return false;
-    
-    return boolValue->Get();
+
+    return bot->GetDistance(medivh) > 20.0f;
 }
 
 // ========== AEONUS ACTIONS ==========
@@ -153,14 +129,12 @@ bool AeonusAvoidCleaveAction::Execute(Event event)
 bool AeonusAvoidCleaveAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot || botAI->IsTank(bot))
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("aeonus cleave danger");
-    if (!boolValue)
-        return false;
-    
-    return boolValue->Get();
+    Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
+    return boss && boss->IsAlive() && boss->IsInCombat() && bot->GetDistance(boss) < 10.0f &&
+           boss->HasInArc(M_PI / 2, bot);
 }
 
 bool AeonusPositionAction::Execute(Event event)
@@ -201,14 +175,11 @@ bool AeonusPositionAction::Execute(Event event)
 bool AeonusPositionAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot || !botAI->IsTank(bot))
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("aeonus engaged");
-    if (!boolValue)
-        return false;
-    
-    return boolValue->Get();
+    Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
+    return boss && boss->IsAlive() && boss->IsInCombat();
 }
 
 bool AeonusSandBreathAction::Execute(Event event)
@@ -242,65 +213,6 @@ bool AeonusSandBreathAction::Execute(Event event)
 bool AeonusSandBreathAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("sand breath danger");
-    if (!boolValue)
-        return false;
-    
-    return boolValue->Get();
-}
-
-bool AeonusTimeStopAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    ObjectGuid botGuid = bot->GetGUID();
-    uint32 currentTime = getMSTime();
-
-    // Check if Time Stop is active
-    if (bot->HasAura(SPELL_TIME_STOP))
-    {
-        g_aeonus_timeStopActive[botGuid] = true;
-        g_aeonus_lastTimeStopTime[botGuid] = currentTime;
-        
-        // Stop all actions during Time Stop
-        botAI->InterruptSpell();
-        return true;
-    }
-    
-    // Reset state after Time Stop ends
-    if (g_aeonus_timeStopActive[botGuid])
-    {
-        if ((currentTime - g_aeonus_lastTimeStopTime[botGuid]) > 3000)
-        {
-            g_aeonus_timeStopActive[botGuid] = false;
-        }
-    }
-
-    return false;
-}
-
-bool AeonusTimeStopAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("time stop active");
-    if (!boolValue)
-        return false;
-    
-    return boolValue->Get();
-}
-
-// Handle Aeonus Enrage - increased damage
-bool AeonusEnrageAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
@@ -308,45 +220,8 @@ bool AeonusEnrageAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Enrage from boss_aeonus.cpp:86 - every 30s
-    if (boss->HasAura(SPELL_ENRAGE))
-    {
-        // Healers need to increase healing
-        if (botAI->IsHeal(bot))
-        {
-            // Focus heal on tank
-            const GuidVector members = AI_VALUE(GuidVector, "group members");
-            for (auto& member : members)
-            {
-                Unit* ally = botAI->GetUnit(member);
-                if (ally && ally->IsAlive() && ally->IsPlayer() && botAI->IsTank(ally->ToPlayer()))
-                {
-                    if (ally->GetHealthPct() < 80.0f)
-                    {
-                        return botAI->CastSpell("greater heal", ally);
-                    }
-                }
-            }
-        }
-        
-        // DPS should use cooldowns
-        if (!botAI->IsTank(bot) && !botAI->IsHeal(bot))
-        {
-            return botAI->CastSpell("boost", bot);
-        }
-    }
-
-    return false;
-}
-
-bool AeonusEnrageAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "aeonus");
-    return boss && boss->HasAura(SPELL_ENRAGE);
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_SAND_BREATH) &&
+           boss->HasInArc(M_PI / 4, bot);
 }
 
 // ========== CHRONO LORD DEJA ACTIONS ==========
@@ -392,14 +267,22 @@ bool AvoidTimeLapseAction::Execute(Event event)
 bool AvoidTimeLapseAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot)
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("time lapse danger");
-    if (!boolValue)
+    Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat() || !boss->FindCurrentSpellBySpellId(SPELL_TIME_LAPSE))
         return false;
-    
-    return boolValue->Get();
+
+    GuidVector const members = AI_VALUE(GuidVector, "group members");
+    for (ObjectGuid const& member : members)
+    {
+        Unit* ally = botAI->GetUnit(member);
+        if (ally && ally != bot && ally->IsAlive() && bot->GetDistance(ally) < 10.0f)
+            return true;
+    }
+
+    return false;
 }
 
 bool AvoidArcaneDischargeAction::Execute(Event event)
@@ -434,14 +317,12 @@ bool AvoidArcaneDischargeAction::Execute(Event event)
 bool AvoidArcaneDischargeAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot)
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("arcane discharge danger");
-    if (!boolValue)
-        return false;
-    
-    return boolValue->Get();
+    Unit* boss = AI_VALUE2(Unit*, "find target", "chrono lord deja");
+    return boss && boss->IsAlive() && boss->IsInCombat() && boss->FindCurrentSpellBySpellId(SPELL_ARCANE_DISCHARGE) &&
+           bot->GetDistance(boss) < 20.0f;
 }
 
 bool DejaAttractionAction::Execute(Event event)
@@ -519,40 +400,27 @@ bool AvoidWingBuffetAction::Execute(Event event)
 bool AvoidWingBuffetAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot)
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("wing buffet danger");
-    if (!boolValue)
-        return false;
-    
-    return boolValue->Get();
+    Unit* boss = AI_VALUE2(Unit*, "find target", "temporus");
+    return boss && boss->IsAlive() && boss->IsInCombat() && boss->FindCurrentSpellBySpellId(SPELL_WING_BUFFET) &&
+           bot->GetDistance(boss) < 10.0f;
 }
 
 bool TemporusMortalWoundAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI->IsHeal(bot))
         return false;
 
-    // RESEARCHED: Mortal Wound from boss_temporus.cpp
-    if (bot->HasAura(SPELL_MORTAL_WOUND))
+    GuidVector const members = AI_VALUE(GuidVector, "group members");
+    for (ObjectGuid const& member : members)
     {
-        // Healers should prioritize healing targets with Mortal Wound
-        if (botAI->IsHeal(bot))
+        Unit* ally = botAI->GetUnit(member);
+        if (ally && ally->IsAlive() && ally->HasAura(SPELL_MORTAL_WOUND) && ally->GetHealthPct() < 60.0f)
         {
-            const GuidVector members = AI_VALUE(GuidVector, "group members");
-            for (auto& member : members)
-            {
-                Unit* ally = botAI->GetUnit(member);
-                if (ally && ally->IsAlive() && ally->HasAura(SPELL_MORTAL_WOUND))
-                {
-                    if (ally->GetHealthPct() < 60.0f)
-                    {
-                        return botAI->CastSpell("heal", ally);
-                    }
-                }
-            }
+            return botAI->CastSpell("heal", ally);
         }
     }
 
@@ -562,14 +430,18 @@ bool TemporusMortalWoundAction::Execute(Event event)
 bool TemporusMortalWoundAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot || !botAI->IsHeal(bot))
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("mortal wound active");
-    if (!boolValue)
-        return false;
-    
-    return boolValue->Get();
+    GuidVector const members = AI_VALUE(GuidVector, "group members");
+    for (ObjectGuid const& member : members)
+    {
+        Unit* ally = botAI->GetUnit(member);
+        if (ally && ally->IsAlive() && ally->HasAura(SPELL_MORTAL_WOUND))
+            return true;
+    }
+
+    return false;
 }
 
 bool TemporusReflectAction::Execute(Event event)
@@ -599,14 +471,14 @@ bool TemporusReflectAction::Execute(Event event)
 bool TemporusReflectAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot)
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("temporus reflect active");
-    if (!boolValue)
+    Unit* boss = AI_VALUE2(Unit*, "find target", "temporus");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat() || !boss->HasAura(SPELL_REFLECT))
         return false;
-    
-    return boolValue->Get();
+
+    return bot->IsNonMeleeSpellCast(false);
 }
 
 // ========== TEMPORUS HASTEN DISPEL ==========
