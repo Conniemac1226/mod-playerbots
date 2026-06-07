@@ -555,6 +555,21 @@ void RandomPlayerbotMgr::PreloadArenaTeamBots()
              skippedDeathKnight);
 }
 
+bool RandomPlayerbotMgr::IsRandomArenaTeamBot(Player* bot)
+{
+    if (!bot || !sPlayerbotAIConfig.IsInRandomAccountList(bot->GetSession()->GetAccountId()))
+        return false;
+
+    for (uint32 arenaSlot = 0; arenaSlot < MAX_ARENA_SLOT; ++arenaSlot)
+    {
+        if (bot->GetArenaTeamId(arenaSlot) ||
+            sCharacterCache->GetCharacterArenaTeamIdByGuid(bot->GetGUID(), arenaSlot))
+            return true;
+    }
+
+    return false;
+}
+
 // void RandomPlayerbotMgr::ScaleBotActivity()
 //{
 //     float activityPercentage = getActivityPercentage();
@@ -1935,6 +1950,12 @@ void RandomPlayerbotMgr::Randomize(Player* bot)
     if (bot->InBattleground())
         return;
 
+    if (IsRandomArenaTeamBot(bot))
+    {
+        RandomizeFirst(bot);
+        return;
+    }
+
     if (bot->GetLevel() < 3 || (bot->GetLevel() < 56 && bot->getClass() == CLASS_DEATH_KNIGHT))
     {
         RandomizeFirst(bot);
@@ -2037,6 +2058,9 @@ void RandomPlayerbotMgr::RandomizeFirst(Player* bot)
                                                       : sPlayerbotAIConfig.randombotStartingLevel;
     }
 
+    if (IsRandomArenaTeamBot(bot))
+        level = maxLevel;
+
     SetValue(bot, "level", level);
     PlayerbotFactory factory(bot, level);
     factory.Randomize(false);
@@ -2078,6 +2102,13 @@ void RandomPlayerbotMgr::RandomizeMin(Player* bot)
 
     PerfMonitorOperation* pmo = sPerfMonitor.start(PERF_MON_RNDBOT, "RandomizeMin");
     uint32 level = sPlayerbotAIConfig.randomBotMinLevel;
+    if (IsRandomArenaTeamBot(bot))
+    {
+        level = sPlayerbotAIConfig.randomBotMaxLevel;
+        if (level > sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL))
+            level = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
+    }
+
     SetValue(bot, "level", level);
     PlayerbotFactory factory(bot, level);
     factory.Randomize(false);
