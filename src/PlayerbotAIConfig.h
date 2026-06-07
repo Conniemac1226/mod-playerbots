@@ -228,6 +228,7 @@ public:
 
     bool randomBotJoinBG;
     bool randomBotAutoJoinBG;
+    bool preloadArenaTeamBots;
 
     std::string randomBotAutoJoinICBrackets;
     std::string randomBotAutoJoinEYBrackets;

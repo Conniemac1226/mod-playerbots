@@ -1252,6 +1252,10 @@ AiPlayerbot.RandomBotJoinBG = 1
 # Enable auto-joining of battlegrounds - have bots start battlegrounds and arenas on their own
 AiPlayerbot.RandomBotAutoJoinBG = 0
 
+# Preload saved random-bot arena team members during startup before the general random bot population.
+# This keeps rated arena teams ready as soon as queues are opened.
+AiPlayerbot.PreloadArenaTeamBots = 1
+
 # Required Configuration for RandomBotAutoJoinBG
 #
 # Known issue: When enabling many brackets in combination with multiple instances, it can lead to more

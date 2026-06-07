@@ -8,6 +8,7 @@
 #include <WorldSessionMgr.h>
 
 #include <algorithm>
+#include <unordered_set>
 #include <boost/thread/thread.hpp>
 #include <cstdlib>
 #include <ctime>
@@ -15,9 +16,12 @@
 #include <random>
 
 #include "AiFactory.h"
+#include "ArenaTeam.h"
+#include "ArenaTeamMgr.h"
 #include "Battleground.h"
 #include "BattlegroundMgr.h"
 #include "ChannelMgr.h"
+#include "CharacterCache.h"
 #include "DBCStores.h"
 #include "DBCStructure.h"
 #include "DatabaseEnv.h"
@@ -308,6 +312,8 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 /*elapsed*/, bool /*minimal*/)
                             sPlayerbotAIConfig.randomBotCountChangeMaxInterval));
     }
 
+    PreloadArenaTeamBots();
+
     GetBots();
     std::list<uint32> availableBots = currentBots;
     uint32 availableBotCount = availableBots.size();
@@ -460,6 +466,93 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 /*elapsed*/, bool /*minimal*/)
     {
         LogPlayerLocation();
     }
+}
+
+void RandomPlayerbotMgr::PreloadArenaTeamBots()
+{
+    if (arenaTeamBotsPreloaded || !sPlayerbotAIConfig.preloadArenaTeamBots)
+        return;
+
+    arenaTeamBotsPreloaded = true;
+
+    std::unordered_set<ObjectGuid> arenaMemberGuids;
+    uint32 skippedNonRandomAccount = 0;
+    uint32 skippedDeathKnight = 0;
+
+    for (auto const& arenaTeamEntry : sArenaTeamMgr->GetArenaTeams())
+    {
+        ArenaTeam* arenaTeam = arenaTeamEntry.second;
+        if (!arenaTeam)
+            continue;
+
+        bool hasRandomCaptain = false;
+        if (CharacterCacheEntry const* captainInfo = sCharacterCache->GetCharacterCacheByGuid(arenaTeam->GetCaptain()))
+            hasRandomCaptain = sPlayerbotAIConfig.IsInRandomAccountList(captainInfo->AccountId);
+
+        if (!hasRandomCaptain)
+            continue;
+
+        for (ArenaTeam::MemberList::const_iterator itr = arenaTeam->GetMembers().begin();
+             itr != arenaTeam->GetMembers().end(); ++itr)
+        {
+            CharacterCacheEntry const* memberInfo = sCharacterCache->GetCharacterCacheByGuid(itr->Guid);
+            if (!memberInfo)
+                continue;
+
+            if (!sPlayerbotAIConfig.IsInRandomAccountList(memberInfo->AccountId))
+            {
+                skippedNonRandomAccount++;
+                continue;
+            }
+
+            if (sPlayerbotAIConfig.disableDeathKnightLogin && memberInfo->Class == CLASS_DEATH_KNIGHT)
+            {
+                skippedDeathKnight++;
+                continue;
+            }
+
+            arenaMemberGuids.insert(itr->Guid);
+        }
+    }
+
+    uint32 alreadyOnline = 0;
+    uint32 alreadyScheduled = 0;
+    uint32 requestedLogin = 0;
+
+    for (ObjectGuid const& memberGuid : arenaMemberGuids)
+    {
+        ObjectGuid::LowType lowGuid = memberGuid.GetCounter();
+
+        if (ObjectAccessor::FindConnectedPlayer(memberGuid) || GetPlayerBot(memberGuid))
+        {
+            alreadyOnline++;
+            continue;
+        }
+
+        if (botLoading.find(memberGuid) != botLoading.end() || GetEventValue(lowGuid, "add") ||
+            std::find(currentBots.begin(), currentBots.end(), lowGuid) != currentBots.end())
+        {
+            alreadyScheduled++;
+            continue;
+        }
+
+        uint32 addTime = sPlayerbotAIConfig.enablePeriodicOnlineOffline
+                             ? urand(sPlayerbotAIConfig.minRandomBotInWorldTime,
+                                     sPlayerbotAIConfig.maxRandomBotInWorldTime)
+                             : sPlayerbotAIConfig.permanentlyInWorldTime;
+
+        SetEventValue(lowGuid, "add", 1, addTime);
+        SetEventValue(lowGuid, "logout", 0, 0);
+        currentBots.push_back(lowGuid);
+        AddPlayerBot(memberGuid, 0);
+        requestedLogin++;
+    }
+
+    LOG_INFO("playerbots",
+             "Preloaded random arena team bots: {} login requested, {} already online, {} already scheduled, {} "
+             "unique random arena members found ({} non-random members skipped, {} death knights skipped).",
+             requestedLogin, alreadyOnline, alreadyScheduled, arenaMemberGuids.size(), skippedNonRandomAccount,
+             skippedDeathKnight);
 }
 
 // void RandomPlayerbotMgr::ScaleBotActivity()

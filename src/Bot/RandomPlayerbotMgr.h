@@ -233,6 +233,7 @@ private:
     time_t DelayLoginBotsTimer;
     time_t printStatsTimer;
     uint32 AddRandomBots();
+    void PreloadArenaTeamBots();
     bool ProcessBot(uint32 bot);
     void ScheduleRandomize(uint32 bot, uint32 time);
     void RandomTeleport(Player* bot);
@@ -247,6 +248,7 @@ private:
     std::map<TeamId, std::map<BattlegroundTypeId, std::vector<uint32>>> BattleMastersCache;
     std::unordered_map<uint32, BotEventCache> eventCache;
     std::list<uint32> currentBots;
+    bool arenaTeamBotsPreloaded = false;
     uint32 bgBotsCount;
     uint32 playersLevel;
 
