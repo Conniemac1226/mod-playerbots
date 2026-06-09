@@ -380,22 +380,12 @@ namespace MagtheridonHelpers
 
     void LogMagtheridonDebug(PlayerbotAI* botAI, Player* bot, std::string const& event, std::string const& details, Unit* magtheridon, uint32 throttleSeconds)
     {
-        if (!bot || !IsMagtheridonEncounterRelevant(botAI, bot, magtheridon))
-            return;
-
-        if (!ShouldLogMagtheridonDebug(bot, event, throttleSeconds))
-            return;
-
-        MarkMagtheridonDebugActivity(bot, event);
-        LOG_INFO("playerbots",
-            "MAG-LAIR-DEBUG ts={} bot={} {} event={} {} {} {}",
-            static_cast<long long>(time(nullptr)),
-            bot->GetName(),
-            GetMagtheridonDebugRole(botAI, bot),
-            event,
-            details,
-            GetMagtheridonDebugUnit(bot, botAI ? botAI->GetUnit(bot->GetTarget()) : nullptr),
-            GetMagtheridonEncounterDebug(botAI, bot, magtheridon));
+        (void)botAI;
+        (void)bot;
+        (void)event;
+        (void)details;
+        (void)magtheridon;
+        (void)throttleSeconds;
     }
 
     const Position WAITING_FOR_MAGTHERIDON_POSITION = {   1.359f,   2.048f, -0.406f, 3.135f };
