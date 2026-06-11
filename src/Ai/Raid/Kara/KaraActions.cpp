@@ -737,6 +737,7 @@ namespace
     static bool IsKingEntry(uint32 e);
     static bool IsSummonedDaemonChessPiece(uint32 entry);
     static bool IsOrcWarlockChessPiece(uint32 entry);
+    static bool IsShortRangeChessAoePiece(uint32 entry);
     static void PurgeChessPieceCacheForGuid(Player* bot, ObjectGuid const& pieceGuid, std::string const& source);
 
     static bool IsInsideBoard(ChessBoardState const& b, int row, int col);
@@ -824,6 +825,77 @@ namespace
         return haystack.find(needle) != std::string::npos;
     }
 
+    static bool IsExplicitOffensiveChessSpell(uint32 spellId)
+    {
+        switch (spellId)
+        {
+            case 37406: // Heroic Blow
+            case 37413: // Vicious Strike
+            case 37427: // Geyser
+            case 37428: // Hellfire
+            case 37453: // Smash
+            case 37454: // Bite
+            case 37459: // Holy Lance
+            case 37461: // Shadow Spear
+            case 37462: // Elemental Blast
+            case 37463: // Fireball
+            case 37465: // Rain of Fire
+            case 37469: // Poison Cloud
+            case 37474: // Sweep
+            case 37476: // Cleave
+            case 37498: // Stomp
+            case 37502: // Howl
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    static bool IsCasterCenteredOffensiveChessSpell(uint32 spellId)
+    {
+        switch (spellId)
+        {
+            case 37406: // Heroic Blow
+            case 37413: // Vicious Strike
+            case 37427: // Geyser
+            case 37428: // Hellfire
+            case 37453: // Smash
+            case 37454: // Bite
+            case 37459: // Holy Lance
+            case 37461: // Shadow Spear
+            case 37474: // Sweep
+            case 37476: // Cleave
+            case 37498: // Stomp
+            case 37502: // Howl
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    static float GetCasterCenteredChessSpellRadius(uint32 spellId)
+    {
+        switch (spellId)
+        {
+            case 37427: // Geyser
+            case 37428: // Hellfire
+                return 10.0f;
+            default:
+                return 8.0f;
+        }
+    }
+
+    static void CastOffensiveChessSpell(Creature* piece, Unit* target, uint32 spellId)
+    {
+        if (!piece)
+            return;
+
+        if (IsCasterCenteredOffensiveChessSpell(spellId))
+            piece->CastSpell(piece, spellId, true);
+        else if (target)
+            piece->CastSpell(target, spellId, true);
+    }
+
     static bool IsKingAttackOffensiveChessSpell(uint32 spellId, std::string& rejectReason)
     {
         rejectReason.clear();
@@ -840,6 +912,9 @@ namespace
             rejectReason = "non_offensive";
             return false;
         }
+
+        if (IsExplicitOffensiveChessSpell(spellId))
+            return true;
 
         if (ContainsChessSpellNeedle(lower, "move"))
         {
@@ -907,11 +982,6 @@ namespace
         }
 
         return spells;
-    }
-
-    static bool IsHellfireChessAoeSpell(uint32 spellId)
-    {
-        return spellId == 37428;
     }
 
     static bool IsPoisonCloudChessSpell(uint32 spellId)
@@ -1312,6 +1382,12 @@ namespace
 
     static bool IsChessSupportSpell(uint32 spellId, std::string& rejectReason)
     {
+        if (IsExplicitOffensiveChessSpell(spellId))
+        {
+            rejectReason = "offensive_spell";
+            return false;
+        }
+
         SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
         std::string lower = spellInfo ? spellInfo->SpellName[0] : std::string();
         std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
@@ -1529,12 +1605,17 @@ namespace
         return entry == NPC_QUEEN_H;
     }
 
+    static bool IsShortRangeChessAoePiece(uint32 entry)
+    {
+        return entry == NPC_ROOK_A || entry == NPC_ROOK_H;
+    }
+
     static float GetChessPracticalAttackRange(Creature* piece)
     {
         if (!piece)
             return 22.0f;
 
-        if (IsSummonedDaemonChessPiece(piece->GetEntry()))
+        if (IsShortRangeChessAoePiece(piece->GetEntry()))
             return 10.0f;
 
         float bestRange = 0.0f;
@@ -2909,7 +2990,7 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
         if (nonPawnMovement)
         {
             ChessOffensiveTargetSelection movementTarget =
-                IsSummonedDaemonChessPiece(piece->GetEntry())
+                IsShortRangeChessAoePiece(piece->GetEntry())
                     ? SelectSummonedDaemonChessTarget(botAI, bot, piece, board, "movement")
                     : SelectNonKingChessTarget(botAI, bot, piece, board, "movement");
             if (movementTarget.target)
@@ -2960,9 +3041,8 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
                 }
             }
 
-            if (IsSummonedDaemonChessPiece(piece->GetEntry()))
+            if (IsShortRangeChessAoePiece(piece->GetEntry()))
             {
-                float const practicalAttackRange = GetChessPracticalAttackRange(piece);
                 if (!moveTarget)
                 {
                 }
@@ -2970,12 +3050,11 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
 
             if (moveTarget)
             {
-                float const practicalAttackRange = GetChessPracticalAttackRange(piece);
-                if (IsSummonedDaemonChessPiece(piece->GetEntry()))
+                if (IsShortRangeChessAoePiece(piece->GetEntry()))
                 {
-                    constexpr float HellfireAoeRadius = 10.0f;
-                    uint32 const nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(bot, board, piece, HellfireAoeRadius);
-                    if (nearbyEnemyCount)
+                    float const practicalAttackRange = GetChessPracticalAttackRange(piece);
+                    uint32 const nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(bot, board, piece, practicalAttackRange);
+                    if (nearbyEnemyCount || piece->GetExactDist2d(moveTarget) <= practicalAttackRange)
                     {
                         return false;
                     }
@@ -3276,7 +3355,7 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
     if (useNonKingOffensePrecheck)
     {
         nonKingTarget =
-            IsSummonedDaemonChessPiece(piece->GetEntry())
+            IsShortRangeChessAoePiece(piece->GetEntry())
                 ? SelectSummonedDaemonChessTarget(botAI, bot, piece, board, "offense")
                 : SelectNonKingChessTarget(botAI, bot, piece, board, "offense");
 
@@ -3427,6 +3506,10 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
             bool targetActiveBoardPiece = false;
             if (healerNeedsTarget)
             {
+                std::string supportRejectReason;
+                if (!IsChessSupportSpell(spellId, supportRejectReason))
+                    continue;
+
                 if (piece->GetEntry() == NPC_BISHOP_H || piece->GetEntry() == NPC_BISHOP_A)
                 {
                 }
@@ -3500,9 +3583,12 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 if (ShouldThrottlePoisonCloudCast(bot, piece, enemyKing, spellId, now, poisonReason))
                     continue;
             }
+            if (IsCasterCenteredOffensiveChessSpell(spellId) &&
+                piece->GetExactDist2d(enemyKing) > GetCasterCenteredChessSpellRadius(spellId))
+                continue;
             if (IsChessHealSpellBlockedOnEnemy(spellId))
                 continue;
-            piece->CastSpell(enemyKing, spellId, true);
+            CastOffensiveChessSpell(piece, enemyKing, spellId);
             if (piece->HasSpellCooldown(spellId))
             {
                 ClearChessSpellNoOpBackoff(pieceGuid, spellId);
@@ -3522,23 +3608,13 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 continue;
             }
 
-            if (IsHellfireChessAoeSpell(spellId))
+            if (IsCasterCenteredOffensiveChessSpell(spellId))
             {
-                // Conservative chess-safe radius: Hellfire should only be used if enemies are actually nearby.
-                constexpr float HellfireAoeRadius = 10.0f;
-                uint32 nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(bot, board, piece, HellfireAoeRadius);
-                float const kingDistance = enemyKing ? piece->GetExactDist2d(enemyKing) : 0.0f;
+                float const aoeRadius = GetCasterCenteredChessSpellRadius(spellId);
+                uint32 nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(bot, board, piece, aoeRadius);
                 if (!nearbyEnemyCount)
                 {
                     continue;
-                }
-                if (IsSummonedDaemonChessPiece(piece->GetEntry()) && enemyKing && enemyDamageAlive <= 1)
-                {
-                    constexpr float HellfireSafetyMargin = 0.5f;
-                    if (kingDistance > (HellfireAoeRadius - HellfireSafetyMargin))
-                    {
-                        return false;
-                    }
                 }
             }
 
@@ -3563,7 +3639,7 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
             {
                 continue;
             }
-            piece->CastSpell(nonKingTarget.target, spellId, true);
+            CastOffensiveChessSpell(piece, nonKingTarget.target, spellId);
             if (piece->HasSpellCooldown(spellId))
             {
                 ClearChessSpellNoOpBackoff(pieceGuid, spellId);
@@ -3583,11 +3659,9 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
             {
             }
 
-            if (IsHellfireChessAoeSpell(spellId))
+            if (IsCasterCenteredOffensiveChessSpell(spellId))
             {
-                // Conservative chess-safe radius: Hellfire should only be used if enemies are actually nearby.
-                constexpr float HellfireAoeRadius = 10.0f;
-                uint32 nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(bot, board, piece, HellfireAoeRadius);
+                uint32 nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(bot, board, piece, GetCasterCenteredChessSpellRadius(spellId));
                 if (!nearbyEnemyCount)
                 {
                     continue;
@@ -3686,8 +3760,8 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
         if (spellId && !piece->HasSpellCooldown(spellId))
         {
             std::string rejectReason;
-            bool const offensiveAllowed = IsKingAttackOffensiveChessSpell(spellId, rejectReason);
-            if (!offensiveAllowed)
+            bool const supportAllowed = IsChessSupportSpell(spellId, rejectReason);
+            if (!supportAllowed)
             {
                 continue;
             }
@@ -3761,7 +3835,7 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
     std::string kingGateReason = "no_enemy_king";
     bool const kingAttackAllowed = IsKarazhanChessKingFocusAllowedActiveBoard(bot, board, enemyKing, enemySupportAlive, enemyDamageAlive, enemyPawnAlive, kingGateReason);
     ChessOffensiveTargetSelection nonKingTarget =
-        IsSummonedDaemonChessPiece(piece->GetEntry())
+        IsShortRangeChessAoePiece(piece->GetEntry())
             ? SelectSummonedDaemonChessTarget(botAI, bot, piece, board, "offense")
             : SelectNonKingChessTarget(botAI, bot, piece, board, "offense");
     bool const noActionableNonKingTarget =
@@ -3813,6 +3887,10 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
         uint32 spellId = piece->m_spells[i];
         if (spellId && !piece->HasSpellCooldown(spellId))
         {
+            std::string offensiveRejectReason;
+            if (!IsKingAttackOffensiveChessSpell(spellId, offensiveRejectReason))
+                continue;
+
             time_t backoffRemaining = 0;
             if (IsChessSpellNoOpBackoffActive(piece->GetGUID(), spellId, now, backoffRemaining))
             {
@@ -3832,7 +3910,11 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
             if (IsChessHealSpellBlockedOnEnemy(spellId))
                 continue;
 
-            piece->CastSpell(enemyKing, spellId, true);
+            if (IsCasterCenteredOffensiveChessSpell(spellId) &&
+                piece->GetExactDist2d(enemyKing) > GetCasterCenteredChessSpellRadius(spellId))
+                continue;
+
+            CastOffensiveChessSpell(piece, enemyKing, spellId);
             if (piece->HasSpellCooldown(spellId))
             {
                 ClearChessSpellNoOpBackoff(piece->GetGUID(), spellId);
