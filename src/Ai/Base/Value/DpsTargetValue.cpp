@@ -284,16 +284,19 @@ Unit* DpsTargetValue::Calculate()
             // Caster find target strategy avoids casting spells on enemies
             // with too low health to ensure the effectiveness of casting
             CasterFindTargetSmartStrategy strategy(botAI, dps);
-            return TargetValue::FindTarget(&strategy);
+            Unit* result = TargetValue::FindTarget(&strategy);
+            return result;
         }
         else if (botAI->IsCombo(bot))
         {
             ComboFindTargetSmartStrategy strategy(botAI, dps);
-            return TargetValue::FindTarget(&strategy);
+            Unit* result = TargetValue::FindTarget(&strategy);
+            return result;
         }
     }
     GeneralFindTargetSmartStrategy strategy(botAI, dps);
-    return TargetValue::FindTarget(&strategy);
+    Unit* result = TargetValue::FindTarget(&strategy);
+    return result;
 }
 
 class FindMaxHpTargetStrategy : public FindTargetStrategy

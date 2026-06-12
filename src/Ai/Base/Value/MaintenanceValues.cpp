@@ -54,7 +54,7 @@ bool CanFightEqualValue::Calculate() { return AI_VALUE(uint8, "durability") > 20
 bool CanFightEliteValue::Calculate()
 {
     return bot->GetGroup() && AI_VALUE2(bool, "group and", "can fight equal") &&
-           AI_VALUE2(bool, "group and", "following party") && !AI_VALUE2(bool, "group or", "should sell,can sell");
+           AI_VALUE2(bool, "group and", "following party");
 }
 
 bool CanFightBossValue::Calculate()

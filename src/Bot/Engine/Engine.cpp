@@ -151,6 +151,7 @@ bool Engine::DoNextAction(Unit* /*unit*/, uint32 /*depth*/, bool minimal)
 
     // Update triggers and push default actions
     ProcessTriggers(minimal);
+
     PushDefaultActions();
 
     uint32 iterations = 0;

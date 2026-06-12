@@ -14,6 +14,10 @@
 
 using namespace KarazhanHelpers;
 
+namespace
+{
+}
+
 // Trash
 
 // Mana Warps blow up when they die for massive raid damage

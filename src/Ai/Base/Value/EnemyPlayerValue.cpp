@@ -74,7 +74,6 @@ Unit* EnemyPlayerValue::Calculate()
         std::sort(targets.begin(), targets.end(),
                   [&](Unit const* pUnit1, Unit const* pUnit2)
                   { return bot->GetDistance(pUnit1) < bot->GetDistance(pUnit2); });
-
         return *targets.begin();
     }
 
@@ -116,7 +115,9 @@ Unit* EnemyPlayerValue::Calculate()
 
         if (bot->IsWithinLOSInMap(pTarget) &&
             (controllingCannon || (fabs(bot->GetPositionZ() - pTarget->GetPositionZ()) < 30.0f)))
+        {
             return pTarget;
+        }
     }
 
     // 3. Check party attackers.

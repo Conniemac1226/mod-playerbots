@@ -61,6 +61,10 @@
 constexpr uint32 SPELL_TITAN_GRIP = 49152;
 constexpr uint32 SPELL_DK_FROST_PRESENCE = 48263;
 
+namespace
+{
+}
+
 std::vector<std::string> PlayerbotAI::dispel_whitelist = {
     "mutating injection",
     "frostbolt",
@@ -794,7 +798,9 @@ void PlayerbotAI::HandleTeleportAck()
 
         // apply instance-related strategies after map attach
         if (sPlayerbotAIConfig.applyInstanceStrategies)
+        {
             ApplyInstanceStrategies(bot->GetMapId(), true);
+        }
 
         if (sPlayerbotAIConfig.restrictHealerDPS)
             EvaluateHealerDpsStrategy();
