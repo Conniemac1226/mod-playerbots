@@ -1,6 +1,7 @@
 #include "Playerbots.h"
 #include "ArcatrazActions.h"
 #include "ArcatrazStrategy.h"
+#include "RaidBossHelpers.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -65,6 +66,7 @@ namespace
             }
         }
     }
+
 }
 
 bool AttackMellicharAddsAction::Execute(Event event)
@@ -525,7 +527,8 @@ bool SkyrissIllusionAction::Execute(Event event)
     if (!illusion)
         return false;
 
-    botAI->GetAiObjectContext()->GetValue<GuidVector>("prioritized targets")->Set({illusion->GetGUID()});
+    MarkTargetWithSkull(bot, illusion);
+    SetRtiTarget(botAI, "skull", illusion);
     return Attack(illusion);
 }
 
