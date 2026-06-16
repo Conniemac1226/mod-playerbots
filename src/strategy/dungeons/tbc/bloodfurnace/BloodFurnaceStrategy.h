@@ -12,7 +12,6 @@ public:
     void InitTriggers(std::vector<TriggerNode*>& triggers) override;
     void InitMultipliers(std::vector<Multiplier*>& multipliers) override;
     std::string const getName() override { return "blood furnace"; }
-    uint32 GetType() const override { return STRATEGY_TYPE_DPS | STRATEGY_TYPE_RANGED; }
 };
 
 #endif

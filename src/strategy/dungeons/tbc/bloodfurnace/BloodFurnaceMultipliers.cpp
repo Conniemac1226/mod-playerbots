@@ -5,22 +5,16 @@
 
 float KelidanChannelerMultiplier::GetValue(Action* action)
 {
-    // Block DpsAssist when Shadowmoon Channelers are present - prevents boss/add oscillation
-    if (botAI->IsHeal(bot)) { return 1.0f; }
-    
-    // Detect channelers reliably by entry
     Player* bot = botAI->GetBot();
-    bool channelerPresent = false;
-    if (bot)
+    if (!bot || botAI->IsHeal(bot))
+        return 1.0f;
+
+    Creature* channeler = bot->FindNearestCreature(NPC_SHADOWMOON_CHANNELER, 120.0f);
+    if (channeler && channeler->IsAlive() && channeler->IsInCombat() &&
+        dynamic_cast<DpsAssistAction*>(action))
     {
-        if (Creature* channeler = bot->FindNearestCreature(NPC_SHADOWMOON_CHANNELER, 120.0f))
-            channelerPresent = channeler->IsAlive();
+        return 0.0f; // Focus active channelers before resuming boss DPS.
     }
-    
-    if (channelerPresent && dynamic_cast<DpsAssistAction*>(action))
-    {
-        return 0.0f; // Block DpsAssist when channelers present
-    }
-    
+
     return 1.0f;
 }
