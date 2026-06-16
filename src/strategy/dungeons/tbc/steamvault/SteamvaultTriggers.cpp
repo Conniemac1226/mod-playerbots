@@ -1,8 +1,55 @@
 #include "SteamvaultTriggers.h"
-#include "SpellInfo.h"
+#include "Group.h"
 #include "Unit.h"
-#include "Spell.h"
 #include "Playerbots.h"
+
+namespace
+{
+bool HasAttackableDungeonAdd(PlayerbotAI* botAI, Player* bot, char const* bossName, uint32 addEntry,
+    bool requireSelectable = false)
+{
+    if (!bot || !botAI)
+        return false;
+
+    AiObjectContext* context = botAI->GetAiObjectContext();
+    if (!context)
+        return false;
+
+    Unit* boss = context->GetValue<Unit*>("find target", bossName)->Get();
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    GuidVector targets = context->GetValue<GuidVector>("possible targets no los")->Get();
+    for (ObjectGuid const& target : targets)
+    {
+        Unit* unit = botAI->GetUnit(target);
+        if (!unit || !unit->IsAlive() || unit->GetEntry() != addEntry)
+            continue;
+
+        if (requireSelectable && unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE))
+            continue;
+
+        return true;
+    }
+
+    return false;
+}
+}
+
+bool HasAttackableThespiaWaterElemental(PlayerbotAI* botAI, Player* bot)
+{
+    return HasAttackableDungeonAdd(botAI, bot, "hydromancer thespia", NPC_THESPIA_WATER_ELEMENTAL);
+}
+
+bool HasAttackableSteamriggerMechanic(PlayerbotAI* botAI, Player* bot)
+{
+    return HasAttackableDungeonAdd(botAI, bot, "mekgineer steamrigger", NPC_STEAMRIGGER_MECHANIC);
+}
+
+bool HasAttackableKalithreshDistiller(PlayerbotAI* botAI, Player* bot)
+{
+    return HasAttackableDungeonAdd(botAI, bot, "warlord kalithresh", NPC_NAGA_DISTILLER, true);
+}
 
 // Hydromancer Thespia
 bool ThespiaLightningCloudTrigger::IsActive()
@@ -25,8 +72,21 @@ bool ThespiaLungBurstTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if bot has Lung Burst debuff
-    return bot->HasAura(SPELL_LUNG_BURST);
+    if (bot->HasAura(SPELL_LUNG_BURST))
+        return true;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    for (GroupReference* memberRef = group->GetFirstMember(); memberRef != nullptr; memberRef = memberRef->next())
+    {
+        Player* member = memberRef->GetSource();
+        if (member && member->IsAlive() && member->HasAura(SPELL_LUNG_BURST))
+            return true;
+    }
+
+    return false;
 }
 
 bool ThespiaWaterElementalActiveTrigger::IsActive()
@@ -35,18 +95,7 @@ bool ThespiaWaterElementalActiveTrigger::IsActive()
     if (!bot || !botAI)
         return false;
 
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_THESPIA_WATER_ELEMENTAL)
-            return true;
-    }
-    return false;
+    return HasAttackableThespiaWaterElemental(botAI, bot);
 }
 
 // Mekgineer Steamrigger
@@ -90,23 +139,7 @@ bool SteamriggerMechanicActiveTrigger::IsActive()
     if (!bot || !botAI)
         return false;
 
-    // Check if Steamrigger is in combat first
-    Unit* boss = AI_VALUE2(Unit*, "find target", "mekgineer steamrigger");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_STEAMRIGGER_MECHANIC && unit->IsInCombat())
-            return true;
-    }
-    return false;
+    return HasAttackableSteamriggerMechanic(botAI, bot);
 }
 
 // Warlord Kalithresh
@@ -130,8 +163,21 @@ bool KalithreshImpaleTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Check if bot has impale debuff
-    return bot->HasAura(SPELL_IMPALE);
+    if (bot->HasAura(SPELL_IMPALE))
+        return true;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    for (GroupReference* memberRef = group->GetFirstMember(); memberRef != nullptr; memberRef = memberRef->next())
+    {
+        Player* member = memberRef->GetSource();
+        if (member && member->IsAlive() && member->HasAura(SPELL_IMPALE))
+            return true;
+    }
+
+    return false;
 }
 
 bool KalithreshNagaDistillerActiveTrigger::IsActive()
@@ -140,23 +186,7 @@ bool KalithreshNagaDistillerActiveTrigger::IsActive()
     if (!bot || !botAI)
         return false;
 
-    // Check if Kalithresh is in combat
-    Unit* boss = AI_VALUE2(Unit*, "find target", "warlord kalithresh");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_NAGA_DISTILLER && !unit->HasUnitFlag(UNIT_FLAG_NOT_SELECTABLE))
-            return true;
-    }
-    return false;
+    return HasAttackableKalithreshDistiller(botAI, bot);
 }
 
 bool KalithreshChannelingRageTrigger::IsActive()
@@ -165,9 +195,9 @@ bool KalithreshChannelingRageTrigger::IsActive()
     if (!bot || !botAI)
         return false;
 
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    const GuidVector npcs = AI_VALUE(GuidVector, "possible targets no los");
 
-    for (auto& npc : npcs)
+    for (ObjectGuid const& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
@@ -192,7 +222,6 @@ bool KalithreshSpellReflectionEndedTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check if we previously had spell reflection flag set but boss no longer has the aura
     Value<bool>* spellReflectionActiveValue = botAI->GetAiObjectContext()->GetValue<bool>("spell reflection active");
     if (!spellReflectionActiveValue)
         return false;

@@ -520,16 +520,22 @@ bool SkyrissIllusionAction::Execute(Event event)
         return false;
     }
 
-    Unit* illusion = FindAttackableSkyrissIllusion(botAI, bot, "possible targets");
+    Unit* illusion = FindAttackableSkyrissIllusion(botAI, bot, "possible targets no los");
+    if (!illusion)
+        illusion = FindAttackableSkyrissIllusion(botAI, bot, "possible targets");
     if (!illusion)
         illusion = FindAttackableSkyrissIllusion(botAI, bot, "nearest hostile npcs");
 
     if (!illusion)
         return false;
 
+    if (AI_VALUE(Unit*, "current target") == illusion)
+        return false;
+
+    FocusPriorityTarget(botAI, illusion);
     MarkTargetWithSkull(bot, illusion);
     SetRtiTarget(botAI, "skull", illusion);
-    return botAI->DoSpecificAction("attack rti target");
+    return Attack(illusion);
 }
 
 bool SkyrissFearAction::Execute(Event event)

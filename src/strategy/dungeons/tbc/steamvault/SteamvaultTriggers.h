@@ -4,6 +4,8 @@
 #include "PlayerbotAIConfig.h"
 #include "GenericTriggers.h"
 
+class Player;
+
 // Boss IDs from AzerothCore
 #define NPC_HYDROMANCER_THESPIA         17797
 #define NPC_MEKGINEER_STEAMRIGGER       17796
@@ -46,6 +48,8 @@ public:
     bool IsActive() override;
 };
 
+bool HasAttackableThespiaWaterElemental(PlayerbotAI* botAI, Player* bot);
+
 // Mekgineer Steamrigger
 class SteamriggerShrinkRayTrigger : public Trigger
 {
@@ -75,6 +79,8 @@ public:
     bool IsActive() override;
 };
 
+bool HasAttackableSteamriggerMechanic(PlayerbotAI* botAI, Player* bot);
+
 // Warlord Kalithresh
 class KalithreshSpellReflectionTrigger : public Trigger
 {
@@ -89,6 +95,8 @@ public:
     KalithreshImpaleTrigger(PlayerbotAI* ai) : Trigger(ai, "kalithresh impale") {}
     bool IsActive() override;
 };
+
+bool HasAttackableKalithreshDistiller(PlayerbotAI* botAI, Player* bot);
 
 class KalithreshNagaDistillerActiveTrigger : public Trigger
 {

@@ -73,8 +73,10 @@ void SteamvaultStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 void SteamvaultStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new SteamvaultMultiplier(botAI));
-    // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
+    // WotLK-style targeted suppression: only block generic DPS logic while
+    // the relevant add or reflect mechanic is actually active.
     multipliers.push_back(new ThespiaWaterElementalMultiplier(botAI));
     multipliers.push_back(new SteamriggerMechanicMultiplier(botAI));
+    multipliers.push_back(new KalithreshSpellReflectionMultiplier(botAI));
     multipliers.push_back(new KalithreshDistillerMultiplier(botAI));
 }

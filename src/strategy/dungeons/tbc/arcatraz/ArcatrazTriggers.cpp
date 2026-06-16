@@ -234,7 +234,8 @@ bool SkyrissIllusionTrigger::IsActive()
         return false;
     }
 
-    return HasAttackableSkyrissIllusion(botAI, bot, "possible targets") ||
+    return HasAttackableSkyrissIllusion(botAI, bot, "possible targets no los") ||
+           HasAttackableSkyrissIllusion(botAI, bot, "possible targets") ||
            HasAttackableSkyrissIllusion(botAI, bot, "nearest hostile npcs");
 }
 

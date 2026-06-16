@@ -24,6 +24,13 @@ public:
     float GetValue(Action* action) override;
 };
 
+class KalithreshSpellReflectionMultiplier : public Multiplier
+{
+public:
+    KalithreshSpellReflectionMultiplier(PlayerbotAI* ai) : Multiplier(ai, "kalithresh spell reflection") {}
+    float GetValue(Action* action) override;
+};
+
 class KalithreshDistillerMultiplier : public Multiplier
 {
 public:

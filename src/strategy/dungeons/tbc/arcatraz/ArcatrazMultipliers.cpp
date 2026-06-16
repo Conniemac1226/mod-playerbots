@@ -1,7 +1,38 @@
 #include "Playerbots.h"
 #include "ArcatrazMultipliers.h"
 #include "ArcatrazActions.h"
+#include "ChooseTargetActions.h"
 #include "SharedDefines.h"
+
+namespace
+{
+    bool HasAttackableSkyrissIllusion(PlayerbotAI* botAI, char const* targetList)
+    {
+        if (!botAI)
+            return false;
+
+        Player* bot = botAI->GetBot();
+        if (!bot)
+            return false;
+
+        AiObjectContext* context = botAI->GetAiObjectContext();
+        if (!context)
+            return false;
+
+        GuidVector targets = context->GetValue<GuidVector>(targetList)->Get();
+        for (ObjectGuid const& targetGuid : targets)
+        {
+            Unit* unit = botAI->GetUnit(targetGuid);
+            if (unit && unit->GetEntry() == NPC_HARBINGER_ILLUSION &&
+                unit->IsAlive() && bot->IsValidAttackTarget(unit))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
 
 float ZerekethMultiplier::GetValue(Action* action)
 {
@@ -146,6 +177,21 @@ float SkyrissMultiplier::GetValue(Action* action)
     }
     
     std::string actionName = action->getName();
+
+    if (HasAttackableSkyrissIllusion(botAI, "possible targets no los") ||
+        HasAttackableSkyrissIllusion(botAI, "possible targets") ||
+        HasAttackableSkyrissIllusion(botAI, "nearest hostile npcs"))
+    {
+        if (dynamic_cast<DpsAssistAction*>(action))
+        {
+            return 0.0f;
+        }
+
+        if (action->getThreatType() == Action::ActionThreatType::Aoe)
+        {
+            return 0.0f;
+        }
+    }
 
     // EMERGENCY: Fear management
     if (actionName == "skyriss fear")

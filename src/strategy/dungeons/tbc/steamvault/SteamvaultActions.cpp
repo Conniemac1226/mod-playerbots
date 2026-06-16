@@ -1,15 +1,31 @@
 #include "SteamvaultActions.h"
 #include "SteamvaultTriggers.h"
+#include "Group.h"
+#include "Spell.h"
 #include "SpellInfo.h"
 #include "Unit.h"
-#include "AttackersValue.h"
 #include "Playerbots.h"
 
 // Use NPC and spell IDs from SteamvaultTriggers.h
 
+namespace
+{
+Unit* GetSpellOriginalTarget(Unit* caster, uint32 spellId)
+{
+    if (!caster)
+        return nullptr;
+
+    Spell* spell = caster->FindCurrentSpellBySpellId(spellId);
+    return spell ? spell->GetOriginalTarget() : nullptr;
+}
+}
+
 // Hydromancer Thespia Actions
 bool AvoidLightningCloudAction::Execute(Event event)
 {
+    if (!botAI)
+        return false;
+
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
@@ -23,12 +39,13 @@ bool AvoidLightningCloudAction::Execute(Event event)
     // Must evacuate the area immediately!
     if (boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_CLOUD))
     {
-        // Check if we're the target or near target area
-        float distance = bot->GetDistance(boss);
+        Unit* target = GetSpellOriginalTarget(boss, SPELL_LIGHTNING_CLOUD);
+        float distance = target ? bot->GetDistance(target) : bot->GetDistance(boss);
+
         if (distance < 25.0f) // Lightning Cloud has large AoE
         {
             // EMERGENCY: Move to safe distance
-            float angle = bot->GetAngle(boss) + M_PI;
+            float angle = target && target != bot ? bot->GetAngle(target) + M_PI : bot->GetAngle(boss) + M_PI;
             float x = bot->GetPositionX() + cos(angle) * 30.0f;
             float y = bot->GetPositionY() + sin(angle) * 30.0f;
             float z = bot->GetPositionZ();
@@ -52,30 +69,62 @@ bool AvoidLightningCloudAction::isUseful()
     Unit* boss = bot->FindNearestCreature(NPC_HYDROMANCER_THESPIA, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
-        
-    return boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_CLOUD) && bot->GetDistance(boss) < 25.0f;
+
+    if (!boss->FindCurrentSpellBySpellId(SPELL_LIGHTNING_CLOUD))
+        return false;
+
+    Unit* target = GetSpellOriginalTarget(boss, SPELL_LIGHTNING_CLOUD);
+    return bot->GetDistance(target ? target : boss) < 25.0f;
 }
 
 bool DispelLungBurstAction::Execute(Event event)
 {
+    if (!botAI)
+        return false;
+
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // Try to dispel Lung Burst from self or allies
-    if (bot->HasAura(SPELL_LUNG_BURST))
+    Unit* dispelTarget = nullptr;
+    float lowestHealth = 100.0f;
+
+    auto const considerTarget = [&](Unit* target)
     {
-        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
-        if (spellIdsValue)
+        if (!target || !target->IsAlive() || !target->HasAura(SPELL_LUNG_BURST))
+            return;
+
+        float healthPct = target->GetHealthPct();
+        if (healthPct < lowestHealth)
         {
-            std::list<uint32> spellIds = spellIdsValue->Get();
-            for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+            dispelTarget = target;
+            lowestHealth = healthPct;
+        }
+    };
+
+    considerTarget(bot);
+
+    if (Group* group = bot->GetGroup())
+    {
+        for (GroupReference* memberRef = group->GetFirstMember(); memberRef != nullptr; memberRef = memberRef->next())
+        {
+            considerTarget(memberRef->GetSource());
+        }
+    }
+
+    if (!dispelTarget)
+        return false;
+
+    Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
+    if (spellIdsValue)
+    {
+        std::list<uint32> spellIds = spellIdsValue->Get();
+        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        {
+            uint32 spellId = *it;
+            if (botAI->CanCastSpell(spellId, dispelTarget, false))
             {
-                uint32 spellId = *it;
-                if (botAI->CanCastSpell(spellId, bot, false))
-                {
-                    return botAI->CastSpell(spellId, bot);
-                }
+                return botAI->CastSpell(spellId, dispelTarget);
             }
         }
     }
@@ -98,21 +147,25 @@ bool DispelLungBurstAction::isUseful()
 bool AttackWaterElementalAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI || botAI->IsHeal(bot))
         return false;
 
-    // Find water elementals using proven pattern
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->GetEntry() == NPC_THESPIA_WATER_ELEMENTAL)
+        return false;
+
+    // Find water elementals using the WotLK-style target scan
+    const GuidVector npcs = AI_VALUE(GuidVector, "possible targets no los");
     Unit* elemental = nullptr;
     float closestDistance = 50.0f;
 
-    for (auto& npc : npcs)
+    for (ObjectGuid const& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_THESPIA_WATER_ELEMENTAL && AttackersValue::IsValidTarget(unit, bot))
+        if (unit->GetEntry() == NPC_THESPIA_WATER_ELEMENTAL)
         {
             float distance = bot->GetDistance(unit);
             if (distance < closestDistance)
@@ -134,15 +187,14 @@ bool AttackWaterElementalAction::Execute(Event event)
 bool AttackWaterElementalAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot || !botAI || botAI->IsHeal(bot))
         return false;
 
-    // Use safe Value pattern to prevent crashes
-    Value<bool>* elementalActiveValue = botAI->GetAiObjectContext()->GetValue<bool>("thespia water elemental active");
-    if (!elementalActiveValue)
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->GetEntry() == NPC_THESPIA_WATER_ELEMENTAL)
         return false;
-    
-    return elementalActiveValue->Get();
+
+    return HasAttackableThespiaWaterElemental(botAI, bot);
 }
 
 // Mekgineer Steamrigger Actions
@@ -187,6 +239,9 @@ bool DispelShrinkRayAction::isUseful()
 
 bool AvoidSawBladeAction::Execute(Event event)
 {
+    if (!botAI)
+        return false;
+
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
@@ -200,20 +255,27 @@ bool AvoidSawBladeAction::Execute(Event event)
     // Move immediately when cast starts!
     if (boss->FindCurrentSpellBySpellId(SPELL_SAW_BLADE))
     {
-        // Check if we're the target
-        if (boss->GetTarget() == bot->GetGUID() || boss->GetVictim() == bot)
+        Unit* target = GetSpellOriginalTarget(boss, SPELL_SAW_BLADE);
+        if (target)
         {
-            // EMERGENCY: Move perpendicular to avoid the blade path
-            float angle = boss->GetAngle(bot);
-            float newAngle = angle + (frand(0, 1) > 0.5f ? M_PI / 2 : -M_PI / 2); // Random side
-            
-            float moveX = bot->GetPositionX() + cos(newAngle) * 15.0f;
-            float moveY = bot->GetPositionY() + sin(newAngle) * 15.0f;
-            float moveZ = bot->GetPositionZ();
-
-            return MoveTo(bot->GetMapId(), moveX, moveY, moveZ, false, false, false, true, 
-                        MovementPriority::MOVEMENT_FORCED);
+            if (target != bot)
+                return false;
         }
+        else if (boss->GetTarget() != bot->GetGUID() && boss->GetVictim() != bot)
+        {
+            return false;
+        }
+
+        // EMERGENCY: Move perpendicular to avoid the blade path
+        float angle = target && target != bot ? bot->GetAngle(target) : bot->GetAngle(boss);
+        float newAngle = angle + (frand(0, 1) > 0.5f ? M_PI / 2 : -M_PI / 2); // Random side
+
+        float moveX = bot->GetPositionX() + cos(newAngle) * 15.0f;
+        float moveY = bot->GetPositionY() + sin(newAngle) * 15.0f;
+        float moveZ = bot->GetPositionZ();
+
+        return MoveTo(bot->GetMapId(), moveX, moveY, moveZ, false, false, false, true,
+                    MovementPriority::MOVEMENT_FORCED);
     }
     
     return false;
@@ -228,8 +290,19 @@ bool AvoidSawBladeAction::isUseful()
     Value<bool>* sawBladeValue = botAI->GetAiObjectContext()->GetValue<bool>("steamrigger saw blade");
     if (!sawBladeValue)
         return false;
-    
-    return sawBladeValue->Get();
+
+    if (!sawBladeValue->Get())
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_MEKGINEER_STEAMRIGGER, 100.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    Unit* target = GetSpellOriginalTarget(boss, SPELL_SAW_BLADE);
+    if (target)
+        return target == bot;
+
+    return boss->GetTarget() == bot->GetGUID() || boss->GetVictim() == bot;
 }
 
 bool RemoveElectrifiedNetAction::Execute(Event event)
@@ -275,28 +348,31 @@ bool RemoveElectrifiedNetAction::isUseful()
 bool AttackSteamriggerMechanicAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI || botAI->IsHeal(bot))
         return false;
 
-    // Find mechanics using proven pattern
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->GetEntry() == NPC_STEAMRIGGER_MECHANIC)
+        return false;
+
+    GuidVector targets = AI_VALUE(GuidVector, "possible targets no los");
     Unit* mechanic = nullptr;
     float closestDistance = 50.0f;
 
-    for (auto& npc : npcs)
+    for (ObjectGuid const& npc : targets)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
             continue;
 
-        if (unit->GetEntry() == NPC_STEAMRIGGER_MECHANIC && AttackersValue::IsValidTarget(unit, bot))
+        if (unit->GetEntry() != NPC_STEAMRIGGER_MECHANIC)
+            continue;
+
+        float distance = bot->GetDistance(unit);
+        if (distance < closestDistance)
         {
-            float distance = bot->GetDistance(unit);
-            if (distance < closestDistance)
-            {
-                mechanic = unit;
-                closestDistance = distance;
-            }
+            mechanic = unit;
+            closestDistance = distance;
         }
     }
 
@@ -311,19 +387,22 @@ bool AttackSteamriggerMechanicAction::Execute(Event event)
 bool AttackSteamriggerMechanicAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot || !botAI || botAI->IsHeal(bot))
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("steamrigger mechanic active");
-    if (!boolValue)
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->GetEntry() == NPC_STEAMRIGGER_MECHANIC)
         return false;
-    
-    return boolValue->Get();
+
+    return HasAttackableSteamriggerMechanic(botAI, bot);
 }
 
 // Warlord Kalithresh Actions
 bool StopCastingSpellReflectionAction::Execute(Event event)
 {
+    if (!botAI)
+        return false;
+
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
@@ -333,22 +412,21 @@ bool StopCastingSpellReflectionAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Spell Reflection - boss_warlord_kalithresh.cpp:79-82
-    // Boss casts SPELL_SPELL_REFLECTION every 20-36 seconds via DoCastSelf
-    // CRITICAL: Stop ALL spellcasting immediately for ALL classes!
+    // Boss casts SPELL_SPELL_REFLECTION every 20-36 seconds via DoCastSelf.
+    // Stop boss-targeted harmful spellcasts while the aura is up.
     if (boss->HasAura(SPELL_SPELL_REFLECTION))
     {
-        // Interrupt any current cast for ALL bots (not just casters)
-        if (bot->HasUnitState(UNIT_STATE_CASTING))
+        Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+        if (!currentSpell)
+            currentSpell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+
+        Unit* target = currentSpell ? currentSpell->GetOriginalTarget() : nullptr;
+        if (currentSpell && target == boss && currentSpell->m_spellInfo && !currentSpell->m_spellInfo->IsPositive())
         {
             bot->InterruptNonMeleeSpells(true);
+            botAI->GetAiObjectContext()->GetValue<bool>("spell reflection active")->Set(true);
+            return true;
         }
-        
-        // Set a temporary flag to prevent spell casting
-        botAI->GetAiObjectContext()->GetValue<bool>("spell reflection active")->Set(true);
-        
-        // For melee, continue auto-attacks but no spells
-        // For casters/hybrids, avoid all spell casting temporarily
-        return true;
     }
 
     return false;
@@ -360,15 +438,33 @@ bool StopCastingSpellReflectionAction::isUseful()
     if (!bot || !botAI)
         return false;
 
+    Unit* boss = AI_VALUE2(Unit*, "find target", "warlord kalithresh");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat() || !boss->HasAura(SPELL_SPELL_REFLECTION))
+        return false;
+
     Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("kalithresh spell reflection");
     if (!boolValue)
         return false;
     
-    return boolValue->Get();
+    if (!boolValue->Get())
+        return false;
+
+    if (!bot->IsNonMeleeSpellCast(false))
+        return false;
+
+    Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+    if (!currentSpell)
+        currentSpell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
+
+    Unit* target = currentSpell ? currentSpell->GetOriginalTarget() : nullptr;
+    return currentSpell && target == boss && currentSpell->m_spellInfo && !currentSpell->m_spellInfo->IsPositive();
 }
 
 bool HealImpaleTargetAction::Execute(Event event)
 {
+    if (!botAI)
+        return false;
+
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
@@ -380,6 +476,12 @@ bool HealImpaleTargetAction::Execute(Event event)
 
     Unit* impaleTarget = nullptr;
     float lowestHealth = 100.0f;
+
+    if (bot->HasAura(SPELL_IMPALE))
+    {
+        impaleTarget = bot;
+        lowestHealth = bot->GetHealthPct();
+    }
 
     for (GroupReference* itr = group->GetFirstMember(); itr != nullptr; itr = itr->next())
     {
@@ -421,7 +523,7 @@ bool HealImpaleTargetAction::Execute(Event event)
 bool HealImpaleTargetAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot || !botAI || !botAI->IsHeal(bot))
         return false;
 
     Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("kalithresh impale");
@@ -434,15 +536,19 @@ bool HealImpaleTargetAction::isUseful()
 bool AttackNagaDistillerAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
-    if (!bot)
+    if (!bot || !botAI || botAI->IsHeal(bot))
         return false;
 
-    // Find active Naga Distillers using proven pattern
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->GetEntry() == NPC_NAGA_DISTILLER)
+        return false;
+
+    // Find active Naga Distillers using the WotLK-style target scan
+    const GuidVector npcs = AI_VALUE(GuidVector, "possible targets no los");
     Unit* distiller = nullptr;
     float closestDistance = 100.0f;
 
-    for (auto& npc : npcs)
+    for (ObjectGuid const& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
@@ -471,26 +577,29 @@ bool AttackNagaDistillerAction::Execute(Event event)
 bool AttackNagaDistillerAction::isUseful()
 {
     Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
+    if (!bot || !botAI || botAI->IsHeal(bot))
         return false;
 
-    Value<bool>* boolValue = botAI->GetAiObjectContext()->GetValue<bool>("kalithresh naga distiller active");
-    if (!boolValue)
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget && currentTarget->GetEntry() == NPC_NAGA_DISTILLER)
         return false;
-    
-    return boolValue->Get();
+
+    return HasAttackableKalithreshDistiller(botAI, bot);
 }
 
 bool InterruptDistillerChannelAction::Execute(Event event)
 {
+    if (!botAI)
+        return false;
+
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // Find distiller channeling on Kalithresh using proven pattern
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    // Find distiller channeling on Kalithresh using the WotLK-style target scan
+    const GuidVector npcs = AI_VALUE(GuidVector, "possible targets no los");
 
-    for (auto& npc : npcs)
+    for (ObjectGuid const& npc : npcs)
     {
         Unit* unit = botAI->GetUnit(npc);
         if (!unit || !unit->IsAlive())
@@ -536,6 +645,9 @@ bool InterruptDistillerChannelAction::isUseful()
 
 bool ResumeAttackAfterSpellReflectionAction::Execute(Event event)
 {
+    if (!botAI)
+        return false;
+
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
