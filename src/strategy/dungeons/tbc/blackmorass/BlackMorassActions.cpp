@@ -32,18 +32,44 @@ Unit* FindPortalAdd(PlayerbotAI* botAI, Player* bot)
 
     return target;
 }
+
+bool ShouldDismountForPortalAdd(PlayerbotAI* botAI, Unit* target)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || !bot->IsMounted() || !target)
+        return false;
+
+    Player* master = botAI->GetMaster();
+    if (master && !master->IsMounted())
+        return true;
+
+    return bot->GetExactDist2d(target) <= 20.0f;
+}
 }
 
 // ========== PORTAL/ADD MANAGEMENT ==========
 
-bool AttackPortalAddAction::Execute(Event event)
+bool AttackPortalAddAction::Execute(Event /*event*/)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
     Unit* target = FindPortalAdd(botAI, bot);
-    return target && Attack(target);
+    if (!target)
+        return false;
+
+    if (ShouldDismountForPortalAdd(botAI, target))
+    {
+        bot->Dismount();
+        return true;
+    }
+
+    // Keep the portal-add action active while the bot is still riding in.
+    if (bot->IsMounted())
+        return true;
+
+    return Attack(target);
 }
 
 bool AttackPortalAddAction::isUseful()

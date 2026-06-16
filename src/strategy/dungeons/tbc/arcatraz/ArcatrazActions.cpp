@@ -529,7 +529,7 @@ bool SkyrissIllusionAction::Execute(Event event)
 
     MarkTargetWithSkull(bot, illusion);
     SetRtiTarget(botAI, "skull", illusion);
-    return Attack(illusion);
+    return botAI->DoSpecificAction("attack rti target");
 }
 
 bool SkyrissFearAction::Execute(Event event)
