@@ -54,7 +54,6 @@ void ManaTombsStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 
 void ManaTombsStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
-    // CRITICAL: Block DpsAssist when beacons present - prevents boss/add oscillation
-    // RESEARCHED: Following HallsOfLightningStrategy.cpp:37-40 pattern
+    multipliers.push_back(new PandemoniusDarkShellMultiplier(botAI));
     multipliers.push_back(new EtherealBeaconMultiplier(botAI));
 }

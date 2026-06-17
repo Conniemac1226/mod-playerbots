@@ -80,7 +80,10 @@ float OmroggMultiplier::GetValue(Action* action)
     
     if (dynamic_cast<MoveFromBlastWaveAction*>(action))
     {
-        if (boss->HasAura(SPELL_BURNING_MAUL))
+        if ((boss->HasAura(SPELL_BURNING_MAUL) ||
+             boss->FindCurrentSpellBySpellId(SPELL_BURNING_MAUL)) &&
+            boss->HasUnitState(UNIT_STATE_CASTING) &&
+            boss->FindCurrentSpellBySpellId(SPELL_BLAST_WAVE))
         {
             float distance = bot->GetExactDist2d(boss);
             if (distance < 12.0f)
@@ -93,7 +96,8 @@ float OmroggMultiplier::GetValue(Action* action)
     
     if (dynamic_cast<AvoidBurningMaulAction*>(action))
     {
-        if (boss->HasAura(SPELL_BURNING_MAUL) || boss->FindCurrentSpellBySpellId(SPELL_BURNING_MAUL))
+        if (boss->HasAura(SPELL_BURNING_MAUL) ||
+            boss->FindCurrentSpellBySpellId(SPELL_BURNING_MAUL))
         {
             return 1.0f;
         }
@@ -113,7 +117,8 @@ float KargathMultiplier::GetValue(Action* action)
     
     if (dynamic_cast<AvoidBladeDanceAction*>(action))
     {
-        if (boss->HasAura(SPELL_BLADE_DANCE_DMG) || boss->FindCurrentSpellBySpellId(SPELL_BLADE_DANCE_DMG))
+        if (boss->HasUnitState(UNIT_STATE_CASTING) &&
+            boss->FindCurrentSpellBySpellId(SPELL_BLADE_DANCE_TARGETING))
         {
             float distance = bot->GetExactDist2d(boss);
             if (distance < 10.0f)

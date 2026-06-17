@@ -21,13 +21,6 @@ public:
     bool IsActive() override;
 };
 
-class GargolmarSurgeTrigger : public Trigger
-{
-public:
-    GargolmarSurgeTrigger(PlayerbotAI* ai) : Trigger(ai, "gargolmar surge") {}
-    bool IsActive() override;
-};
-
 // Omor the Unscarred Triggers
 class FiendishHoundActiveTrigger : public Trigger
 {
@@ -54,28 +47,6 @@ class OmorDemonicShieldTrigger : public Trigger
 {
 public:
     OmorDemonicShieldTrigger(PlayerbotAI* ai) : Trigger(ai, "omor demonic shield") {}
-    bool IsActive() override;
-};
-
-
-class OmorTreacheryCastTrigger : public Trigger
-{
-public:
-    OmorTreacheryCastTrigger(PlayerbotAI* ai) : Trigger(ai, "omor treachery cast") {}
-    bool IsActive() override;
-};
-
-class OmorDebuffAvoidanceTrigger : public Trigger
-{
-public:
-    OmorDebuffAvoidanceTrigger(PlayerbotAI* ai) : Trigger(ai, "omor debuff avoidance") {}
-    bool IsActive() override;
-};
-
-class OmorClearSpreadTrigger : public Trigger
-{
-public:
-    OmorClearSpreadTrigger(PlayerbotAI* ai) : Trigger(ai, "omor clear spread") {}
     bool IsActive() override;
 };
 

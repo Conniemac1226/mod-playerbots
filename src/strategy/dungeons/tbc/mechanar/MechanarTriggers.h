@@ -57,14 +57,6 @@ public:
     bool IsActive() override;
 };
 
-
-class RagingFlamesTargetTrigger : public Trigger
-{
-public:
-    RagingFlamesTargetTrigger(PlayerbotAI* botAI) : Trigger(botAI, "should target raging flames") {}
-    bool IsActive() override;
-};
-
 // RESEARCHED: Pattern from WOTLK Oculus UromArcaneExplosionTrigger
 class RagingFlamesInfernoTrigger : public Trigger
 {

@@ -3,7 +3,6 @@
 
 #include "Action.h"
 #include "AttackAction.h"
-#include "ChangeTargetAction.h"
 #include "MovementActions.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
@@ -47,10 +46,8 @@ enum MechanarSpells
     SPELL_FROST_ATTACK              = 45196,
     MECH_SPELL_ARCANE_BLAST         = 35314,
     MECH_SPELL_DRAGONS_BREATH       = 35250,
-    SPELL_RAGING_FLAMES_AREA_AURA   = 35281,
     SPELL_INFERNO                   = 35268,
-    SPELL_INFERNO_DAMAGE            = 35283,
-    
+
     // Pathaleon the Calculator
     MECH_SPELL_ARCANE_EXPLOSION     = 15453,
     MECH_SPELL_DISGRUNTLED_ANGER    = 35289,
@@ -60,10 +57,6 @@ enum MechanarSpells
     MECH_SPELL_FRENZY               = 36992,
     MECH_SPELL_SUICIDE              = 35301
 };
-
-extern std::map<ObjectGuid, uint32> g_capacitus_lastPolarityTime;
-extern std::map<ObjectGuid, bool> g_capacitus_hasPositive;
-extern std::map<ObjectGuid, bool> g_capacitus_hasNegative;
 
 // ========== MECHANO LORD CAPACITUS ACTIONS ==========
 
@@ -137,14 +130,6 @@ class SepethreaArcaneBlastAction : public Action
 {
 public:
     SepethreaArcaneBlastAction(PlayerbotAI* ai) : Action(ai, "handle arcane blast") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
-
-class SepethreaTargetElementalAction : public ai::ChangeTargetAction
-{
-public:
-    SepethreaTargetElementalAction(PlayerbotAI* ai) : ChangeTargetAction(ai, "focus boss not flames") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

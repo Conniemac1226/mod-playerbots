@@ -18,15 +18,17 @@ const uint32 SH_SPELL_FEAR = 30584;
 const uint32 SPELL_THUNDERCLAP = 30633;
 const uint32 SPELL_BURNING_MAUL = 30598;
 
-const uint32 SPELL_BLADE_DANCE_DMG = 30739;
+const uint32 SPELL_BLADE_DANCE_TARGETING = 30738;
 
 const uint32 NPC_SHATTERED_ASSASSIN = 17695;
 const uint32 NPC_PEON = 17083;
 
 // Gauntlet fire arrow mechanics
 const uint32 NPC_SH_ARCHER = 17427;
+const uint32 NPC_SH_FLAME_ARROW = 17687;
 const uint32 SPELL_SHOOT_FLAME_ARROW = 30952;
 const uint32 SPELL_FLAME_ARROW_FIRE = 30953;
+const uint32 GO_BLAZE = 181915;
 
 class AvoidShadowFissureAction : public MovementAction
 {

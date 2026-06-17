@@ -96,7 +96,10 @@ bool MoveFromBlastWaveAction::Execute(Event event)
         return false;
     }
     
-    if (!boss->HasAura(SPELL_BURNING_MAUL))
+    if ((!boss->HasAura(SPELL_BURNING_MAUL) &&
+         !boss->FindCurrentSpellBySpellId(SPELL_BURNING_MAUL)) ||
+        !boss->HasUnitState(UNIT_STATE_CASTING) ||
+        !boss->FindCurrentSpellBySpellId(SPELL_BLAST_WAVE))
     {
         return false;
     }
@@ -132,7 +135,8 @@ bool AvoidBurningMaulAction::Execute(Event event)
         return false;
     }
     
-    if (boss->HasAura(SPELL_BURNING_MAUL))
+    if (boss->HasAura(SPELL_BURNING_MAUL) ||
+        boss->FindCurrentSpellBySpellId(SPELL_BURNING_MAUL))
     {
         float safeDistance = 8.0f;
         float currentDist = bot->GetExactDist2d(boss);
@@ -169,7 +173,8 @@ bool AvoidBladeDanceAction::Execute(Event event)
         return false;
     }
     
-    if (boss->HasAura(SPELL_BLADE_DANCE_DMG) || boss->FindCurrentSpellBySpellId(SPELL_BLADE_DANCE_DMG))
+    if (boss->HasUnitState(UNIT_STATE_CASTING) &&
+        boss->FindCurrentSpellBySpellId(SPELL_BLADE_DANCE_TARGETING))
     {
         float safeDistance = 10.0f;
         float currentDist = bot->GetExactDist2d(boss);
@@ -202,9 +207,7 @@ bool KillShatteredAssassinsAction::Execute(Event event)
     {
         return false;
     }
-    
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    
+
     const GuidVector attackers = AI_VALUE(GuidVector, "attackers");
     for (auto& attacker : attackers)
     {
@@ -235,9 +238,7 @@ bool NetheKursePeonPriorityAction::Execute(Event event)
     {
         return false;
     }
-    
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    
+
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
@@ -275,10 +276,15 @@ bool AvoidFlameArrowFireAction::isUseful()
 
 bool AvoidFlameArrowFireAction::IsFireNearby()
 {
+    if (bot->HasAura(SPELL_FLAME_ARROW_FIRE))
+    {
+        return true;
+    }
+
     // Check for fire effects or triggers in the area
     std::list<GameObject*> gameObjects;
-    bot->GetGameObjectListWithEntryInGrid(gameObjects, 182592, 10.0f); // Fire visual objects
-    
+    bot->GetGameObjectListWithEntryInGrid(gameObjects, GO_BLAZE, 10.0f); // Fire visual objects
+
     if (!gameObjects.empty())
     {
         return true;
@@ -298,9 +304,9 @@ bool AvoidFlameArrowFireAction::IsFireNearby()
             if (bot->GetDistance(unit) < 8.0f)
                 return true;
         }
-        
+
         // Check for invisible triggers that represent fire patches
-        if (unit->GetEntry() == 17662 || unit->GetEntry() == 18370) // Common fire trigger IDs
+        if (unit->GetEntry() == NPC_SH_FLAME_ARROW)
         {
             if (bot->GetDistance(unit) < 8.0f)
                 return true;
@@ -353,9 +359,9 @@ Position AvoidFlameArrowFireAction::GetSafePosition()
             Unit* unit = botAI->GetUnit(guid);
             if (!unit)
                 continue;
-                
-            if (unit->HasAura(SPELL_FLAME_ARROW_FIRE) || 
-                unit->GetEntry() == 17662 || unit->GetEntry() == 18370)
+
+            if (unit->HasAura(SPELL_FLAME_ARROW_FIRE) ||
+                unit->GetEntry() == NPC_SH_FLAME_ARROW)
             {
                 float fireDist = unit->GetDistance2d(newX, newY);
                 if (fireDist < 8.0f)
@@ -370,7 +376,7 @@ Position AvoidFlameArrowFireAction::GetSafePosition()
         
         // Also check for game objects
         std::list<GameObject*> gameObjects;
-        bot->GetGameObjectListWithEntryInGrid(gameObjects, 182592, 20.0f);
+        bot->GetGameObjectListWithEntryInGrid(gameObjects, GO_BLAZE, 20.0f);
         for (auto* obj : gameObjects)
         {
             float fireDist = obj->GetDistance2d(newX, newY);

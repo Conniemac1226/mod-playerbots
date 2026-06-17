@@ -3,10 +3,10 @@
 
 #include "Multiplier.h"
 
-class ManaTombsMultiplier : public Multiplier
+class PandemoniusDarkShellMultiplier : public Multiplier
 {
 public:
-    ManaTombsMultiplier(PlayerbotAI* ai) : Multiplier(ai, "mana tombs") {}
+    PandemoniusDarkShellMultiplier(PlayerbotAI* ai) : Multiplier(ai, "dark shell") {}
     float GetValue(Action* action) override;
 };
 

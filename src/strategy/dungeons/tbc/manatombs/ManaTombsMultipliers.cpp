@@ -1,12 +1,42 @@
 #include "ManaTombsMultipliers.h"
 #include "ManaTombsActions.h"
+#include "Ai/Base/Actions/GenericActions.h"
+#include "Ai/Base/Actions/GenericSpellActions.h"
 #include "ChooseTargetActions.h"
-#include "ManaTombsTriggers.h"
 
-float ManaTombsMultiplier::GetValue(Action* action)
+float PandemoniusDarkShellMultiplier::GetValue(Action* action)
 {
-    // Following proven pattern of minimal multipliers to avoid priority violations
-    // All priorities are set directly in strategy triggers
+    if (!action)
+        return 1.0f;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "pandemonius");
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+    {
+        return 1.0f;
+    }
+
+    bool darkShellActive = boss->HasAura(SPELL_DARK_SHELL) ||
+        (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_DARK_SHELL));
+    if (!darkShellActive)
+    {
+        return 1.0f;
+    }
+
+    if (dynamic_cast<AttackAction*>(action) || dynamic_cast<PetAttackAction*>(action))
+    {
+        return 0.0f;
+    }
+
+    auto castSpellAction = dynamic_cast<CastSpellAction*>(action);
+    if (castSpellAction && !dynamic_cast<CastHealingSpellAction*>(action))
+    {
+        if (castSpellAction->GetTarget() == boss ||
+            castSpellAction->getThreatType() == Action::ActionThreatType::Aoe)
+        {
+            return 0.0f;
+        }
+    }
+
     return 1.0f;
 }
 

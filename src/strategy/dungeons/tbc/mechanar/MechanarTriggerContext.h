@@ -19,7 +19,6 @@ public:
         creators["raging flames too close"] = &MechanarTriggerContext::raging_flames_too_close;
         creators["raging flames inferno"] = &MechanarTriggerContext::raging_flames_inferno;
         creators["raging flames fire trail"] = &MechanarTriggerContext::raging_flames_fire_trail;
-        creators["should target raging flames"] = &MechanarTriggerContext::should_target_raging_flames;
         creators["dragons breath danger"] = &MechanarTriggerContext::dragons_breath_danger;
         
         // Pathaleon the Calculator
@@ -45,7 +44,6 @@ private:
     static Trigger* raging_flames_too_close(PlayerbotAI* botAI) { return new RagingFlamesTooCloseTrigger(botAI); }
     static Trigger* raging_flames_inferno(PlayerbotAI* botAI) { return new RagingFlamesInfernoTrigger(botAI); }
     static Trigger* raging_flames_fire_trail(PlayerbotAI* botAI) { return new RagingFlamesFireTrailTrigger(botAI); }
-    static Trigger* should_target_raging_flames(PlayerbotAI* botAI) { return new RagingFlamesTargetTrigger(botAI); }
     static Trigger* dragons_breath_danger(PlayerbotAI* botAI) { return new DragonsBreathDangerTrigger(botAI); }
     
     // Pathaleon the Calculator

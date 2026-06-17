@@ -13,8 +13,9 @@ bool PandemoniusDarkShellTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Dark Shell buff check - boss_pandemonius.cpp:78
-    return boss->HasAura(SPELL_DARK_SHELL);
+    // RESEARCHED: Dark Shell is cast on self and persists as an aura.
+    return boss->HasAura(SPELL_DARK_SHELL) ||
+           (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_DARK_SHELL));
 }
 
 // Void Blast spread check
@@ -27,6 +28,12 @@ bool PandemoniusVoidBlastTrigger::IsActive()
     Unit* boss = bot->FindNearestCreature(NPC_PANDEMONIUS, 50.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
+
+    if (!boss->HasUnitState(UNIT_STATE_CASTING) ||
+        !boss->FindCurrentSpellBySpellId(SPELL_VOID_BLAST))
+    {
+        return false;
+    }
 
     // Check if players are too close together
     Group* group = bot->GetGroup();

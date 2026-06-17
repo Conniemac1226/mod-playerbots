@@ -25,7 +25,6 @@ enum HellfireRampartsNpcs
 enum GargolmarSpells
 {
     SPELL_GARGOLMAR_MORTAL_WOUND = 30641,
-    SPELL_SURGE                 = 34645,
     SPELL_RETALIATION           = 22857
 };
 
@@ -67,14 +66,6 @@ public:
     bool isUseful() override;
 };
 
-class GargolmarSurgeAction : public MovementAction
-{
-public:
-    GargolmarSurgeAction(PlayerbotAI* ai) : MovementAction(ai, "gargolmar surge") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
-
 // Omor the Unscarred Actions
 class AttackFiendishHoundAction : public AttackAction
 {
@@ -92,10 +83,10 @@ public:
     bool isUseful() override;
 };
 
-class OmorTreacherousAuraAction : public Action
+class OmorTreacherousAuraAction : public MovementAction
 {
 public:
-    OmorTreacherousAuraAction(PlayerbotAI* ai) : Action(ai, "omor treacherous aura") {}
+    OmorTreacherousAuraAction(PlayerbotAI* ai) : MovementAction(ai, "omor treacherous aura") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };
@@ -104,31 +95,6 @@ class OmorDemonicShieldAction : public Action
 {
 public:
     OmorDemonicShieldAction(PlayerbotAI* ai) : Action(ai, "omor demonic shield") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
-
-
-class OmorTreacherySpreadAction : public MovementAction
-{
-public:
-    OmorTreacherySpreadAction(PlayerbotAI* ai) : MovementAction(ai, "omor treachery spread") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
-
-class OmorDebuffAvoidanceAction : public MovementAction
-{
-public:
-    OmorDebuffAvoidanceAction(PlayerbotAI* ai) : MovementAction(ai, "omor debuff avoidance") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
-
-class OmorClearSpreadAction : public Action
-{
-public:
-    OmorClearSpreadAction(PlayerbotAI* ai) : Action(ai, "omor clear spread") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

@@ -1,7 +1,5 @@
 #include "HellfireRampartsActions.h"
 #include "Playerbots.h"
-#include "Group.h"
-#include <cfloat>
 
 // Watchkeeper Gargolmar - Attack Hellfire Watchers at 50% health
 bool AttackHellfireWatcherAction::Execute(Event event)
@@ -56,14 +54,11 @@ bool GargolmarRetaliationAction::Execute(Event event)
     // RESEARCHED: Retaliation buff active - boss_watchkeeper_gargolmar.cpp:71
     if (boss->HasAura(SPELL_RETALIATION))
     {
-        // Ranged classes should switch to ranged attacks
-        if (bot->getClass() == CLASS_HUNTER || bot->getClass() == CLASS_MAGE || 
-            bot->getClass() == CLASS_PRIEST || bot->getClass() == CLASS_WARLOCK)
+        if (!botAI->IsTank(bot))
         {
             float distance = bot->GetDistance(boss);
-            if (distance < 10.0f)
+            if (distance < 15.0f)
             {
-                // Move to ranged position using MoveAway pattern from WOTLK
                 return MoveAway(boss, 15.0f - distance);
             }
         }
@@ -83,55 +78,15 @@ bool GargolmarRetaliationAction::isUseful()
         return false;
 
     // RESEARCHED: Retaliation at 20% health - boss_watchkeeper_gargolmar.cpp:70
-    return boss->HasAura(SPELL_RETALIATION) && bot->GetDistance(boss) < 10.0f;
-}
-
-// Handle Gargolmar's Surge (targets farthest player)
-bool GargolmarSurgeAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "watchkeeper gargolmar");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // RESEARCHED: Surge targets min distance (farthest) - boss_watchkeeper_gargolmar.cpp:91
-    if (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_SURGE))
-    {
-        // If we're ranged and far away, we might be the target - move closer
-        float distance = bot->GetDistance(boss);
-        if (distance > 20.0f)
-        {
-            // Move closer to avoid being surge target
-            float angle = bot->GetAngle(boss);
-            float x = bot->GetPositionX() + cos(angle) * 5.0f;
-            float y = bot->GetPositionY() + sin(angle) * 5.0f;
-            float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
-        }
-    }
-
-    return false;
-}
-
-bool GargolmarSurgeAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "watchkeeper gargolmar");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // Only useful for ranged who are too far
-    return bot->GetDistance(boss) > 20.0f;
+    return boss->HasAura(SPELL_RETALIATION) && !botAI->IsTank(bot) && bot->GetDistance(boss) < 15.0f;
 }
 
 // Omor the Unscarred - Attack Fiendish Hounds
-bool AttackFiendishHoundAction::isUseful() { return !botAI->IsHeal(bot); }
+bool AttackFiendishHoundAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    return bot && !botAI->IsHeal(bot);
+}
 bool AttackFiendishHoundAction::Execute(Event event)
 {
     Unit* hound = nullptr;
@@ -212,24 +167,26 @@ bool OmorShadowBoltInterruptAction::isUseful()
     return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_SHADOW_BOLT);
 }
 
-// Handle Treacherous Aura
+// Handle Treacherous Aura on the bot that actually received it
 bool OmorTreacherousAuraAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // RESEARCHED: Treacherous Aura from boss_omor_the_unscarred.cpp:36
-    // Some cores use a different aura id on players (heroic): SPELL_TREACHEROUS_AURA_H
-    if (bot->HasAura(SPELL_TREACHEROUS_AURA) || bot->HasAura(SPELL_TREACHEROUS_AURA_H))
+    bool const hasAura = bot->HasAura(SPELL_TREACHEROUS_AURA) || bot->HasAura(SPELL_TREACHEROUS_AURA_H);
+    if (!hasAura)
+        return false;
+
+    bool const isTank = botAI->IsTank(bot);
+    bool const isMelee = botAI->IsMelee(bot);
+    bool shouldStayOut = isMelee;
+
+    // Keep the tank planted; only non-tanks step out for the debuff.
+    if (isTank)
     {
-        // Emergency: ensure immediate group spread even if cast trigger was missed
-        if (AI_VALUE(float, "disperse distance") < 15.0f)
-        {
-            SET_AI_VALUE(float, "disperse distance", 20.0f);
-        }
-        // Dispel if possible
-        Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
+        Value<std::list<uint32>>* spellIdsValue =
+            botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
         if (spellIdsValue)
         {
             std::list<uint32> spellIds = spellIdsValue->Get();
@@ -242,11 +199,41 @@ bool OmorTreacherousAuraAction::Execute(Event event)
                 }
             }
         }
-        // Even if we cannot dispel, consider the spread action handled
-        return true;
+
+        return false;
     }
 
-    return false;
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (boss && boss->IsAlive() && boss->IsInCombat())
+    {
+        float const distance = bot->GetExactDist2d(boss);
+        if (distance < 20.0f)
+        {
+            if (MoveAway(boss, 20.0f - distance))
+            {
+                return true;
+            }
+
+            shouldStayOut = true;
+        }
+    }
+
+    Value<std::list<uint32>>* spellIdsValue =
+        botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
+    if (spellIdsValue)
+    {
+        std::list<uint32> spellIds = spellIdsValue->Get();
+        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        {
+            uint32 spellId = *it;
+            if (botAI->CanCastSpell(spellId, bot, false))
+            {
+                return botAI->CastSpell(spellId, bot);
+            }
+        }
+    }
+
+    return shouldStayOut;
 }
 
 bool OmorTreacherousAuraAction::isUseful()
@@ -255,7 +242,7 @@ bool OmorTreacherousAuraAction::isUseful()
     if (!bot)
         return false;
 
-    return bot->HasAura(SPELL_TREACHEROUS_AURA);
+    return bot->HasAura(SPELL_TREACHEROUS_AURA) || bot->HasAura(SPELL_TREACHEROUS_AURA_H);
 }
 
 // Handle Omor's Demonic Shield at 21% health
@@ -311,23 +298,14 @@ bool NazanLiquidFireAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: Liquid Fire is a ground effect, not an NPC - need to check for area effect
-    // Check for nearby fire patches using direct creature search
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    for (auto& guid : npcs)
+    // Liquid Fire is represented by summon trigger creature 22515.
+    Unit* liquidFire = bot->FindNearestCreature(NPC_LIQUID_FIRE, 8.0f);
+    if (liquidFire)
     {
-        Unit* unit = botAI->GetUnit(guid);
-        if (!unit)
-            continue;
-            
-        // RESEARCHED: Liquid Fire summoned by SPELL_SUMMON_LIQUID_FIRE (31706) - HellfireRampartsActions.h:21
-        if (unit->GetEntry() == NPC_LIQUID_FIRE)
+        float distance = bot->GetDistance(liquidFire);
+        if (distance < 8.0f)
         {
-            float distance = bot->GetDistance(unit);
-            if (distance < 8.0f)
-            {
-                return MoveAway(unit, 10.0f - distance);
-            }
+            return MoveAway(liquidFire, 10.0f - distance);
         }
     }
 
@@ -340,16 +318,10 @@ bool NazanLiquidFireAction::isUseful()
     if (!bot)
         return false;
 
-    // Check if any liquid fire patches are near the bot
-    GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    for (auto& guid : npcs)
+    Unit* liquidFire = bot->FindNearestCreature(NPC_LIQUID_FIRE, 8.0f);
+    if (liquidFire)
     {
-        Unit* unit = botAI->GetUnit(guid);
-        if (unit && unit->GetEntry() == NPC_LIQUID_FIRE)
-        {
-            if (bot->GetDistance(unit) < 8.0f)
-                return true;
-        }
+        return bot->GetDistance(liquidFire) < 8.0f;
     }
 
     return false;
@@ -531,96 +503,4 @@ bool NazanBellowingRoarAction::isUseful()
         return false;
 
     return bot->HasAura(SPELL_BELLOWING_ROAR);
-}
-
-
-// NEW HEROIC-READY SPREAD MECHANICS FOR OMOR
-
-bool OmorTreacherySpreadAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    // Ulduar/ICC Pattern: Use disperse distance AI value for immediate spread
-    // RESEARCHED: Same pattern used in RaidUlduarActions.cpp:2269 (Mimiron) and RaidIccActions.cpp
-    SET_AI_VALUE(float, "disperse distance", 20.0f);
-    
-    return true;
-}
-
-bool OmorTreacherySpreadAction::isUseful()
-{
-    // Always useful when trigger activates - this is emergency spread
-    return true;
-}
-
-bool OmorDebuffAvoidanceAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    // Find the closest player with Treacherous Aura debuff
-    Unit* debuffedPlayer = nullptr;
-    float closestDistance = FLT_MAX;
-    
-    GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
-    for (const auto& guid : friendlyUnits)
-    {
-        Unit* unit = botAI->GetUnit(guid);
-        if (unit && unit != bot && unit->IsAlive() && (unit->HasAura(SPELL_TREACHEROUS_AURA) || unit->HasAura(SPELL_TREACHEROUS_AURA_H)))
-        {
-            float distance = bot->GetDistance(unit);
-            if (distance < closestDistance)
-            {
-                closestDistance = distance;
-                debuffedPlayer = unit;
-            }
-        }
-    }
-    
-    if (debuffedPlayer)
-    {
-        // Ensure group-wide spread is active during this window
-        if (AI_VALUE(float, "disperse distance") < 15.0f)
-        {
-            SET_AI_VALUE(float, "disperse distance", 20.0f);
-        }
-        // Move away only if too close
-        if (closestDistance < 15.0f)
-        {
-            return MoveAway(debuffedPlayer, 25.0f - closestDistance, false);
-        }
-        return true;
-    }
-
-    return false;
-}
-
-bool OmorDebuffAvoidanceAction::isUseful()
-{
-    return true; // Always useful when trigger activates
-}
-
-bool OmorClearSpreadAction::Execute(Event event)
-{
-    // Clear the disperse distance when cast finishes or fight ends
-    if (AI_VALUE(float, "disperse distance") > 0.0f)
-    {
-        SET_AI_VALUE(float, "disperse distance", 0.0f);
-        return true;
-    }
-    return false;
-}
-
-bool OmorClearSpreadAction::isUseful()
-{
-    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
-    if (!boss)
-        return true; // Clear spread when boss is gone
-    
-    // Clear spread when Omor is not casting Treacherous Aura
-    return !(boss->HasUnitState(UNIT_STATE_CASTING) && 
-             boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA));
 }

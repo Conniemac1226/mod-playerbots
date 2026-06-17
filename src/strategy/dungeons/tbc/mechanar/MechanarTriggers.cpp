@@ -116,35 +116,6 @@ bool DragonsBreathDangerTrigger::IsActive()
     return false;
 }
 
-
-bool RagingFlamesTargetTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-    
-    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-    
-    if (botAI->IsTank(bot) || botAI->IsHeal(bot))
-        return false;
-    
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    
-    for (auto& npc : npcs)
-    {
-        Unit* unit = botAI->GetUnit(npc);
-        if (!unit || !unit->IsAlive())
-            continue;
-
-        if (unit->GetEntry() == NPC_RAGING_FLAMES)
-            return true;
-    }
-    
-    return false;
-}
-
 // Raging Flames Inferno detection
 bool RagingFlamesInfernoTrigger::IsActive()
 {
@@ -184,11 +155,23 @@ bool RagingFlamesFireTrailTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check if bot is standing in fire trail
-    return bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA);
+    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    float const dangerDistance = bot->GetMap()->IsHeroic() ? 18.0f : 16.0f;
+
+    for (auto& npc : npcs)
+    {
+        Unit* flame = botAI->GetUnit(npc);
+        if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
+            continue;
+
+        if (bot->GetDistance(flame) < dangerDistance)
+            return true;
+    }
+
+    return false;
 }
 
-// Universal trigger for ALL bots to avoid Raging Flames area aura
+// Universal trigger for ALL bots to avoid drifting into the flame path.
 bool RagingFlamesTooCloseTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -212,7 +195,7 @@ bool RagingFlamesTooCloseTrigger::IsActive()
         if (flame->GetVictim() == bot)
             return false;
             
-        if (bot->GetDistance(flame) < 15.0f) // Increased safe distance for area aura + inferno
+        if (bot->GetDistance(flame) < 15.0f) // Keep bystanders out of the flame path.
             return true;
     }
     

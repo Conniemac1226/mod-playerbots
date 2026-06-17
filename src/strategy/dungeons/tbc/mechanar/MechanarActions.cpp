@@ -6,10 +6,6 @@
 
 using namespace VMAP;
 
-// Per-bot state management
-std::map<ObjectGuid, uint32> g_capacitus_lastPolarityTime;
-std::map<ObjectGuid, bool> g_capacitus_hasPositive;
-std::map<ObjectGuid, bool> g_capacitus_hasNegative;
 // Sepethrea kiting state
 static std::map<ObjectGuid, uint32> g_sepethrea_lastKiteMove;
 
@@ -387,22 +383,11 @@ bool CapacitusPolarityShiftAction::Execute(Event event)
     if (!bot)
         return false;
 
-    ObjectGuid botGuid = bot->GetGUID();
-    uint32 currentTime = getMSTime();
-
     bool hasPositive = bot->HasAura(SPELL_POSITIVE_POLARITY);
     bool hasNegative = bot->HasAura(SPELL_NEGATIVE_POLARITY);
 
     if (!hasPositive && !hasNegative)
-    {
-        g_capacitus_hasPositive[botGuid] = false;
-        g_capacitus_hasNegative[botGuid] = false;
         return false;
-    }
-
-    g_capacitus_hasPositive[botGuid] = hasPositive;
-    g_capacitus_hasNegative[botGuid] = hasNegative;
-    g_capacitus_lastPolarityTime[botGuid] = currentTime;
 
     const GuidVector members = AI_VALUE(GuidVector, "group members");
     Unit* closestSamePolarityAlly = nullptr;
@@ -646,14 +631,10 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     bool const isHealer = botAI->IsHeal(bot);
     float const flameDistance = bot->GetDistance(targetingFlame);
     float const minFlameDistance = GetMinimumFlameDistance(botAI, bot->GetPosition());
-    bool const inFire = bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA) || bot->HasAura(SPELL_INFERNO_DAMAGE);
-    bool const urgent = inFire || flameDistance < (heroic ? 15.0f : 13.0f) || minFlameDistance < (heroic ? 13.0f : 11.0f);
+    bool const urgent =
+        flameDistance < (heroic ? 16.0f : 14.0f) || minFlameDistance < (heroic ? 14.0f : 12.0f);
 
-    // If the fixated bot has a clean gap, let normal DPS/healing continue.
-    if (!urgent && flameDistance > (heroic ? 26.0f : 23.0f) && minFlameDistance > (heroic ? 19.0f : 16.0f))
-        return false;
-
-    // Keep casts only when movement is not urgent.
+    // Kite immediately once fixated; the move throttle below prevents path spam.
     if (bot->IsNonMeleeSpellCast(false))
     {
         if (Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
@@ -677,12 +658,20 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     Position escapePos;
     float const preferredDistance = heroic ? (isHealer ? 24.0f : 22.0f) : (isHealer ? 21.0f : 19.0f);
     float const requiredFlameDistance = heroic ? (urgent ? 17.0f : 15.0f) : (urgent ? 14.0f : 12.0f);
+    auto const moveForced = [this, bot](Position const& pos)
+    {
+        return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                      false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+    };
+
     if (SelectSepethreaEscapePosition(botAI, bot, preferredDistance, requiredFlameDistance, escapePos, targetingFlame) ||
         SelectSepethreaEscapePosition(botAI, bot, preferredDistance - 3.0f, requiredFlameDistance - 4.0f, escapePos, targetingFlame))
     {
-        lastMove = now;
-        return MoveTo(bot->GetMapId(), escapePos.m_positionX, escapePos.m_positionY, escapePos.m_positionZ,
-                      false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        if (moveForced(escapePos))
+        {
+            lastMove = now;
+            return true;
+        }
     }
 
     Position away;
@@ -693,9 +682,15 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
     away.m_positionZ = bot->GetPositionZ();
     Position safeAway = ConstrainToRoom(away, botAI);
 
-    lastMove = now;
-    return MoveTo(bot->GetMapId(), safeAway.m_positionX, safeAway.m_positionY, safeAway.m_positionZ,
-                  false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+    if (IsPositionSafe(safeAway, botAI) && IsPathClear(bot->GetPosition(), safeAway, botAI) &&
+        IsPathSafeFromFlames(bot->GetPosition(), safeAway, botAI, requiredFlameDistance - 2.0f) &&
+        moveForced(safeAway))
+    {
+        lastMove = now;
+        return true;
+    }
+
+    return false;
 }
 
 bool SepethreaRagingFlamesAction::isUseful()
@@ -734,6 +729,32 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
     if (boss->HasUnitState(UNIT_STATE_CASTING) && 
         boss->FindCurrentSpellBySpellId(MECH_SPELL_DRAGONS_BREATH))
     {
+        if (bot->IsNonMeleeSpellCast(false))
+            botAI->InterruptSpell();
+
+        auto const moveForced = [this, bot](Position const& pos)
+        {
+            return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                          false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+        };
+
+        auto const forceFlee = [this, bot, &moveForced](Unit* source, float radius)
+        {
+            Position fleePos = botAI->IsMelee(bot) ? BestPositionForMeleeToFlee(source->GetPosition(), radius) :
+                                                     BestPositionForRangedToFlee(source->GetPosition(), radius);
+            if (fleePos == Position())
+                return false;
+
+            fleePos = ConstrainToRoom(fleePos, botAI);
+            if (!IsPositionSafe(fleePos, botAI) || !IsPathClear(bot->GetPosition(), fleePos, botAI) ||
+                !IsPathSafeFromFlames(bot->GetPosition(), fleePos, botAI, 10.0f))
+            {
+                return false;
+            }
+
+            return moveForced(fleePos);
+        };
+
         // Check if in frontal cone
         if (boss->HasInArc(M_PI / 2, bot) && !botAI->IsTank(bot))
         {
@@ -771,12 +792,11 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
 
             if (bestScore > 0.0f)
             {
-                return MoveTo(bot->GetMapId(), bestPos.m_positionX, bestPos.m_positionY,
-                             bestPos.m_positionZ, false, false, false, true,
-                             MovementPriority::MOVEMENT_COMBAT);
+                if (moveForced(bestPos))
+                    return true;
             }
 
-            return FleePosition(boss->GetPosition(), 14.0f, 800U);
+            return forceFlee(boss, 14.0f);
         }
     }
 
@@ -837,72 +857,6 @@ bool SepethreaArcaneBlastAction::isUseful()
     return engagedValue->Get();
 }
 
-bool SepethreaTargetElementalAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // FORCE target back to boss (don't waste time on flames - focus burn boss)
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    if (bot->GetSelectedUnit() != boss || currentTarget != boss)
-    {
-        AiObjectContext* botContext = botAI->GetAiObjectContext();
-        if (botContext)
-        {
-            if (auto* dpsTarget = botContext->GetValue<Unit*>("dps target"))
-                dpsTarget->Set(boss);
-            if (auto* current = botContext->GetValue<Unit*>("current target"))
-                current->Set(boss);
-        }
-
-        bot->SetSelection(boss->GetGUID());
-        bot->SetTarget(boss->GetGUID());
-        return true;
-    }
-
-    return false;
-}
-
-bool SepethreaTargetElementalAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot || botAI->IsTank(bot) || botAI->IsHeal(bot))
-        return false;
-
-    // Check for Raging Flames targeting bot
-    Unit* boss = AI_VALUE2(Unit*, "find target", "nethermancer sepethrea");
-    if (!boss)
-        return false;
-
-    // Check for Raging Flames
-    const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
-    bool hasFlameTargetingBot = false;
-    
-    for (auto& npc : npcs)
-    {
-        Unit* flame = botAI->GetUnit(npc);
-        if (!flame || !flame->IsAlive())
-            continue;
-            
-        if (flame->GetEntry() == NPC_RAGING_FLAMES && flame->GetVictim() == bot)
-        {
-            hasFlameTargetingBot = true;
-            break;
-        }
-    }
-    
-    if (!hasFlameTargetingBot)
-        return false;
-
-    // Only trigger if not already targeting boss
-    return bot->GetSelectedUnit() != boss;
-}
-
 // Avoid nearby flames for bots that are not currently fixated.
 bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
 {
@@ -938,16 +892,41 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
     if (!nearestFlame || closestDistance >= minimumFlameDistance)
         return false;
 
+    if (bot->IsNonMeleeSpellCast(false))
+        botAI->InterruptSpell();
+
+    auto const moveForced = [this, bot](Position const& pos)
+    {
+        return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                      false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+    };
+
+    auto const forceFlee = [this, bot, &moveForced](Unit* source, float radius, float minDistance)
+    {
+        Position fleePos = botAI->IsMelee(bot) ? BestPositionForMeleeToFlee(source->GetPosition(), radius) :
+                                                 BestPositionForRangedToFlee(source->GetPosition(), radius);
+        if (fleePos == Position())
+            return false;
+
+        fleePos = ConstrainToRoom(fleePos, botAI);
+        if (!IsPositionSafe(fleePos, botAI) || !IsPathClear(bot->GetPosition(), fleePos, botAI) ||
+            !IsPathSafeFromFlames(bot->GetPosition(), fleePos, botAI, minDistance))
+        {
+            return false;
+        }
+
+        return moveForced(fleePos);
+    };
+
     Position escapePos;
     if (SelectSepethreaEscapePosition(botAI, bot, heroic ? 20.0f : 17.0f,
                                       heroic ? 14.0f : 12.0f, escapePos, nearestFlame))
     {
-        return MoveTo(bot->GetMapId(), escapePos.m_positionX, escapePos.m_positionY,
-                     escapePos.m_positionZ, false, false, false, true,
-                     MovementPriority::MOVEMENT_COMBAT);
+        if (moveForced(escapePos))
+            return true;
     }
 
-    return FleePosition(nearestFlame->GetPosition(), heroic ? 22.0f : 18.0f, 1500U);
+    return forceFlee(nearestFlame, heroic ? 22.0f : 18.0f, heroic ? 14.0f : 12.0f);
 }
 
 bool SepethreaAvoidRagingFlamesAction::isUseful()
@@ -1011,16 +990,41 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
     if (!infernoFlame)
         return false;
 
+    if (bot->IsNonMeleeSpellCast(false))
+        botAI->InterruptSpell();
+
+    auto const moveForced = [this, bot](Position const& pos)
+    {
+        return MoveTo(bot->GetMapId(), pos.m_positionX, pos.m_positionY, pos.m_positionZ,
+                      false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+    };
+
+    auto const forceFlee = [this, bot, &moveForced](Unit* source, float radius, float minDistance)
+    {
+        Position fleePos = botAI->IsMelee(bot) ? BestPositionForMeleeToFlee(source->GetPosition(), radius) :
+                                                 BestPositionForRangedToFlee(source->GetPosition(), radius);
+        if (fleePos == Position())
+            return false;
+
+        fleePos = ConstrainToRoom(fleePos, botAI);
+        if (!IsPositionSafe(fleePos, botAI) || !IsPathClear(bot->GetPosition(), fleePos, botAI) ||
+            !IsPathSafeFromFlames(bot->GetPosition(), fleePos, botAI, minDistance))
+        {
+            return false;
+        }
+
+        return moveForced(fleePos);
+    };
+
     Position safePos;
     if (SelectSepethreaEscapePosition(botAI, bot, heroic ? 22.0f : 19.0f,
                                       heroic ? 16.0f : 13.0f, safePos, infernoFlame))
     {
-        return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY, 
-                     safePos.m_positionZ, false, false, false, true, 
-                     MovementPriority::MOVEMENT_COMBAT);
+        if (moveForced(safePos))
+            return true;
     }
 
-    return FleePosition(infernoFlame->GetPosition(), 22.0f, 1000U);
+    return forceFlee(infernoFlame, 22.0f, heroic ? 16.0f : 13.0f);
 }
 
 bool SepethreaInfernoAvoidanceAction::isUseful()
@@ -1050,34 +1054,17 @@ bool SepethreaInfernoAvoidanceAction::isUseful()
     return false;
 }
 
-// Fire trail avoidance for all bots - ENHANCED VERSION
+// Fire trail avoidance for all bots.
 bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // IMMEDIATE emergency response to standing in fire trail
+    // IMMEDIATE emergency response to standing near the fire trail
     if (bot->IsNonMeleeSpellCast(false))
     {
-        // Only interrupt long casts or if taking heavy damage
-        Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        if (currentSpell)
-        {
-            uint32 castTime = currentSpell->GetCastTime();
-            float healthPct = bot->GetHealthPct();
-            
-            // Interrupt if: long cast (>2s) or health dropping quickly (<60%)
-            if (castTime > 2000 || healthPct < 60.0f)
-            {
-                botAI->InterruptSpell();
-            }
-        }
-        else
-        {
-            // Fallback - interrupt if no current spell info available
-            botAI->InterruptSpell();
-        }
+        botAI->InterruptSpell();
     }
     
     std::vector<Unit*> flames = GetActiveRagingFlames(botAI);
@@ -1103,18 +1090,24 @@ bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
         {
             return MoveTo(bot->GetMapId(), safePos.m_positionX, safePos.m_positionY,
                           safePos.m_positionZ, false, false, false, true,
-                          MovementPriority::MOVEMENT_COMBAT);
+                          MovementPriority::MOVEMENT_FORCED);
         }
-        return FleePosition(nearestFlame->GetPosition(), 18.0f, 1000U);
-    }
-    
-    // FALLBACK: If no flames found but still in fire aura, move to room center
-    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA))
-    {
-        Position centerPos = MECHANAR_SEPETHREA_CENTER;
-        return MoveTo(bot->GetMapId(), centerPos.m_positionX, centerPos.m_positionY,
-                        centerPos.m_positionZ, false, false, false, true,
-                        MovementPriority::MOVEMENT_FORCED);
+
+        Position fleePos = botAI->IsMelee(bot) ? BestPositionForMeleeToFlee(nearestFlame->GetPosition(),
+                                                                            preferredDistance)
+                                               : BestPositionForRangedToFlee(nearestFlame->GetPosition(),
+                                                                             preferredDistance);
+        if (fleePos != Position())
+        {
+            fleePos = ConstrainToRoom(fleePos, botAI);
+            if (IsPositionSafe(fleePos, botAI) && IsPathClear(bot->GetPosition(), fleePos, botAI) &&
+                IsPathSafeFromFlames(bot->GetPosition(), fleePos, botAI, minimumFlameDistance))
+            {
+                return MoveTo(bot->GetMapId(), fleePos.m_positionX, fleePos.m_positionY,
+                              fleePos.m_positionZ, false, false, false, true,
+                              MovementPriority::MOVEMENT_FORCED);
+            }
+        }
     }
     
     return false;
@@ -1130,17 +1123,15 @@ bool SepethreaFireTrailAvoidanceAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Check if standing in fire trail aura or near any flame within 8 yards
-    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA) || bot->HasAura(SPELL_INFERNO_DAMAGE))
-        return true;
-
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& npc : npcs)
     {
         Unit* flame = botAI->GetUnit(npc);
         if (!flame || !flame->IsAlive() || flame->GetEntry() != NPC_RAGING_FLAMES)
             continue;
-        if (bot->GetDistance(flame) < 12.0f)
+
+        float const dangerDistance = bot->GetMap()->IsHeroic() ? 18.0f : 16.0f;
+        if (bot->GetDistance(flame) < dangerDistance)
             return true;
     }
     return false;

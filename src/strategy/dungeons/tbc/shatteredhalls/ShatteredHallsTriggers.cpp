@@ -89,7 +89,10 @@ bool OmroggBlastWaveTrigger::IsActive()
         return false;
     }
     
-    if (!boss->HasAura(SPELL_BURNING_MAUL))
+    if ((!boss->HasAura(SPELL_BURNING_MAUL) &&
+         !boss->FindCurrentSpellBySpellId(SPELL_BURNING_MAUL)) ||
+        !boss->HasUnitState(UNIT_STATE_CASTING) ||
+        !boss->FindCurrentSpellBySpellId(SPELL_BLAST_WAVE))
     {
         return false;
     }
@@ -117,7 +120,8 @@ bool KargathBladeDanceTrigger::IsActive()
         return false;
     }
     
-    if (boss->HasAura(SPELL_BLADE_DANCE_DMG) || boss->FindCurrentSpellBySpellId(SPELL_BLADE_DANCE_DMG))
+    if (boss->HasUnitState(UNIT_STATE_CASTING) &&
+        boss->FindCurrentSpellBySpellId(SPELL_BLADE_DANCE_TARGETING))
     {
         float distance = bot->GetExactDist2d(boss);
         return distance < 10.0f;
@@ -154,6 +158,11 @@ bool KargathAssassinsTrigger::IsActive()
 
 bool FlameArrowGauntletTrigger::IsActive()
 {
+    if (bot->HasAura(SPELL_FLAME_ARROW_FIRE))
+    {
+        return true;
+    }
+
     // Check if we are in the gauntlet area with active archers
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     for (auto& guid : npcs)
@@ -184,20 +193,20 @@ bool FlameArrowGauntletTrigger::IsActive()
             if (bot->GetDistance(unit) < 15.0f)
                 return true;
         }
-        
+
         // Common fire trigger NPCs
-        if (unit->GetEntry() == 17662 || unit->GetEntry() == 18370)
+        if (unit->GetEntry() == NPC_SH_FLAME_ARROW)
         {
             if (bot->GetDistance(unit) < 15.0f)
                 return true;
         }
     }
-    
+
     // Check for fire game objects
     std::list<GameObject*> gameObjects;
-    bot->GetGameObjectListWithEntryInGrid(gameObjects, 182592, 15.0f);
+    bot->GetGameObjectListWithEntryInGrid(gameObjects, GO_BLAZE, 15.0f);
     if (!gameObjects.empty())
         return true;
-    
+
     return false;
 }

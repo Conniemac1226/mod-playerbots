@@ -5,6 +5,7 @@
 #include "PlayerbotAI.h"
 #include "SpellMgr.h"
 #include "SpellInfo.h"
+#include <algorithm>
 #include <string>
 
 float MechanarMultiplier::GetValue(Action* action)
@@ -17,16 +18,12 @@ float MechanarMultiplier::GetValue(Action* action)
     if (!spellAction)
         return 1.0f;
 
-    // Block all spells if standing in fire trail / inferno damage
-    if (bot->HasAura(SPELL_RAGING_FLAMES_AREA_AURA) || bot->HasAura(SPELL_INFERNO_DAMAGE))
-        return 0.0f;
-        
     // Check if bot is being targeted by Raging Flames for cast time restriction
     const GuidVector npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
     
-    bool flameNearby = false;
     Unit* chasingFlame = nullptr;
     float chasingFlameDistance = 1000.0f;
+    float nearestFlameDistance = 1000.0f;
     for (auto& npc : npcs)
     {
         Unit* flame = botAI->GetUnit(npc);
@@ -34,22 +31,26 @@ float MechanarMultiplier::GetValue(Action* action)
             continue;
 
         float flameDistance = bot->GetExactDist2d(flame);
+        nearestFlameDistance = std::min(nearestFlameDistance, flameDistance);
         if (flame->GetVictim() == bot)
         {
             chasingFlame = flame;
             chasingFlameDistance = flameDistance;
         }
-        // Note flames in 18y for AoE suppression
-        if (!flameNearby && flameDistance < 18.0f)
-            flameNearby = true;
     }
+
+    float const tooCloseDistance = bot->GetMap()->IsHeroic() ? 14.0f : 12.0f;
+    if (nearestFlameDistance < tooCloseDistance)
+        return 0.0f;
+
+    std::string spellName = spellAction->getSpell();
+    uint32 spellId = AI_VALUE2(uint32, "spell id", spellName);
+    SpellInfo const* spellInfo = spellId ? sSpellMgr->GetSpellInfo(spellId) : nullptr;
 
     if (chasingFlame)
     {
-        std::string spellName = spellAction->getSpell();
-        uint32 spellId = AI_VALUE2(uint32, "spell id", spellName);
-        SpellInfo const* spellInfo = spellId ? sSpellMgr->GetSpellInfo(spellId) : nullptr;
-        bool const safeGap = chasingFlameDistance > (bot->GetMap()->IsHeroic() ? 26.0f : 23.0f) && !flameNearby;
+        bool const safeGap = chasingFlameDistance > (bot->GetMap()->IsHeroic() ? 22.0f : 19.0f) &&
+                             nearestFlameDistance > (bot->GetMap()->IsHeroic() ? 18.0f : 16.0f);
 
         if (!spellInfo)
             return safeGap ? 1.0f : 0.0f;
@@ -57,45 +58,25 @@ float MechanarMultiplier::GetValue(Action* action)
         uint32 castTime = spellInfo->CalcCastTime();
         if (castTime == 0)
             return 1.0f;
-        if (safeGap && (castTime <= 1500 || botAI->IsHeal(bot)))
+        if (safeGap && castTime <= 1500)
+            return 1.0f;
+        if (safeGap && botAI->IsHeal(bot) && castTime <= 2500)
             return 1.0f;
 
         return 0.0f;
     }
 
-    // Suppress AoE/ground-targeted spells near flames (prevents stepping into danger and wasted casts)
-    if (flameNearby)
+    // Keep nearby flames from pulling ground-targeted spells into danger, but do not
+    // freeze the rest of the kit when a flame is only passing by.
+    if (nearestFlameDistance < 18.0f)
     {
-        std::string spellName = spellAction->getSpell();
-        uint32 spellId = AI_VALUE2(uint32, "spell id", spellName);
-        if (spellId)
+        if (spellInfo)
         {
-            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
-            if (spellInfo)
-            {
-                // Heuristic: block ground-target and wide AoE when kiting
-                if (spellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
-                    return 0.0f;
-                // Block long casts for all roles when flames are near
-                if (spellInfo->CalcCastTime() > 1200)
-                {
-                    // Allow healers to push long heals only if relatively safe
-                    if (botAI->IsHeal(bot))
-                    {
-                        // If any flame within 14y, block
-                        const GuidVector npcs2 = AI_VALUE(GuidVector, "nearest hostile npcs");
-                        for (auto& g : npcs2)
-                        {
-                            Unit* f = botAI->GetUnit(g);
-                            if (f && f->IsAlive() && f->GetEntry() == NPC_RAGING_FLAMES && bot->GetExactDist2d(f) < 14.0f)
-                                return 0.0f;
-                        }
-                        // Otherwise allow the heal
-                        return 1.0f;
-                    }
-                    return 0.0f;
-                }
-            }
+            if (spellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
+                return 0.0f;
+
+            if (spellInfo->CalcCastTime() > 2500 && nearestFlameDistance < 14.0f)
+                return 0.0f;
         }
     }
 

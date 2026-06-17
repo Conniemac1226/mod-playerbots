@@ -12,12 +12,18 @@ bool PandemoniusDarkShellAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Dark Shell reflects damage every 20s - boss_pandemonius.cpp:70-80
-    // Check if casting or has aura
-    if (boss->FindCurrentSpellBySpellId(SPELL_DARK_SHELL) || boss->HasAura(SPELL_DARK_SHELL))
+    // RESEARCHED: Dark Shell reflects damage every 20s - boss_pandemonius.cpp:65-74
+    if (boss->HasAura(SPELL_DARK_SHELL) ||
+        (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_DARK_SHELL)))
     {
         // Stop ALL attacks immediately to avoid reflection
         bot->AttackStop();
+
+        if (botAI->IsHeal(bot))
+        {
+            return true;
+        }
+
         bot->InterruptNonMeleeSpells(true);
         
         // Move away and wait
@@ -29,6 +35,8 @@ bool PandemoniusDarkShellAction::Execute(Event event)
             float z = boss->GetPositionZ();
             return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
         }
+
+        return true;
     }
 
     return false;
@@ -44,7 +52,8 @@ bool PandemoniusDarkShellAction::isUseful()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    return boss->HasAura(SPELL_DARK_SHELL);
+    return boss->HasAura(SPELL_DARK_SHELL) ||
+           (boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_DARK_SHELL));
 }
 
 // Spread for Void Blast
@@ -116,7 +125,9 @@ bool PandemoniusVoidBlastAction::isUseful()
         return false;
 
     Unit* boss = bot->FindNearestCreature(NPC_PANDEMONIUS, 50.0f);
-    return boss && boss->IsAlive() && boss->IsInCombat();
+    return boss && boss->IsAlive() && boss->IsInCombat() &&
+           boss->HasUnitState(UNIT_STATE_CASTING) &&
+           boss->FindCurrentSpellBySpellId(SPELL_VOID_BLAST);
 }
 
 // Tavarok - Earthquake AoE
@@ -174,8 +185,7 @@ bool TavarokCrystalPrisonAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: Crystal Prison needs to be DPSed to break - boss_tavarok.cpp:53
-    // Look for Crystal Prison gameobjects, not player auras
+    // RESEARCHED: Crystal Prison is broken by interacting with the prison object.
     std::list<GameObject*> prisonList;
     bot->GetGameObjectListWithEntryInGrid(prisonList, 181278, 50.0f); // Crystal Prison object
     
@@ -183,7 +193,7 @@ bool TavarokCrystalPrisonAction::Execute(Event event)
     {
         if (prison && prison->GetGoState() == GO_STATE_READY)
         {
-            // Move to prison and attack it
+            // Move to the prison and interact with it
             if (bot->GetDistance(prison) > 5.0f)
             {
                 return MoveTo(bot->GetMapId(), prison->GetPositionX(), prison->GetPositionY(), 
@@ -192,9 +202,9 @@ bool TavarokCrystalPrisonAction::Execute(Event event)
             }
             else
             {
-                // Focus DPS on the prison
+                // Interact with the prison once we are in range.
                 bot->SetFacingToObject(prison);
-                // Note: Actual attacking of gameobject handled by client
+                prison->Use(bot);
                 return true;
             }
         }

@@ -15,10 +15,6 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("gargolmar retaliation",
              NextAction::array(0, new NextAction("gargolmar retaliation", ACTION_MOVE + 2), nullptr)));
     
-    // Surge targets farthest player - move closer if too far
-    triggers.push_back(new TriggerNode("gargolmar surge",
-             NextAction::array(0, new NextAction("gargolmar surge", ACTION_MOVE + 1), nullptr)));
-    
     // Boss: Omor the Unscarred - Keep essential survival, test combat blocking
     
     // Demonic Shield at 21% - ESSENTIAL for shield phase
@@ -32,20 +28,10 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // Interrupt Shadow Bolt - ESSENTIAL to prevent damage
     triggers.push_back(new TriggerNode("omor shadow bolt cast",
              NextAction::array(0, new NextAction("interrupt omor shadow bolt", ACTION_INTERRUPT + 2), nullptr)));
-    
 
-    // HEROIC-READY SPREAD MECHANICS - IMMEDIATE RESPONSE TO TREACHERY CAST
-    // CRITICAL: Highest priority when Omor starts casting - drop everything and spread
-    triggers.push_back(new TriggerNode("omor treachery cast",
-             NextAction::array(0, new NextAction("omor treachery spread", ACTION_EMERGENCY + 5), nullptr)));
-    
-    // DEBUFF AVOIDANCE - Stay away from players with Treacherous Aura
-    triggers.push_back(new TriggerNode("omor debuff avoidance",
-             NextAction::array(0, new NextAction("omor debuff avoidance", ACTION_EMERGENCY + 1), nullptr)));
-    
-    // CLEAR SPREAD - Remove spread when cast finishes to prevent permanent spreading
-    triggers.push_back(new TriggerNode("omor clear spread",
-             NextAction::array(0, new NextAction("omor clear spread", ACTION_NORMAL + 5), nullptr)));
+    // Treacherous Aura - only the debuffed bot should move out
+    triggers.push_back(new TriggerNode("omor treacherous aura",
+             NextAction::array(0, new NextAction("omor treacherous aura", ACTION_EMERGENCY + 5), nullptr)));
     
     // Boss: Vazruden & Nazan
     // Avoid Liquid Fire patches
