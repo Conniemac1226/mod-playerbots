@@ -291,6 +291,85 @@ bool OmorDemonicShieldAction::isUseful()
 }
 
 
+bool OmorTreacherySpreadAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    SET_AI_VALUE(float, "disperse distance", 20.0f);
+    return true;
+}
+
+bool OmorTreacherySpreadAction::isUseful()
+{
+    return true;
+}
+
+bool OmorDebuffAvoidanceAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* debuffedPlayer = nullptr;
+    float closestDistance = 15.0f;
+
+    GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
+    for (const auto& guid : friendlyUnits)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit != bot && unit->IsAlive() &&
+            (unit->HasAura(SPELL_TREACHEROUS_AURA) || unit->HasAura(SPELL_TREACHEROUS_AURA_H)))
+        {
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                debuffedPlayer = unit;
+            }
+        }
+    }
+
+    if (debuffedPlayer)
+    {
+        return MoveAway(debuffedPlayer, 25.0f - closestDistance, false);
+    }
+
+    return false;
+}
+
+bool OmorDebuffAvoidanceAction::isUseful()
+{
+    return true;
+}
+
+bool OmorClearSpreadAction::Execute(Event event)
+{
+    if (AI_VALUE(float, "disperse distance") > 0.0f)
+    {
+        SET_AI_VALUE(float, "disperse distance", 0.0f);
+        return true;
+    }
+
+    return false;
+}
+
+bool OmorClearSpreadAction::isUseful()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = AI_VALUE2(Unit*, "find target", "omor the unscarred");
+    if (!boss)
+        return true;
+
+    return !(boss->HasUnitState(UNIT_STATE_CASTING) &&
+             boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA));
+}
+
+
 // Nazan & Vazruden - Avoid Liquid Fire
 bool NazanLiquidFireAction::Execute(Event event)
 {
@@ -298,15 +377,31 @@ bool NazanLiquidFireAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // Liquid Fire is represented by summon trigger creature 22515.
-    Unit* liquidFire = bot->FindNearestCreature(NPC_LIQUID_FIRE, 8.0f);
+    Unit* liquidFire = nullptr;
+    float closestDistance = 15.0f;
+
+    GuidVector hostileUnits = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (const auto& guid : hostileUnits)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_LIQUID_FIRE)
+        {
+            float distance = bot->GetExactDist2d(unit);
+            if (distance < closestDistance)
+            {
+                closestDistance = distance;
+                liquidFire = unit;
+            }
+        }
+    }
+
     if (liquidFire)
     {
-        float distance = bot->GetDistance(liquidFire);
-        if (distance < 8.0f)
-        {
-            return MoveAway(liquidFire, 10.0f - distance);
-        }
+        float angle = liquidFire->GetAngle(bot);
+        float x = bot->GetPositionX() + cos(angle) * 20.0f;
+        float y = bot->GetPositionY() + sin(angle) * 20.0f;
+        float z = bot->GetPositionZ();
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_FORCED);
     }
 
     return false;
@@ -318,10 +413,13 @@ bool NazanLiquidFireAction::isUseful()
     if (!bot)
         return false;
 
-    Unit* liquidFire = bot->FindNearestCreature(NPC_LIQUID_FIRE, 8.0f);
-    if (liquidFire)
+    GuidVector hostileUnits = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (const auto& guid : hostileUnits)
     {
-        return bot->GetDistance(liquidFire) < 8.0f;
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_LIQUID_FIRE &&
+            bot->GetExactDist2d(unit) < 15.0f)
+            return true;
     }
 
     return false;

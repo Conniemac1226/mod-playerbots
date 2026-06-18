@@ -99,6 +99,57 @@ bool OmorDemonicShieldTrigger::IsActive()
     return boss->HasAura(SPELL_DEMONIC_SHIELD);
 }
 
+bool OmorTreacheryCastTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA);
+}
+
+bool OmorDebuffAvoidanceTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    GuidVector friendlyUnits = AI_VALUE(GuidVector, "nearest friendly players");
+    for (const auto& guid : friendlyUnits)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit != bot && unit->IsAlive() &&
+            (unit->HasAura(SPELL_TREACHEROUS_AURA) || unit->HasAura(SPELL_TREACHEROUS_AURA_H)))
+        {
+            if (bot->GetExactDist2d(unit) < 15.0f)
+                return true;
+        }
+    }
+
+    return false;
+}
+
+bool OmorClearSpreadTrigger::IsActive()
+{
+    if (AI_VALUE(float, "disperse distance") <= 0.0f)
+        return false;
+
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_OMOR_THE_UNSCARRED, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return true;
+
+    return !(boss->HasUnitState(UNIT_STATE_CASTING) &&
+             boss->FindCurrentSpellBySpellId(SPELL_TREACHEROUS_AURA));
+}
+
 
 // Liquid Fire patches nearby
 bool LiquidFireNearbyTrigger::IsActive()
@@ -107,9 +158,16 @@ bool LiquidFireNearbyTrigger::IsActive()
     if (!bot)
         return false;
 
-    // Liquid Fire is represented by summon trigger creature 22515.
-    Unit* liquidFire = bot->FindNearestCreature(NPC_LIQUID_FIRE, 8.0f);
-    return liquidFire && bot->GetDistance(liquidFire) < 8.0f;
+    GuidVector hostileUnits = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (const auto& guid : hostileUnits)
+    {
+        Unit* unit = botAI->GetUnit(guid);
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_LIQUID_FIRE &&
+            bot->GetExactDist2d(unit) < 15.0f)
+            return true;
+    }
+
+    return false;
 }
 
 // Nazan casting Cone of Fire

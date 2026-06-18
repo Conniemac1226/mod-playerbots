@@ -29,14 +29,27 @@ void TbcDungeonHRStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     triggers.push_back(new TriggerNode("omor shadow bolt cast",
              NextAction::array(0, new NextAction("interrupt omor shadow bolt", ACTION_INTERRUPT + 2), nullptr)));
 
+    // HEROIC-READY SPREAD MECHANICS - IMMEDIATE RESPONSE TO TREACHERY CAST
+    // CRITICAL: Highest priority when Omor starts casting - drop everything and spread
+    triggers.push_back(new TriggerNode("omor treachery cast",
+             NextAction::array(0, new NextAction("omor treachery spread", ACTION_EMERGENCY + 5), nullptr)));
+
+    // DEBUFF AVOIDANCE - Stay away from players with Treacherous Aura
+    triggers.push_back(new TriggerNode("omor debuff avoidance",
+             NextAction::array(0, new NextAction("omor debuff avoidance", ACTION_EMERGENCY + 1), nullptr)));
+
+    // CLEAR SPREAD - Remove spread when cast finishes to prevent permanent spreading
+    triggers.push_back(new TriggerNode("omor clear spread",
+             NextAction::array(0, new NextAction("omor clear spread", ACTION_NORMAL + 5), nullptr)));
+
     // Treacherous Aura - only the debuffed bot should move out
     triggers.push_back(new TriggerNode("omor treacherous aura",
-             NextAction::array(0, new NextAction("omor treacherous aura", ACTION_EMERGENCY + 5), nullptr)));
+             NextAction::array(0, new NextAction("omor treacherous aura", ACTION_EMERGENCY + 6), nullptr)));
     
     // Boss: Vazruden & Nazan
-    // Avoid Liquid Fire patches
+    // Avoid Liquid Fire patches - priority over other movement unless a real emergency
     triggers.push_back(new TriggerNode("liquid fire nearby",
-             NextAction::array(0, new NextAction("avoid liquid fire", ACTION_MOVE + 3), nullptr)));
+             NextAction::array(0, new NextAction("avoid liquid fire", ACTION_MOVE + 5), nullptr)));
     
     // Avoid Cone of Fire
     triggers.push_back(new TriggerNode("nazan cone of fire",
