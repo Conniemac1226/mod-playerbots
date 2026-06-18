@@ -53,8 +53,8 @@ void UnderbogStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
                            new NextAction("spread for chain lightning", ACTION_MOVE + 1), nullptr)));
 
     triggers.push_back(new TriggerNode(
-        "black stalker encounter active",
-        NextAction::array(0, new NextAction("spread out", ACTION_MOVE + 4), nullptr)));
+        "static charge active",
+        NextAction::array(0, new NextAction("avoid static charge", ACTION_MOVE + 4), nullptr)));
 }
 
 void UnderbogStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)

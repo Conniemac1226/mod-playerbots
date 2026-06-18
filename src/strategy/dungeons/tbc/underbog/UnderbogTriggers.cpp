@@ -64,7 +64,9 @@ bool GhazanTailSweepTrigger::IsActive()
         return false;
 
     // RESEARCHED: Only trigger if we're behind the boss - boss_ghazan.cpp:77
-    return !boss->HasInArc(M_PI, bot);
+    return boss->HasUnitState(UNIT_STATE_CASTING) &&
+           boss->FindCurrentSpellBySpellId(UB_SPELL_TAIL_SWEEP) &&
+           fabs(bot->GetRelativeAngle(boss)) > M_PI * 2.0f / 3.0f;
 }
 
 // Swamplord - Windcaller Claw bear pet
@@ -75,7 +77,7 @@ bool WindcallerClawActiveTrigger::IsActive()
     Unit* boss = AI_VALUE2(Unit*, "find target", "swamplord musel'ek");
     Unit* bear = AI_VALUE2(Unit*, "find target", "windcaller claw");
 
-    return boss && bear;
+    return boss && bear && bear->IsAlive() && bear->IsInCombat();
 }
 
 // Freezing Trap being cast
@@ -150,12 +152,28 @@ bool BlackStalkerChainLightningTrigger::IsActive()
     return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING);
 }
 
-bool BlackStalkerEncounterActiveTrigger::IsActive()
+bool BlackStalkerStaticChargeTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
     Unit* boss = bot->FindNearestCreature(NPC_BLACK_STALKER, 100.0f);
-    return boss && boss->IsAlive() && boss->IsInCombat();
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+    {
+        Player* member = gref->GetSource();
+        if (member && member->IsAlive() && member->HasAura(UB_SPELL_STATIC_CHARGE))
+        {
+            return true;
+        }
+    }
+
+    return false;
 }

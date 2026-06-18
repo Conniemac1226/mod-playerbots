@@ -65,6 +65,13 @@ public:
     bool IsActive() override;
 };
 
+class BlackStalkerStaticChargeTrigger : public Trigger
+{
+public:
+    BlackStalkerStaticChargeTrigger(PlayerbotAI* ai) : Trigger(ai, "static charge active") {}
+    bool IsActive() override;
+};
+
 class SporeStriderActiveTrigger : public Trigger
 {
 public:
@@ -76,13 +83,6 @@ class BlackStalkerChainLightningTrigger : public Trigger
 {
 public:
     BlackStalkerChainLightningTrigger(PlayerbotAI* ai) : Trigger(ai, "chain lightning casting") {}
-    bool IsActive() override;
-};
-
-class BlackStalkerEncounterActiveTrigger : public Trigger
-{
-public:
-    BlackStalkerEncounterActiveTrigger(PlayerbotAI* ai) : Trigger(ai, "black stalker encounter active") {}
     bool IsActive() override;
 };
 

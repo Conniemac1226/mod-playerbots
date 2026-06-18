@@ -17,9 +17,9 @@ public:
         creators["avoid freezing trap"] = &UnderbogActionContext::avoid_freezing_trap;
         creators["dispel hunters mark"] = &UnderbogActionContext::dispel_hunters_mark;
         creators["position for levitate"] = &UnderbogActionContext::position_for_levitate;
+        creators["avoid static charge"] = &UnderbogActionContext::avoid_static_charge;
         creators["attack spore strider"] = &UnderbogActionContext::attack_spore_strider;
         creators["interrupt chain lightning"] = &UnderbogActionContext::interrupt_chain_lightning;
-        creators["spread out"] = &UnderbogActionContext::spread_out;
         creators["spread for chain lightning"] = &UnderbogActionContext::spread_for_chain_lightning;
     }
 
@@ -32,9 +32,9 @@ private:
     static Action* avoid_freezing_trap(PlayerbotAI* ai) { return new MuselekFreezingTrapAction(ai); }
     static Action* dispel_hunters_mark(PlayerbotAI* ai) { return new MuselekHuntersMarkAction(ai); }
     static Action* position_for_levitate(PlayerbotAI* ai) { return new BlackStalkerLevitateAction(ai); }
+    static Action* avoid_static_charge(PlayerbotAI* ai) { return new BlackStalkerStaticChargeAction(ai); }
     static Action* attack_spore_strider(PlayerbotAI* ai) { return new AttackSporeStriderAction(ai); }
     static Action* interrupt_chain_lightning(PlayerbotAI* ai) { return new BlackStalkerChainLightningAction(ai); }
-    static Action* spread_out(PlayerbotAI* ai) { return new BlackStalkerSpreadOutAction(ai); }
     static Action* spread_for_chain_lightning(PlayerbotAI* ai) { return new BlackStalkerSpreadChainLightningAction(ai); }
 };
 

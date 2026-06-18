@@ -15,55 +15,32 @@ enum UnderbogNpcs
     NPC_GHAZAN              = 18105,
     NPC_SWAMPLORD_MUSELEK   = 17826,  // Standard NPC ID for Swamplord Musel'ek
     NPC_BLACK_STALKER       = 17882,  // Standard NPC ID for The Black Stalker
-    NPC_WINDCALLER_CLAW     = 17827,  // Musel'ek's pet bear
-    NPC_SPORE_STRIDER       = 22299   // Black Stalker adds
+    NPC_SPORE_STRIDER       = 22299    // Black Stalker adds
 };
 
-// RESEARCHED FROM: boss_hungarfen.cpp:26-37
 enum HungarfenSpells
 {
-    UB_SPELL_SPAWN_MUSHROOMS   = 31692,
-    UB_SPELL_DESPAWN_MUSHROOMS = 34874,
-    UB_SPELL_FOUL_SPORES       = 31673,
-    UB_SPELL_ACID_GEYSER       = 38739,
-    UB_SPELL_SHRINK            = 31691,
-    UB_SPELL_GROW              = 31698,
-    UB_SPELL_SPORE_CLOUD       = 34168
+    UB_SPELL_FOUL_SPORES = 31673
 };
 
-// RESEARCHED FROM: boss_ghazan.cpp:27-30
 enum GhazanSpells
 {
-    UB_SPELL_ACID_BREATH       = 34268,
-    UB_SPELL_ACID_SPIT         = 34290,
-    UB_SPELL_TAIL_SWEEP        = 34267,
-    UB_SPELL_ENRAGE            = 15716
+    UB_SPELL_ACID_BREATH = 34268,
+    UB_SPELL_TAIL_SWEEP = 34267
 };
 
-// RESEARCHED FROM: boss_swamplord_muselek.cpp:23-31
 enum SwamplordSpells
 {
-    UB_SPELL_SHOOT               = 22907,
-    UB_SPELL_KNOCKAWAY           = 18813,
-    UB_SPELL_RAPTOR_STRIKE       = 31566,
-    UB_SPELL_MULTISHOT           = 34974,
     UB_SPELL_THROW_FREEZING_TRAP = 31946,
-    UB_SPELL_AIMED_SHOT          = 31623,
-    UB_SPELL_HUNTERS_MARK        = 31615
+    UB_SPELL_HUNTERS_MARK = 31615
 };
 
-// RESEARCHED FROM: boss_the_black_stalker.cpp:40-49
 enum BlackStalkerSpells
 {
-    UB_SPELL_LEVITATE                  = 31704,
-    UB_SPELL_CHAIN_LIGHTNING           = 31717,
-    UB_SPELL_STATIC_CHARGE             = 31715,
-    UB_SPELL_SUMMON_SPORE_STRIDER      = 38755,
-    UB_SPELL_LEVITATION_PULSE          = 31701,
-    UB_SPELL_SOMEONE_GRAB_ME           = 31702,
-    UB_SPELL_MAGNETIC_PULL             = 31703,
-    SPELL_SUSPENSION_PRIMER         = 31720,
-    SPELL_SUSPENSION                = 31719
+    UB_SPELL_LEVITATE = 31704,
+    UB_SPELL_CHAIN_LIGHTNING = 31717,
+    UB_SPELL_STATIC_CHARGE = 31715,
+    SPELL_SUSPENSION = 31719
 };
 
 // Hungarfen Actions
@@ -134,6 +111,14 @@ public:
     bool isUseful() override;
 };
 
+class BlackStalkerStaticChargeAction : public MovementAction
+{
+public:
+    BlackStalkerStaticChargeAction(PlayerbotAI* ai) : MovementAction(ai, "avoid static charge") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
 class AttackSporeStriderAction : public AttackAction
 {
 public:
@@ -146,14 +131,6 @@ class BlackStalkerChainLightningAction : public Action
 {
 public:
     BlackStalkerChainLightningAction(PlayerbotAI* ai) : Action(ai, "interrupt chain lightning") {}
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
-
-class BlackStalkerSpreadOutAction : public MovementAction
-{
-public:
-    BlackStalkerSpreadOutAction(PlayerbotAI* ai) : MovementAction(ai, "spread out") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

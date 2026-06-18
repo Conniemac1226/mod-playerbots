@@ -190,7 +190,8 @@ bool AttackWindcallerClawAction::isUseful() { return !botAI->IsHeal(bot); }
 bool AttackWindcallerClawAction::Execute(Event event)
 {
     Unit* target = AI_VALUE2(Unit*, "find target", "windcaller claw");
-    if (!target || AI_VALUE(Unit*, "current target") == target)
+    if (!target || !target->IsAlive() || !target->IsInCombat() ||
+        AI_VALUE(Unit*, "current target") == target)
     {
         return false;
     }
@@ -300,7 +301,8 @@ bool BlackStalkerLevitateAction::Execute(Event event)
         // Try to move to lower ground
         bot->UpdateAllowedPositionZ(x, y, z);
         
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_COMBAT);
+        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+                      MovementPriority::MOVEMENT_FORCED);
     }
 
     return false;
@@ -328,7 +330,7 @@ bool AttackSporeStriderAction::Execute(Event event)
     for (auto& target : targets)
     {
         Unit* unit = botAI->GetUnit(target);
-        if (unit && unit->GetEntry() == NPC_SPORE_STRIDER)
+        if (unit && unit->IsAlive() && unit->GetEntry() == NPC_SPORE_STRIDER)
         {
             strider = unit;
             break;
@@ -395,48 +397,72 @@ bool BlackStalkerChainLightningAction::isUseful()
     return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING);
 }
 
-bool BlackStalkerSpreadOutAction::Execute(Event event)
+bool BlackStalkerStaticChargeAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
 
-    // Don't move healers during active healing
-    if (botAI->IsHeal(bot))
-    {
-        Group* group = bot->GetGroup();
-        if (group)
-        {
-            for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
-            {
-                Player* member = gref->GetSource();
-                if (member && member->IsAlive() && member->GetHealthPct() < 70.0f)
-                    return false; // Someone needs healing urgently
-            }
-        }
-    }
+    Unit* boss = bot->FindNearestCreature(NPC_BLACK_STALKER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
 
     Group* group = bot->GetGroup();
     if (!group)
         return false;
 
+    constexpr float safeDistance = 18.0f;
+
+    if (bot->HasAura(UB_SPELL_STATIC_CHARGE))
+    {
+        Player* nearestMember = nullptr;
+        float nearestDistance = 1000.0f;
+
+        for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+        {
+            Player* member = gref->GetSource();
+            if (member && member != bot && member->IsAlive())
+            {
+                float distance = bot->GetDistance(member);
+                if (distance < nearestDistance)
+                {
+                    nearestMember = member;
+                    nearestDistance = distance;
+                }
+            }
+        }
+
+        if (!nearestMember || nearestDistance >= safeDistance)
+            return false;
+
+        return MoveAway(nearestMember, safeDistance - nearestDistance);
+    }
+
+    Player* chargedMember = nullptr;
+    float chargedDistance = 1000.0f;
+
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
         Player* member = gref->GetSource();
-        if (member && member != bot && bot->GetDistance(member) < 12.0f)
+        if (member && member != bot && member->IsAlive() &&
+            member->HasAura(UB_SPELL_STATIC_CHARGE))
         {
-            float angle = bot->GetAngle(member) + M_PI;
-            float x = bot->GetPositionX() + cos(angle) * 15.0f;
-            float y = bot->GetPositionY() + sin(angle) * 15.0f;
-            float z = bot->GetPositionZ();
-            return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+            float distance = bot->GetDistance(member);
+            if (distance < chargedDistance)
+            {
+                chargedMember = member;
+                chargedDistance = distance;
+            }
         }
     }
 
-    return false;
+    if (!chargedMember || chargedDistance >= safeDistance)
+        return false;
+
+    return MoveAway(chargedMember, safeDistance - chargedDistance);
 }
 
-bool BlackStalkerSpreadOutAction::isUseful()
+bool BlackStalkerStaticChargeAction::isUseful()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
@@ -450,10 +476,29 @@ bool BlackStalkerSpreadOutAction::isUseful()
     if (!group)
         return false;
 
+    constexpr float safeDistance = 18.0f;
+
+    if (bot->HasAura(UB_SPELL_STATIC_CHARGE))
+    {
+        for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
+        {
+            Player* member = gref->GetSource();
+            if (member && member != bot && member->IsAlive() &&
+                bot->GetDistance(member) < safeDistance)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
         Player* member = gref->GetSource();
-        if (member && member != bot && bot->GetDistance(member) < 12.0f)
+        if (member && member != bot && member->IsAlive() &&
+            member->HasAura(UB_SPELL_STATIC_CHARGE) &&
+            bot->GetDistance(member) < safeDistance)
         {
             return true;
         }
@@ -473,7 +518,7 @@ bool BlackStalkerSpreadChainLightningAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // Only spread if Chain Lightning is being cast or was recently cast
+    // Only spread while Chain Lightning is being cast
     if (!boss->HasUnitState(UNIT_STATE_CASTING) || !boss->FindCurrentSpellBySpellId(UB_SPELL_CHAIN_LIGHTNING))
         return false;
 
@@ -483,7 +528,7 @@ bool BlackStalkerSpreadChainLightningAction::Execute(Event event)
 
     // Find closest group member within chain lightning range
     Player* closestMember = nullptr;
-    float closestDistance = 15.0f; // Chain lightning jump range
+    float closestDistance = 18.0f;
     
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
@@ -501,14 +546,8 @@ bool BlackStalkerSpreadChainLightningAction::Execute(Event event)
 
     if (closestMember)
     {
-        // Move away from the closest member
-        float angle = bot->GetAngle(closestMember) + M_PI;
-        float x = bot->GetPositionX() + cos(angle) * 18.0f;
-        float y = bot->GetPositionY() + sin(angle) * 18.0f;
-        float z = bot->GetPositionZ();
-        bot->UpdateAllowedPositionZ(x, y, z);
-        
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, MovementPriority::MOVEMENT_NORMAL);
+        float currentDistance = bot->GetDistance(closestMember);
+        return MoveAway(closestMember, 18.0f - currentDistance);
     }
 
     return false;
@@ -519,21 +558,6 @@ bool BlackStalkerSpreadChainLightningAction::isUseful()
     Player* bot = botAI->GetBot();
     if (!bot)
         return false;
-
-    // Don't move healers if someone is critically low
-    if (botAI->IsHeal(bot))
-    {
-        Group* group = bot->GetGroup();
-        if (group)
-        {
-            for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
-            {
-                Player* member = gref->GetSource();
-                if (member && member->IsAlive() && member->GetHealthPct() < 40.0f)
-                    return false; // Someone critically low, healing priority
-            }
-        }
-    }
 
     Unit* boss = bot->FindNearestCreature(NPC_BLACK_STALKER, 50.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
@@ -551,7 +575,8 @@ bool BlackStalkerSpreadChainLightningAction::isUseful()
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
         Player* member = gref->GetSource();
-        if (member && member != bot && member->IsAlive() && bot->GetDistance(member) < 15.0f)
+        if (member && member != bot && member->IsAlive() &&
+            bot->GetDistance(member) < 18.0f)
         {
             return true;
         }

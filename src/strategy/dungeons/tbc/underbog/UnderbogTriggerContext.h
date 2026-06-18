@@ -17,6 +17,7 @@ public:
         creators["freezing trap incoming"] = &UnderbogTriggerContext::freezing_trap_incoming;
         creators["hunters mark active"] = &UnderbogTriggerContext::hunters_mark_active;
         creators["levitate active"] = &UnderbogTriggerContext::levitate_active;
+        creators["static charge active"] = &UnderbogTriggerContext::static_charge_active;
         creators["spore strider active"] = &UnderbogTriggerContext::spore_strider_active;
         creators["chain lightning casting"] = &UnderbogTriggerContext::chain_lightning_casting;
     }
@@ -30,6 +31,7 @@ private:
     static Trigger* freezing_trap_incoming(PlayerbotAI* ai) { return new MuselekFreezingTrapTrigger(ai); }
     static Trigger* hunters_mark_active(PlayerbotAI* ai) { return new MuselekHuntersMarkTrigger(ai); }
     static Trigger* levitate_active(PlayerbotAI* ai) { return new BlackStalkerLevitateTrigger(ai); }
+    static Trigger* static_charge_active(PlayerbotAI* ai) { return new BlackStalkerStaticChargeTrigger(ai); }
     static Trigger* spore_strider_active(PlayerbotAI* ai) { return new SporeStriderActiveTrigger(ai); }
     static Trigger* chain_lightning_casting(PlayerbotAI* ai) { return new BlackStalkerChainLightningTrigger(ai); }
 };

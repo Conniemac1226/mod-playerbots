@@ -3,13 +3,6 @@
 #include "ChooseTargetActions.h"
 #include "UnderbogTriggers.h"
 
-float UnderbogMultiplier::GetValue(Action* action)
-{
-    // Following proven pattern of minimal multipliers to avoid priority violations
-    // All priorities are set directly in strategy triggers
-    return 1.0f;
-}
-
 float BlackStalkerAddMultiplier::GetValue(Action* action)
 {
     // Block DpsAssist when Spore Striders are present - prevents boss/add oscillation
