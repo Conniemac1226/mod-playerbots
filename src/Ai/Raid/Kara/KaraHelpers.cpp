@@ -1,7 +1,9 @@
 #include "KaraHelpers.h"
+#include "DynamicObject.h"
 #include "Playerbots.h"
 #include "InstanceScript.h"
 #include "PathGenerator.h"
+#include "SpellAuraEffects.h"
 #include <cmath>
 #include <unordered_set>
 
@@ -41,6 +43,81 @@ namespace KarazhanHelpers
         static bool IsFreshCache(uint32 nowMs, uint32 stampMs, uint32 ttlMs)
         {
             return stampMs != 0 && (nowMs - stampMs) <= ttlMs;
+        }
+
+        DynamicObject* GetCharredEarthDynObject(Player* player)
+        {
+            if (!player)
+                return nullptr;
+
+            Unit::AuraEffectList const& periodicDamage = player->GetAuraEffectsByType(SPELL_AURA_PERIODIC_DAMAGE);
+            Unit::AuraEffectList const& periodicTrigger =
+                player->GetAuraEffectsByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL);
+            Unit::AuraEffectList const& dummy = player->GetAuraEffectsByType(SPELL_AURA_DUMMY);
+            for (Unit::AuraEffectList const& list : { periodicDamage, periodicTrigger, dummy })
+            {
+                for (AuraEffect const* aurEff : list)
+                {
+                    if (!aurEff || !aurEff->GetBase())
+                        continue;
+
+                    Aura* aura = aurEff->GetBase();
+                    if (aura->GetType() != DYNOBJ_AURA_TYPE || aura->GetSpellInfo()->Id != SPELL_CHARRED_EARTH)
+                        continue;
+
+                    DynamicObject* dynObj = aura->GetDynobjOwner();
+                    if (dynObj && dynObj->IsInWorld())
+                        return dynObj;
+                }
+            }
+
+            return nullptr;
+        }
+
+        bool IsPositionInCharredEarth(
+            std::vector<DynamicObject*> const& hazards, Position const& pos, float padding)
+        {
+            for (DynamicObject* dynObj : hazards)
+            {
+                if (std::fabs(dynObj->GetPositionZ() - pos.GetPositionZ()) > 8.0f)
+                    continue;
+
+                float const radius = dynObj->GetRadius() + padding;
+                float const dx = pos.GetPositionX() - dynObj->GetPositionX();
+                float const dy = pos.GetPositionY() - dynObj->GetPositionY();
+                if ((dx * dx + dy * dy) <= radius * radius)
+                    return true;
+            }
+
+            return false;
+        }
+
+        bool IsPathClearOfCharredEarth(Player* bot, Position const& dest,
+                                       std::vector<DynamicObject*> const& hazards, float padding)
+        {
+            if (!bot || hazards.empty())
+                return true;
+
+            Position const start(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
+            if (IsPositionInCharredEarth(hazards, start, padding))
+                return true;
+
+            float const distance = start.GetExactDist2d(dest);
+            uint32 const steps =
+                std::max<uint32>(1, static_cast<uint32>(std::ceil(distance / 1.0f)));
+
+            for (uint32 i = 0; i <= steps; ++i)
+            {
+                float const t = static_cast<float>(i) / static_cast<float>(steps);
+                Position check(start.GetPositionX() + (dest.GetPositionX() - start.GetPositionX()) * t,
+                               start.GetPositionY() + (dest.GetPositionY() - start.GetPositionY()) * t,
+                               start.GetPositionZ() + (dest.GetPositionZ() - start.GetPositionZ()) * t);
+
+                if (IsPositionInCharredEarth(hazards, check, padding))
+                    return false;
+            }
+
+            return true;
         }
 
         static void CollectNearbyChessData(PlayerbotAI* botAI, Player* bot, ChessNearbyCache& cache, size_t& scannedCount)
@@ -576,6 +653,7 @@ namespace KarazhanHelpers
         if (!bot || !boss || !bot->GetMap() || boss->GetMapId() != bot->GetMapId())
             return false;
 
+        std::vector<DynamicObject*> const charredEarths = GetNightbaneCharredEarths(bot);
         auto tryCandidate = [&](Position candidate, float& bestDist, bool& found) -> void
         {
             float cx = candidate.GetPositionX();
@@ -586,6 +664,10 @@ namespace KarazhanHelpers
                 return;
 
             Position corrected(cx, cy, cz);
+            if (IsPositionInCharredEarth(charredEarths, corrected, 1.5f) ||
+                !IsPathClearOfCharredEarth(bot, corrected, charredEarths, 1.5f))
+                return;
+
             if (!IsNightbaneAnchorPathSafe(bot, corrected))
                 return;
 
@@ -623,6 +705,49 @@ namespace KarazhanHelpers
         }
 
         return found;
+    }
+
+    std::vector<DynamicObject*> GetNightbaneCharredEarths(Player* bot)
+    {
+        std::vector<DynamicObject*> hazards;
+        if (!bot || bot->GetMapId() != KARAZHAN_MAP_ID)
+            return hazards;
+
+        std::unordered_set<ObjectGuid::LowType> seen;
+        auto addHazard = [&](Player* player)
+        {
+            DynamicObject* dynObj = GetCharredEarthDynObject(player);
+            if (!dynObj || dynObj->GetMapId() != KARAZHAN_MAP_ID || dynObj->GetSpellId() != SPELL_CHARRED_EARTH)
+                return;
+
+            if (seen.insert(dynObj->GetGUID().GetCounter()).second)
+                hazards.push_back(dynObj);
+        };
+
+        addHazard(bot);
+        if (Group* group = bot->GetGroup())
+        {
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (!member || !member->IsAlive() || member->GetMap() != bot->GetMap())
+                    continue;
+
+                addHazard(member);
+            }
+        }
+
+        return hazards;
+    }
+
+    bool IsPositionInNightbaneCharredEarth(Player* bot, Position const& pos, float padding)
+    {
+        return IsPositionInCharredEarth(GetNightbaneCharredEarths(bot), pos, padding);
+    }
+
+    bool IsNightbanePathClearOfCharredEarth(Player* bot, Position const& dest, float padding)
+    {
+        return IsPathClearOfCharredEarth(bot, dest, GetNightbaneCharredEarths(bot), padding);
     }
 
     bool IsInsideNightbaneFightArea(Position const& pos)
@@ -679,6 +804,11 @@ namespace KarazhanHelpers
             return false;
 
         Position corrected(x, y, z);
+        std::vector<DynamicObject*> const charredEarths = GetNightbaneCharredEarths(bot);
+        if (IsPositionInCharredEarth(charredEarths, corrected, 1.5f) ||
+            !IsPathClearOfCharredEarth(bot, corrected, charredEarths, 1.5f))
+            return false;
+
         return HasReasonablePathToNightbaneAnchor(bot, corrected) && IsNightbanePathContained(bot, corrected);
     }
 

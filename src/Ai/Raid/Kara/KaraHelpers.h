@@ -9,6 +9,8 @@
 #include "Position.h"
 #include "Unit.h"
 
+class DynamicObject;
+
 namespace KarazhanHelpers
 {
     enum KarazhanSpells
@@ -160,6 +162,11 @@ namespace KarazhanHelpers
     bool HasReasonablePathToNightbaneAnchor(Player* bot, Position const& anchor);
     bool IsNightbaneAnchorPathSafe(Player* bot, Position const& anchor);
     bool FindNearestSafeNightbaneAnchor(Player* bot, Unit* boss, Position wanted, Position& safeOut);
+    std::vector<DynamicObject*> GetNightbaneCharredEarths(Player* bot);
+    bool IsPositionInNightbaneCharredEarth(
+        Player* bot, Position const& pos, float padding = 1.5f);
+    bool IsNightbanePathClearOfCharredEarth(
+        Player* bot, Position const& dest, float padding = 1.5f);
     bool IsInsideNightbaneFightArea(Position const& pos);
     bool IsNightbanePathContained(Player* bot, Position const& dest);
     bool IsNightbaneMovementAllowed(Player* bot, Position const& dest);

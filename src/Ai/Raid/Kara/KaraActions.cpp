@@ -4915,10 +4915,8 @@ bool NightbaneGroundPhaseDynamicPositionAction::Execute(Event /*event*/)
         bot->SetTarget(nightbane->GetGUID());
 
     const bool isMainTank = botAI->IsMainTank(bot);
-    const bool isTank = botAI->IsTank(bot);
     const bool isHealer = botAI->IsHeal(bot);
     const bool isRanged = botAI->IsRanged(bot);
-    std::string role = isMainTank ? "main_tank" : (isTank ? "off_tank" : (isHealer ? "healer" : (isRanged ? "ranged" : "melee")));
 
     if (isMainTank)
     {
@@ -4926,14 +4924,15 @@ bool NightbaneGroundPhaseDynamicPositionAction::Execute(Event /*event*/)
     }
 
     Position anchor = GetNightbaneDynamicAnchorForBot(botAI, bot, nightbane);
-    const float anchorDist = bot->GetExactDist2d(anchor.GetPositionX(), anchor.GetPositionY());
-    const bool inCharredEarth = bot->HasAura(SPELL_CHARRED_EARTH);
+    const bool inCharredEarth = bot->HasAura(SPELL_CHARRED_EARTH) ||
+                                IsPositionInNightbaneCharredEarth(
+                                    bot, Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()));
+    const bool anchorInCharredEarth = IsPositionInNightbaneCharredEarth(bot, anchor);
     const bool feared = bot->HasAura(SPELL_BELLOWING_ROAR);
     Position safeAnchor;
     bool hasSafeAnchor = FindNearestSafeNightbaneAnchor(bot, nightbane, anchor, safeAnchor);
-    const float zDiffRaw = std::fabs(anchor.GetPositionZ() - bot->GetPositionZ());
 
-    if (inCharredEarth && !feared)
+    if ((inCharredEarth || anchorInCharredEarth) && !feared)
     {
         float escapeX = bot->GetPositionX();
         float escapeY = bot->GetPositionY();
@@ -4979,7 +4978,6 @@ bool NightbaneGroundPhaseDynamicPositionAction::Execute(Event /*event*/)
         return false;
     }
 
-    const float safeDist = bot->GetExactDist2d(safeAnchor.GetPositionX(), safeAnchor.GetPositionY());
     if (!IsAtNightbaneDynamicAnchor(bot, safeAnchor, isRanged || isHealer ? 3.0f : 2.0f))
     {
         if (!IsNightbaneMovementAllowed(bot, safeAnchor))
@@ -5007,12 +5005,16 @@ bool NightbaneGroundPhaseRotateRangedPositionsAction::Execute(Event /*event*/)
         return false;
     }
 
-    const bool inCharredEarth = bot->HasAura(SPELL_CHARRED_EARTH) && !bot->HasAura(SPELL_BELLOWING_ROAR);
+    const bool inCharredEarth = (bot->HasAura(SPELL_CHARRED_EARTH) ||
+                                IsPositionInNightbaneCharredEarth(
+                                    bot, Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))) &&
+                                !bot->HasAura(SPELL_BELLOWING_ROAR);
 
     if (!botAI->IsMainTank(bot) && inCharredEarth)
     {
         Position escape;
-        if (FindNearestSafeNightbaneAnchor(bot, nightbane, Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()), escape) &&
+        if (FindNearestSafeNightbaneAnchor(
+                bot, nightbane, Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()), escape) &&
             bot->GetExactDist2d(escape.GetPositionX(), escape.GetPositionY()) > 1.0f &&
             IsNightbaneMovementAllowed(bot, escape))
         {
@@ -5032,6 +5034,39 @@ bool NightbaneGroundPhaseRotateRangedPositionsAction::Execute(Event /*event*/)
         NIGHTBANE_RANGED_POSITION2,
         NIGHTBANE_RANGED_POSITION3
     };
+    bool foundPreferredPosition = false;
+    for (uint8 attempt = 0; attempt < 3; ++attempt)
+    {
+        Position const& candidate = rangedPositions[index];
+        if (!IsPositionInNightbaneCharredEarth(bot, candidate))
+        {
+            foundPreferredPosition = true;
+            break;
+        }
+
+        index = (index + 1) % 3;
+    }
+
+    if (!foundPreferredPosition)
+    {
+        Position fallback;
+        if (FindNearestSafeNightbaneAnchor(bot, nightbane,
+                                           Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()),
+                                           fallback) &&
+            bot->GetExactDist2d(fallback.GetPositionX(), fallback.GetPositionY()) > 1.0f &&
+            IsNightbaneMovementAllowed(bot, fallback))
+        {
+            nightbaneRangedStep[botGuid] = index;
+            bot->AttackStop();
+            bot->InterruptNonMeleeSpells(true);
+            return MoveTo(KARAZHAN_MAP_ID, fallback.GetPositionX(), fallback.GetPositionY(), fallback.GetPositionZ(),
+                          false, false, false, false, MovementPriority::MOVEMENT_FORCED, true, false);
+        }
+
+        return false;
+    }
+
+    nightbaneRangedStep[botGuid] = index;
     const Position& position = rangedPositions[index];
     const float maxDistance = 2.0f;
     float distanceToTarget = bot->GetExactDist2d(position);

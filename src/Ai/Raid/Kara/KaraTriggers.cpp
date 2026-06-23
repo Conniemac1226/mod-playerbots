@@ -350,7 +350,10 @@ bool NightbaneRangedBotsAreInCharredEarthTrigger::IsActive()
         return false;
 
     // Any non-main-tank bot standing in Charred Earth should try to move immediately.
-    if (bot->HasAura(SPELL_CHARRED_EARTH) && !bot->HasAura(SPELL_BELLOWING_ROAR) && !botAI->IsMainTank(bot))
+    if ((bot->HasAura(SPELL_CHARRED_EARTH) ||
+         IsPositionInNightbaneCharredEarth(
+             bot, Position(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))) &&
+        !bot->HasAura(SPELL_BELLOWING_ROAR) && !botAI->IsMainTank(bot))
         return true;
 
     if (!botAI->IsRanged(bot))
