@@ -2,7 +2,7 @@
 #include "Playerbots.h"
 #include "UnderbogActions.h"
 
-// Hungarfen - Mushrooms nearby at 20% health
+// Hungarfen - Mushrooms can spawn throughout the fight
 bool HungarfenMushroomNearbyTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -11,10 +11,6 @@ bool HungarfenMushroomNearbyTrigger::IsActive()
 
     Unit* boss = bot->FindNearestCreature(NPC_HUNGARFEN, 100.0f);
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    // RESEARCHED: Mushrooms spawn at 20% health - boss_hungarfen.cpp:117
-    if (boss->GetHealthPct() > 20.0f)
         return false;
 
     Unit* mushroom = bot->FindNearestCreature(NPC_UNDERBOG_MUSHROOM, 15.0f);

@@ -552,10 +552,57 @@ void PlayerbotAI::UpdateAIInternal([[maybe_unused]] uint32 elapsed, bool minimal
     masterIncomingPacketHandlers.Handle(helper);
     masterOutgoingPacketHandlers.Handle(helper);
 
+    ApplyWorldBossStrategies();
     DoNextAction(minimal);
 
     if (pmo)
         pmo->finish();
+}
+
+void PlayerbotAI::ApplyWorldBossStrategies()
+{
+    Engine* combatEngine = engines[BOT_STATE_COMBAT];
+    if (!combatEngine)
+        return;
+
+    bool const hasWorldBossStrategy = combatEngine->HasStrategy("doomwalker") ||
+                                      combatEngine->HasStrategy("doom lord kazzak");
+    if (!bot->IsInCombat() && !hasWorldBossStrategy)
+        return;
+
+    struct BossStrategyEntry
+    {
+        char const* strategyName;
+        char const* bossName;
+    };
+
+    static constexpr BossStrategyEntry entries[] = {
+        { "doomwalker", "doomwalker" },
+        { "doom lord kazzak", "doom lord kazzak" },
+    };
+
+    bool changed = false;
+
+    for (BossStrategyEntry const& entry : entries)
+    {
+        Unit* boss = aiObjectContext->GetValue<Unit*>("find target", entry.bossName)->Get();
+        bool const active = boss && boss->IsAlive() && boss->IsInCombat() && !boss->IsFriendlyTo(bot);
+        bool const hasStrategy = combatEngine->HasStrategy(entry.strategyName);
+
+        if (active && !hasStrategy)
+        {
+            combatEngine->addStrategy(entry.strategyName, false);
+            changed = true;
+        }
+        else if (!active && hasStrategy)
+        {
+            combatEngine->removeStrategy(entry.strategyName, false);
+            changed = true;
+        }
+    }
+
+    if (changed)
+        combatEngine->Init();
 }
 
 void PlayerbotAI::HandleCommands()

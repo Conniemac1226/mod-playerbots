@@ -20,6 +20,7 @@
 #include "UldStrategy.h"
 #include "OnyStrategy.h"
 #include "ICCStrategy.h"
+#include "OutlandWorldBossStrategy.h"
 #include "../../strategy/raids/blacktemple/BlackTempleStrategy.h"
 
 class RaidStrategyContext : public NamedObjectContext<Strategy>
@@ -47,6 +48,8 @@ public:
         creators["icc"] = &RaidStrategyContext::icc;
 
         // Custom / Unique to this branch
+        creators["doomwalker"] = &RaidStrategyContext::doomwalker;
+        creators["doom lord kazzak"] = &RaidStrategyContext::doom_lord_kazzak;
         creators["blacktemple"] = &RaidStrategyContext::blacktemple;
         creators["najentus"] = &RaidStrategyContext::najentus;
         creators["supremus"] = &RaidStrategyContext::supremus;
@@ -77,6 +80,8 @@ private:
     static Strategy* onyxia(PlayerbotAI* botAI) { return new RaidOnyxiaStrategy(botAI); }
     static Strategy* ulduar(PlayerbotAI* botAI) { return new RaidUlduarStrategy(botAI); }
     static Strategy* icc(PlayerbotAI* botAI) { return new RaidIccStrategy(botAI); }
+    static Strategy* doomwalker(PlayerbotAI* botAI) { return new RaidDoomwalkerStrategy(botAI); }
+    static Strategy* doom_lord_kazzak(PlayerbotAI* botAI) { return new RaidDoomLordKazzakStrategy(botAI); }
 
     // Custom
     static Strategy* blacktemple(PlayerbotAI* botAI) { return new RaidBtStrategy(botAI); }

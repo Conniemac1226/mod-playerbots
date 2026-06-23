@@ -20,6 +20,7 @@
 #include "UldTriggerContext.h"
 #include "OnyTriggerContext.h"
 #include "ICCTriggerContext.h"
+#include "OutlandWorldBossTriggerContext.h"
 #include "Ai/Dungeon/DungeonAutoPullTriggerContext.h"
 #include "Ai/Dungeon/TbcDungeonTriggerContext.h"
 #include "Ai/Dungeon/WotlkDungeonTriggerContext.h"
@@ -63,6 +64,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidUlduarTriggerContext());
     triggerContexts.Add(new RaidOnyxiaTriggerContext());
     triggerContexts.Add(new RaidIccTriggerContext());
+    triggerContexts.Add(new RaidOutlandWorldBossTriggerContext());
     triggerContexts.Add(new DungeonAutoPullTriggerContext());
     triggerContexts.Add(new TbcDungeonAuchenaiCryptsTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());

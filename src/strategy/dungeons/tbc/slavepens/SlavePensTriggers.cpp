@@ -2,29 +2,28 @@
 #include "Playerbots.h"
 #include "SlavePensActions.h"
 
-// Mennu the Betrayer - Totems active
+// Mennu the Betrayer - Attackable totems active
 bool MennuTotemActiveTrigger::IsActive()
 {
-    if (botAI->IsHeal(bot)) { return false; }
+    Player* bot = botAI->GetBot();
+    if (!bot || botAI->IsHeal(bot))
+        return false;
 
-    // WotLK pattern for spawned adds - check for any totem type
-    uint32 totemIds[] = { NPC_NOVA_TOTEM, NPC_HEALING_WARD, NPC_EARTHGRAB_TOTEM, NPC_STONESKIN_TOTEM };
-    
-    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (auto& target : targets)
+    Unit* boss = bot->FindNearestCreature(NPC_MENNU_THE_BETRAYER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // WotLK-style spawned add check: presence, not combat state.
+    GuidVector const npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (ObjectGuid const& target : npcs)
     {
         Unit* unit = botAI->GetUnit(target);
-        if (unit && unit->IsInCombat())
+        if (unit && unit->IsAlive() && IsMennuAttackableTotemEntry(unit->GetEntry()))
         {
-            for (uint32 totemId : totemIds)
-            {
-                if (unit->GetEntry() == totemId)
-                {
-                    return true;
-                }
-            }
+            return true;
         }
     }
+
     return false;
 }
 
@@ -48,6 +47,10 @@ bool MennuNovaTotemNearbyTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
     if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_MENNU_THE_BETRAYER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
     Unit* totem = bot->FindNearestCreature(NPC_NOVA_TOTEM, 20.0f);
@@ -76,7 +79,21 @@ bool RokmarGrievousWoundTrigger::IsActive()
     return (bot->HasAura(SP_SPELL_GRIEVOUS_WOUND_N) || bot->HasAura(SP_SPELL_GRIEVOUS_WOUND_H)) && bot->GetHealthPct() < 90.0f;
 }
 
-// Water Spit at low health
+// Rokmar Frenzy at 20%
+bool RokmarFrenzyTrigger::IsActive()
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_ROKMAR_THE_CRACKLER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    return boss->HasAura(SP_SPELL_FRENZY);
+}
+
+// Water Spit cast incoming
 bool RokmarWaterSpitTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();
@@ -87,8 +104,8 @@ bool RokmarWaterSpitTrigger::IsActive()
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Water Spit at 10% health - boss_rokmar_the_crackler.cpp:64
-    return boss->GetHealthPct() < 10.0f;
+    // RESEARCHED: Water Spit is a timed cast - boss_rokmar_the_crackler.cpp:56-60
+    return boss->HasUnitState(UNIT_STATE_CASTING) && boss->FindCurrentSpellBySpellId(SP_SPELL_WATER_SPIT);
 }
 
 // Quagmirran - Acid Spray casting

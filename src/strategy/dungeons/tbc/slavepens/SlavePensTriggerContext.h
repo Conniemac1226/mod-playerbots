@@ -14,6 +14,7 @@ public:
         creators["nova totem nearby"] = &SlavePensTriggerContext::nova_totem_nearby;
         creators["ensnaring moss active"] = &SlavePensTriggerContext::ensnaring_moss_active;
         creators["grievous wound active"] = &SlavePensTriggerContext::grievous_wound_active;
+        creators["rokmar frenzy"] = &SlavePensTriggerContext::rokmar_frenzy;
         creators["water spit incoming"] = &SlavePensTriggerContext::water_spit_incoming;
         creators["acid spray casting"] = &SlavePensTriggerContext::acid_spray_casting;
         creators["poison bolt volley casting"] = &SlavePensTriggerContext::poison_bolt_volley_casting;
@@ -27,6 +28,7 @@ private:
     static Trigger* nova_totem_nearby(PlayerbotAI* ai) { return new MennuNovaTotemNearbyTrigger(ai); }
     static Trigger* ensnaring_moss_active(PlayerbotAI* ai) { return new RokmarEnsnaringMossTrigger(ai); }
     static Trigger* grievous_wound_active(PlayerbotAI* ai) { return new RokmarGrievousWoundTrigger(ai); }
+    static Trigger* rokmar_frenzy(PlayerbotAI* ai) { return new RokmarFrenzyTrigger(ai); }
     static Trigger* water_spit_incoming(PlayerbotAI* ai) { return new RokmarWaterSpitTrigger(ai); }
     static Trigger* acid_spray_casting(PlayerbotAI* ai) { return new QuagmirranAcidSprayTrigger(ai); }
     static Trigger* poison_bolt_volley_casting(PlayerbotAI* ai) { return new QuagmirranPoisonBoltVolleyTrigger(ai); }

@@ -13,6 +13,7 @@ public:
         creators["interrupt mennu lightning bolt"] = &SlavePensActionContext::interrupt_mennu_lightning_bolt;
         creators["avoid nova totem"] = &SlavePensActionContext::avoid_nova_totem;
         creators["dispel ensnaring moss"] = &SlavePensActionContext::dispel_ensnaring_moss;
+        creators["rokmar frenzy"] = &SlavePensActionContext::rokmar_frenzy;
         creators["heal grievous wound"] = &SlavePensActionContext::heal_grievous_wound;
         creators["avoid water spit"] = &SlavePensActionContext::avoid_water_spit;
         creators["avoid acid spray"] = &SlavePensActionContext::avoid_acid_spray;
@@ -26,6 +27,7 @@ private:
     static Action* interrupt_mennu_lightning_bolt(PlayerbotAI* ai) { return new MennuLightningBoltInterruptAction(ai); }
     static Action* avoid_nova_totem(PlayerbotAI* ai) { return new MennuNovaTotemAction(ai); }
     static Action* dispel_ensnaring_moss(PlayerbotAI* ai) { return new RokmarEnsnaringMossAction(ai); }
+    static Action* rokmar_frenzy(PlayerbotAI* ai) { return new RokmarFrenzyAction(ai); }
     static Action* heal_grievous_wound(PlayerbotAI* ai) { return new RokmarGrievousWoundAction(ai); }
     static Action* avoid_water_spit(PlayerbotAI* ai) { return new RokmarWaterSpitAction(ai); }
     static Action* avoid_acid_spray(PlayerbotAI* ai) { return new QuagmirranAcidSprayAction(ai); }

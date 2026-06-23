@@ -42,6 +42,13 @@ public:
     bool IsActive() override;
 };
 
+class RokmarFrenzyTrigger : public Trigger
+{
+public:
+    RokmarFrenzyTrigger(PlayerbotAI* ai) : Trigger(ai, "rokmar frenzy") {}
+    bool IsActive() override;
+};
+
 class RokmarWaterSpitTrigger : public Trigger
 {
 public:

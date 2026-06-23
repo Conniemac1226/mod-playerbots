@@ -17,23 +17,20 @@ float MennuTotemMultiplier::GetValue(Action* action)
     if (!bot)
         return 1.0f;
 
-    // WotLK pattern - check for any totem type present
-    uint32 totemIds[] = { NPC_NOVA_TOTEM, NPC_HEALING_WARD, NPC_EARTHGRAB_TOTEM, NPC_STONESKIN_TOTEM };
-    
-    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (auto& target : targets)
+    Unit* boss = bot->FindNearestCreature(NPC_MENNU_THE_BETRAYER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return 1.0f;
+
+    // WotLK-style spawned add check: only block when killable totems are present.
+    GuidVector const npcs = AI_VALUE(GuidVector, "nearest hostile npcs");
+    for (ObjectGuid const& target : npcs)
     {
         Unit* unit = botAI->GetUnit(target);
-        if (unit && unit->IsInCombat())
+        if (unit && unit->IsAlive() && IsMennuAttackableTotemEntry(unit->GetEntry()))
         {
-            for (uint32 totemId : totemIds)
-            {
-                if (unit->GetEntry() == totemId)
-                {
-                    return 0.0f; // Block DpsAssist when any totem present
-                }
-            }
+            return 0.0f; // Block DpsAssist when killable totems are present
         }
     }
+
     return 1.0f;
 }

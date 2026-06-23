@@ -624,6 +624,7 @@ private:
         return player && player->GetSession() && player->IsInWorld() && !player->IsDuringRemoveFromWorld() &&
                !player->IsBeingTeleported();
     }
+    void ApplyWorldBossStrategies();
 protected:
     Player* bot;
     Player* master;

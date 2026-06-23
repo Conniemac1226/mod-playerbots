@@ -20,6 +20,19 @@ enum SlavePensNpcs
     NPC_NOVA_TOTEM              = 18179   // Nova Totem
 };
 
+inline bool IsMennuAttackableTotemEntry(uint32 entry)
+{
+    switch (entry)
+    {
+        case NPC_HEALING_WARD:
+        case NPC_EARTHGRAB_TOTEM:
+        case NPC_STONESKIN_TOTEM:
+            return true;
+        default:
+            return false;
+    }
+}
+
 // RESEARCHED FROM: boss_mennu_the_betrayer.cpp:22-28
 enum MennuSpells
 {
@@ -79,6 +92,14 @@ class RokmarEnsnaringMossAction : public Action
 {
 public:
     RokmarEnsnaringMossAction(PlayerbotAI* ai) : Action(ai, "dispel ensnaring moss") {}
+    bool Execute(Event event) override;
+    bool isUseful() override;
+};
+
+class RokmarFrenzyAction : public Action
+{
+public:
+    RokmarFrenzyAction(PlayerbotAI* ai) : Action(ai, "rokmar frenzy") {}
     bool Execute(Event event) override;
     bool isUseful() override;
 };

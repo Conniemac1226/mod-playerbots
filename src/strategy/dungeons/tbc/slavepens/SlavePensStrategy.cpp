@@ -18,7 +18,7 @@ void SlavePensStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     
     triggers.push_back(new TriggerNode(
         "nova totem nearby",
-        NextAction::array(0, new NextAction("avoid nova totem", ACTION_MOVE + 3), nullptr)));
+        NextAction::array(0, new NextAction("avoid nova totem", ACTION_EMERGENCY), nullptr)));
 
     // Rokmar the Crackler
     triggers.push_back(new TriggerNode(
@@ -28,7 +28,11 @@ void SlavePensStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "grievous wound active",
         NextAction::array(0, new NextAction("heal grievous wound", ACTION_EMERGENCY), nullptr)));
-    
+
+    triggers.push_back(new TriggerNode(
+        "rokmar frenzy",
+        NextAction::array(0, new NextAction("rokmar frenzy", ACTION_DISPEL + 2), nullptr)));
+
     triggers.push_back(new TriggerNode(
         "water spit incoming",
         NextAction::array(0, new NextAction("avoid water spit", ACTION_MOVE + 2), nullptr)));

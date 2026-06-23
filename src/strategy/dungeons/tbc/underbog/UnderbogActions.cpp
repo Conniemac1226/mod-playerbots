@@ -1,6 +1,32 @@
 #include "UnderbogActions.h"
 #include "Playerbots.h"
 #include "Value.h"
+#include <unordered_map>
+
+namespace
+{
+    std::unordered_map<ObjectGuid, bool> blackStalkerLevitateHandledByBot;
+
+    bool IsBlackStalkerLevitateActive(Player* bot)
+    {
+        return bot && (bot->HasAura(UB_SPELL_LEVITATE) || bot->HasAura(SPELL_SUSPENSION));
+    }
+
+    bool NeedsBlackStalkerLevitateResponse(Player* bot)
+    {
+        if (!bot)
+            return false;
+
+        ObjectGuid const guid = bot->GetGUID();
+        if (!IsBlackStalkerLevitateActive(bot))
+        {
+            blackStalkerLevitateHandledByBot.erase(guid);
+            return false;
+        }
+
+        return blackStalkerLevitateHandledByBot.find(guid) == blackStalkerLevitateHandledByBot.end();
+    }
+}
 
 // Hungarfen - Avoid mushroom explosions at 20% health
 bool HungarfenMushroomAction::Execute(Event event)
@@ -281,7 +307,7 @@ bool MuselekHuntersMarkAction::isUseful()
     return bot->HasAura(UB_SPELL_HUNTERS_MARK);
 }
 
-// The Black Stalker - Position for levitate mechanic
+// The Black Stalker - One-shot response for the levitate / suspension chain
 bool BlackStalkerLevitateAction::Execute(Event event)
 {
     Player* bot = botAI->GetBot();
@@ -289,20 +315,23 @@ bool BlackStalkerLevitateAction::Execute(Event event)
         return false;
 
     // RESEARCHED: Levitate pulls players - boss_the_black_stalker.cpp:25-35
-    if (bot->HasAura(UB_SPELL_LEVITATE) || bot->HasAura(SPELL_SUSPENSION))
+    if (!NeedsBlackStalkerLevitateResponse(bot))
+        return false;
+
+    // Move once, then stay put until the aura chain ends.
+    float angle = bot->GetOrientation();
+    float x = bot->GetPositionX() + cos(angle) * 5.0f;
+    float y = bot->GetPositionY() + sin(angle) * 5.0f;
+    float z = bot->GetPositionZ();
+
+    // Try to move to lower ground
+    bot->UpdateAllowedPositionZ(x, y, z);
+
+    if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
+               MovementPriority::MOVEMENT_FORCED))
     {
-        // Try to position near ground to minimize fall damage
-        // Move towards a wall or lower ground if possible
-        float angle = bot->GetOrientation();
-        float x = bot->GetPositionX() + cos(angle) * 5.0f;
-        float y = bot->GetPositionY() + sin(angle) * 5.0f;
-        float z = bot->GetPositionZ();
-        
-        // Try to move to lower ground
-        bot->UpdateAllowedPositionZ(x, y, z);
-        
-        return MoveTo(bot->GetMapId(), x, y, z, false, false, false, true,
-                      MovementPriority::MOVEMENT_FORCED);
+        blackStalkerLevitateHandledByBot[bot->GetGUID()] = true;
+        return true;
     }
 
     return false;
@@ -314,7 +343,7 @@ bool BlackStalkerLevitateAction::isUseful()
     if (!bot)
         return false;
 
-    return bot->HasAura(UB_SPELL_LEVITATE) || bot->HasAura(SPELL_SUSPENSION);
+    return NeedsBlackStalkerLevitateResponse(bot);
 }
 
 // Attack Spore Striders

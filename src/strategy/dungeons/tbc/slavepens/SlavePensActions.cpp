@@ -2,64 +2,84 @@
 #include "Playerbots.h"
 #include "Value.h"
 
-// Mennu the Betrayer - Attack totems with priority
-bool AttackMennuTotemAction::Execute(Event event)
+namespace
 {
-    // RESEARCHED: Totems spawn pattern - boss_mennu_the_betrayer.cpp:71-83
-    // Priority: Nova (explosion) > Healing (60% hp) > Earthgrab (root) > Stoneskin (armor)
-    uint32 totemPriority[] = { NPC_NOVA_TOTEM, NPC_HEALING_WARD, NPC_EARTHGRAB_TOTEM, NPC_STONESKIN_TOTEM };
-    
-    Unit* priorityTotem = nullptr;
-    
-    // WotLK pattern with priority - find highest priority totem
-    GuidVector targets = AI_VALUE(GuidVector, "possible targets");
-    for (uint32 totemId : totemPriority)
+    Unit* FindMennuAttackableTotem(PlayerbotAI* botAI, Player* bot)
     {
-        for (auto& target : targets)
-        {
-            Unit* unit = botAI->GetUnit(target);
-            if (unit && unit->IsInCombat() && unit->GetEntry() == totemId)
-            {
-                priorityTotem = unit;
-                break; // Found highest priority, stop searching
-            }
-        }
-        if (priorityTotem) break; // Found totem, stop checking lower priorities
-    }
+        if (!botAI || !bot)
+            return nullptr;
 
-    Unit* currentTarget = AI_VALUE(Unit*, "current target");
-    // Prevent ping-pong between totems if attacking one already (unless higher priority found)
-    if (priorityTotem && currentTarget)
-    {
-        // Check if current target is a totem
-        bool currentIsTotem = false;
+        auto* npcsValue = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest hostile npcs");
+        if (!npcsValue)
+            return nullptr;
+
+        GuidVector const npcs = npcsValue->Get();
+        uint32 const totemPriority[] = { NPC_HEALING_WARD, NPC_EARTHGRAB_TOTEM, NPC_STONESKIN_TOTEM };
+        Unit* target = nullptr;
+        float bestDistance = 100.0f;
+
         for (uint32 totemId : totemPriority)
         {
-            if (currentTarget->GetEntry() == totemId)
+            for (ObjectGuid const& guid : npcs)
             {
-                currentIsTotem = true;
-                break;
-            }
-        }
-        
-        // If attacking a totem and found same/lower priority, don't switch
-        if (currentIsTotem && priorityTotem == currentTarget)
-        {
-            return false;
-        }
-    }
+                Unit* unit = botAI->GetUnit(guid);
+                if (!unit || !unit->IsAlive() || unit->GetEntry() != totemId)
+                    continue;
 
-    if (!priorityTotem || AI_VALUE(Unit*, "current target") == priorityTotem)
+                float distance = bot->GetExactDist2d(unit);
+                if (!target || distance < bestDistance)
+                {
+                    target = unit;
+                    bestDistance = distance;
+                }
+            }
+
+            if (target)
+                return target;
+        }
+
+        return nullptr;
+    }
+}
+
+// Mennu the Betrayer - Attack killable totems with priority
+bool AttackMennuTotemAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot || botAI->IsHeal(bot))
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_MENNU_THE_BETRAYER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Totems spawn pattern - boss_mennu_the_betrayer.cpp:62-78
+    // Priority: Healing Ward > Earthgrab > Stoneskin
+    // Nova Totem is handled as a movement hazard, not a kill target.
+    Unit* priorityTotem = FindMennuAttackableTotem(botAI, bot);
+    if (!priorityTotem)
+        return false;
+
+    Unit* currentTarget = AI_VALUE(Unit*, "current target");
+    if (currentTarget == priorityTotem)
     {
         return false;
     }
-    
+
     return Attack(priorityTotem);
 }
 
 bool AttackMennuTotemAction::isUseful()
 {
-    return !botAI->IsHeal(bot);
+    Player* bot = botAI->GetBot();
+    if (!bot || botAI->IsHeal(bot))
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_MENNU_THE_BETRAYER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    return FindMennuAttackableTotem(botAI, bot);
 }
 
 // Interrupt Mennu's Lightning Bolt
@@ -122,6 +142,10 @@ bool MennuNovaTotemAction::Execute(Event event)
     if (!bot)
         return false;
 
+    Unit* boss = bot->FindNearestCreature(NPC_MENNU_THE_BETRAYER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
     // RESEARCHED: Nova Totem explodes after delay - boss_mennu_the_betrayer.cpp:73
     // Move away IMMEDIATELY when totem spawns
     std::list<Creature*> totemList;
@@ -157,6 +181,10 @@ bool MennuNovaTotemAction::isUseful()
     if (!bot)
         return false;
 
+    Unit* boss = bot->FindNearestCreature(NPC_MENNU_THE_BETRAYER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
     Unit* totem = bot->FindNearestCreature(NPC_NOVA_TOTEM, 20.0f);
     return totem && totem->IsAlive() && bot->GetDistance(totem) < 10.0f;
 }
@@ -168,8 +196,26 @@ bool RokmarEnsnaringMossAction::Execute(Event event)
     if (!bot)
         return false;
 
-    // RESEARCHED: Ensnaring Moss - boss_rokmar_the_crackler.cpp:60
-    if (bot->HasAura(SP_SPELL_ENSNARING_MOSS))
+    // RESEARCHED: Ensnaring Moss - boss_rokmar_the_crackler.cpp:54-60
+    Player* dispelTarget = nullptr;
+    auto const considerTarget = [&](Player* target)
+    {
+        if (dispelTarget || !target || !target->IsAlive() || !target->HasAura(SP_SPELL_ENSNARING_MOSS))
+            return;
+
+        dispelTarget = target;
+    };
+
+    considerTarget(bot);
+
+    Group* group = bot->GetGroup();
+    if (group)
+    {
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            considerTarget(ref->GetSource());
+    }
+
+    if (dispelTarget)
     {
         // Try to dispel the root effect - SAFE PATTERN from HellfireRampartsActions.cpp:219-231
         Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel");
@@ -179,9 +225,9 @@ bool RokmarEnsnaringMossAction::Execute(Event event)
             for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
             {
                 uint32 spellId = *it;
-                if (botAI->CanCastSpell(spellId, bot, false))
+                if (botAI->CanCastSpell(spellId, dispelTarget, false))
                 {
-                    return botAI->CastSpell(spellId, bot);
+                    return botAI->CastSpell(spellId, dispelTarget);
                 }
             }
         }
@@ -196,7 +242,59 @@ bool RokmarEnsnaringMossAction::isUseful()
     if (!bot)
         return false;
 
-    return bot->HasAura(SP_SPELL_ENSNARING_MOSS);
+    if (bot->HasAura(SP_SPELL_ENSNARING_MOSS))
+        return true;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (member && member->IsAlive() && member->HasAura(SP_SPELL_ENSNARING_MOSS))
+            return true;
+    }
+
+    return false;
+}
+
+// Dispel Rokmar Frenzy
+bool RokmarFrenzyAction::Execute(Event event)
+{
+    Player* bot = botAI->GetBot();
+    if (!bot)
+        return false;
+
+    Unit* boss = bot->FindNearestCreature(NPC_ROKMAR_THE_CRACKLER, 50.0f);
+    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
+        return false;
+
+    // RESEARCHED: Frenzy at 20% health - boss_rokmar_the_crackler.cpp:39-42
+    if (!boss->HasAura(SP_SPELL_FRENZY))
+        return false;
+
+    Value<std::list<uint32>>* spellIdsValue = botAI->GetAiObjectContext()->GetValue<std::list<uint32>>("spell list", "dispel magic");
+    if (spellIdsValue)
+    {
+        std::list<uint32> spellIds = spellIdsValue->Get();
+        for (std::list<uint32>::iterator it = spellIds.begin(); it != spellIds.end(); ++it)
+        {
+            uint32 spellId = *it;
+            if (botAI->CanCastSpell(spellId, boss, false))
+            {
+                return botAI->CastSpell(spellId, boss);
+            }
+        }
+    }
+
+    return false;
+}
+
+bool RokmarFrenzyAction::isUseful()
+{
+    Unit* boss = AI_VALUE2(Unit*, "find target", "rokmar the crackler");
+    return boss && boss->IsAlive() && boss->IsInCombat() && boss->HasAura(SP_SPELL_FRENZY);
 }
 
 // Heal Grievous Wound
@@ -286,7 +384,7 @@ bool RokmarWaterSpitAction::Execute(Event event)
     if (!boss || !boss->IsAlive() || !boss->IsInCombat())
         return false;
 
-    // RESEARCHED: Water Spit AoE damage - boss_rokmar_the_crackler.cpp:62-65
+    // RESEARCHED: Water Spit is a timed cast - boss_rokmar_the_crackler.cpp:56-60
     // It's AoE centered on boss, spread out!
     if (boss->FindCurrentSpellBySpellId(SP_SPELL_WATER_SPIT))
     {
