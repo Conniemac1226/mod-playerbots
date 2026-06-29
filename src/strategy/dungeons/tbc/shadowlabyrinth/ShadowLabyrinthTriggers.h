@@ -41,13 +41,6 @@ public:
     bool IsActive() override;
 };
 
-class VorpilVoidTravelerTrigger : public Trigger
-{
-public:
-    VorpilVoidTravelerTrigger(PlayerbotAI* botAI) : Trigger(botAI, "vorpil void traveler") {}
-    bool IsActive() override;
-};
-
 class VorpilSpreadTrigger : public Trigger
 {
 public:

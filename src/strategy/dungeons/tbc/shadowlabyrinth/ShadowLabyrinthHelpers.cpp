@@ -5,6 +5,7 @@
 #include "SpellAuras.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace
 {
@@ -12,6 +13,22 @@ constexpr float kPi = 3.14159265358979323846f;
 constexpr float kVorpilCenterX = -253.548f;
 constexpr float kVorpilCenterY = -263.646f;
 constexpr float kVorpilCenterZ = 17.0864f;
+constexpr float kVorpilPlatformThresholdZ = 15.0f;
+constexpr float kVorpilEscapeRadius = 24.0f;
+
+struct VorpilEscapeSpot
+{
+    float x;
+    float y;
+    float z;
+};
+
+constexpr VorpilEscapeSpot kVorpilLowerEscapeSpots[] =
+{
+    {-282.272f, -240.432f, 12.683899f},
+    {-291.833f, -268.595f, 12.682545f},
+    {-303.966f, -255.759f, 12.683404f},
+};
 
 std::unordered_map<ObjectGuid, ShadowLabyrinth::VorpilCache> g_vorpilCache;
 std::unordered_map<ObjectGuid, ShadowLabyrinth::MurmurCache> g_murmurCache;
@@ -21,6 +38,11 @@ Position MakePosition(float x, float y, float z)
     Position pos;
     pos.Relocate(x, y, z);
     return pos;
+}
+
+Position MakePosition(VorpilEscapeSpot const& spot)
+{
+    return MakePosition(spot.x, spot.y, spot.z);
 }
 
 Player* GetTouchedGroupMember(PlayerbotAI* botAI, Player* bot, float maxDistance, uint32& touchExpireMs, ObjectGuid& touchedGuid)
@@ -83,6 +105,11 @@ bool ShadowLabyrinth::IsMurmur(Unit const* unit)
 bool ShadowLabyrinth::IsVoidTraveler(Unit const* unit)
 {
     return unit && unit->GetEntry() == NPC_VOID_TRAVELER;
+}
+
+bool ShadowLabyrinth::IsVorpilOnUpperPlatform(Player const* bot)
+{
+    return bot && bot->GetPositionZ() > kVorpilPlatformThresholdZ;
 }
 
 ShadowLabyrinth::VorpilCache& ShadowLabyrinth::GetVorpilCache(ObjectGuid const& botGuid)
@@ -238,6 +265,45 @@ bool ShadowLabyrinth::ShouldIssueMovement(uint32& lastMoveMs, Position& lastMove
 Position ShadowLabyrinth::GetVorpilCenter()
 {
     return MakePosition(kVorpilCenterX, kVorpilCenterY, kVorpilCenterZ);
+}
+
+Position ShadowLabyrinth::GetVorpilEscapePosition(Player* bot, Unit* boss)
+{
+    Position const centerPos = boss ? boss->GetPosition() : GetVorpilCenter();
+
+    if (!bot)
+        return centerPos;
+
+    if (IsVorpilOnUpperPlatform(bot))
+    {
+        VorpilEscapeSpot const* bestSpot = &kVorpilLowerEscapeSpots[0];
+        float bestDistance = std::numeric_limits<float>::max();
+
+        for (VorpilEscapeSpot const& spot : kVorpilLowerEscapeSpots)
+        {
+            float const dx = bot->GetPositionX() - spot.x;
+            float const dy = bot->GetPositionY() - spot.y;
+            float const distance = dx * dx + dy * dy;
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestSpot = &spot;
+            }
+        }
+
+        return MakePosition(*bestSpot);
+    }
+
+    float angle = bot->GetAngle(&centerPos);
+    if (!std::isfinite(angle))
+        angle = 0.0f;
+
+    float const currentDist = bot->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY());
+    float const escapeDistance = std::max(kVorpilEscapeRadius, currentDist + 8.0f);
+
+    return MakePosition(centerPos.GetPositionX() + std::cos(angle) * escapeDistance,
+        centerPos.GetPositionY() + std::sin(angle) * escapeDistance,
+        centerPos.GetPositionZ());
 }
 
 Position ShadowLabyrinth::GetVorpilSafeSpreadPosition(Player* bot, Unit* boss, Player const* nearestAlly)

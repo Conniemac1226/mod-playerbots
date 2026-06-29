@@ -92,21 +92,6 @@ bool BlackheartChargeTrigger::IsActive()
     return false;
 }
 
-bool VorpilVoidTravelerTrigger::IsActive()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-        
-    Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-    {
-        return false;
-    }
-
-    return ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, bot, boss, 80.0f) != nullptr;
-}
-
 bool VorpilSpreadTrigger::IsActive()
 {
     Player* bot = botAI->GetBot();

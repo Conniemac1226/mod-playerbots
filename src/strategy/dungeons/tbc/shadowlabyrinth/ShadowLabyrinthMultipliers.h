@@ -33,11 +33,4 @@ public:
     float GetValue(Action* action) override;
 };
 
-class VorpilVoidTravelerMultiplier : public Multiplier
-{
-public:
-    VorpilVoidTravelerMultiplier(PlayerbotAI* botAI) : Multiplier(botAI, "vorpil void traveler") {}
-    float GetValue(Action* action) override;
-};
-
 #endif

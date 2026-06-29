@@ -7,6 +7,20 @@
 
 #include <cmath>
 
+namespace
+{
+void ClearVorpilCombatMovement(Player* bot)
+{
+    if (!bot)
+        return;
+
+    bot->AttackStop();
+    bot->InterruptNonMeleeSpells(true);
+    bot->StopMoving();
+    if (MotionMaster* motionMaster = bot->GetMotionMaster())
+        motionMaster->Clear();
+}
+}
 
 bool AvoidCorrosiveAcidAction::Execute(Event event)
 {
@@ -218,73 +232,6 @@ bool BlackheartChargeReactAction::Execute(Event event)
     return false;
 }
 
-bool VoidTravelerPriorityAction::isUseful()
-{
-    Player* bot = botAI->GetBot();
-    if (!bot || !botAI)
-        return false;
-
-    // CRITICAL: HEALERS SHOULD NEVER ATTACK ADDS - Always prioritize healing
-    if (botAI->IsHeal(bot))
-        return false;
-
-    Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!boss || !boss->IsAlive() || !boss->IsInCombat())
-        return false;
-
-    if (boss->GetHealthPct() <= 12.0f)
-    {
-        return false;
-    }
-
-    Unit* voidTraveler = ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, bot, boss, 80.0f);
-    if (!voidTraveler)
-        return false;
-
-    if (botAI->IsTank(bot))
-    {
-        float const dangerDistance = voidTraveler->GetDistance(boss);
-        return dangerDistance < 20.0f;
-    }
-
-    return true;
-}
-
-bool VoidTravelerPriorityAction::Execute(Event event)
-{
-    Player* bot = botAI->GetBot();
-    if (!bot)
-        return false;
-
-    if (botAI->IsHeal(bot))
-        return false;
-        
-    Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
-    {
-        return false;
-    }
-    
-    Unit* voidTraveler = ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, bot, boss, 80.0f);
-
-    if (voidTraveler)
-    {
-        if (botAI->IsTank(bot) && voidTraveler->GetDistance(boss) > 20.0f)
-            return false;
-
-        bot->SetTarget(voidTraveler->GetGUID());
-
-        if (!voidTraveler->GetThreatMgr().GetThreat(bot))
-        {
-            voidTraveler->GetThreatMgr().AddThreat(bot, 1.0f);
-        }
-
-        return Attack(voidTraveler);
-    }
-    
-    return false;
-}
-
 bool VorpilSpreadAction::isUseful()
 {
     Player* bot = botAI->GetBot();
@@ -360,55 +307,51 @@ bool VorpilSpreadAction::Execute(Event event)
 
 bool MoveFromRainOfFireAction::Execute(Event event)
 {
+    Player* bot = botAI->GetBot();
     Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
+    if (!bot || !ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
 
     ShadowLabyrinth::VorpilCache& cache = ShadowLabyrinth::GetVorpilCache(bot->GetGUID());
     uint32 const now = getMSTime();
-    Position const centerPos = ShadowLabyrinth::GetVorpilCenter();
-
-    if (boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE) || bot->HasAura(SPELL_RAIN_OF_FIRE))
+    if (boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE) || bot->HasAura(SPELL_RAIN_OF_FIRE) ||
+        boss->FindCurrentSpellBySpellId(SPELL_DRAW_SHADOWS))
     {
-        float const safeRadius = 15.0f;
-        float currentDist = bot->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY());
-        
-        if (currentDist < safeRadius)
+        Position destination = ShadowLabyrinth::GetVorpilEscapePosition(bot, boss);
+        if (!ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 250U, 2.0f))
         {
-            float angle = atan2(bot->GetPositionY() - centerPos.GetPositionY(),
-                              bot->GetPositionX() - centerPos.GetPositionX());
-            Position destination = {centerPos.GetPositionX() + cos(angle) * (safeRadius + 3.0f),
-                centerPos.GetPositionY() + sin(angle) * (safeRadius + 3.0f), bot->GetPositionZ()};
-            if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
+            return false;
+        }
+
+        ClearVorpilCombatMovement(bot);
+
+        if (ShadowLabyrinth::IsVorpilOnUpperPlatform(bot) &&
+            destination.GetPositionZ() + 1.0f < bot->GetPositionZ())
+        {
+            if (MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                false, false, false, true, MovementPriority::MOVEMENT_FORCED, true))
             {
-                return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
-                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
+                return true;
             }
+
+            return JumpTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                MovementPriority::MOVEMENT_FORCED);
         }
+
+        return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+            false, false, false, true, MovementPriority::MOVEMENT_FORCED, true);
     }
 
-    if (bot->HasAura(SPELL_RAIN_OF_FIRE))
-    {
-        float angle = atan2(bot->GetPositionY() - centerPos.GetPositionY(),
-                          bot->GetPositionX() - centerPos.GetPositionX());
-        Position destination = {centerPos.GetPositionX() + cos(angle) * 18.0f,
-            centerPos.GetPositionY() + sin(angle) * 18.0f, bot->GetPositionZ()};
-        if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
-        {
-            return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
-                false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-        }
-    }
-    
     return false;
 }
 
 bool DrawShadowsReactAction::Execute(Event event)
 {
+    Player* bot = botAI->GetBot();
     Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
+    if (!bot || !ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
     {
         return false;
     }
@@ -417,22 +360,29 @@ bool DrawShadowsReactAction::Execute(Event event)
     {
         ShadowLabyrinth::VorpilCache& cache = ShadowLabyrinth::GetVorpilCache(bot->GetGUID());
         uint32 const now = getMSTime();
-        Position const centerPos = ShadowLabyrinth::GetVorpilCenter();
-        float const safeDistance = 15.0f;
-        float currentDist = bot->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY());
-        
-        if (currentDist < safeDistance)
+        Position destination = ShadowLabyrinth::GetVorpilEscapePosition(bot, boss);
+        if (!ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 250U, 2.0f))
         {
-            float angle = atan2(bot->GetPositionY() - centerPos.GetPositionY(), 
-                              bot->GetPositionX() - centerPos.GetPositionX());
-            Position destination = {centerPos.GetPositionX() + cos(angle) * (safeDistance + 3.0f),
-                centerPos.GetPositionY() + sin(angle) * (safeDistance + 3.0f), bot->GetPositionZ()};
-            if (ShadowLabyrinth::ShouldIssueMovement(cache.lastMoveMs, cache.lastMovePos, destination, now, 500U, 3.0f))
-            {
-                return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
-                    false, false, false, true, MovementPriority::MOVEMENT_FORCED);
-            }
+            return false;
         }
+
+        ClearVorpilCombatMovement(bot);
+
+        if (ShadowLabyrinth::IsVorpilOnUpperPlatform(bot) &&
+            destination.GetPositionZ() + 1.0f < bot->GetPositionZ())
+        {
+            if (MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                false, false, false, true, MovementPriority::MOVEMENT_FORCED, true))
+            {
+                return true;
+            }
+
+            return JumpTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+                MovementPriority::MOVEMENT_FORCED);
+        }
+
+        return MoveTo(bot->GetMapId(), destination.GetPositionX(), destination.GetPositionY(), destination.GetPositionZ(),
+            false, false, false, true, MovementPriority::MOVEMENT_FORCED, true);
     }
     
     return false;

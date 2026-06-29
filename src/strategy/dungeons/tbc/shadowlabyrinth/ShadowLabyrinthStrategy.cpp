@@ -24,17 +24,14 @@ void ShadowLabyrinthStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
         NextAction::array(0, new NextAction("blackheart charge react", ACTION_MOVE + 4), nullptr)));
     
     // Grandmaster Vorpil
-    triggers.push_back(new TriggerNode("vorpil void traveler",
-        NextAction::array(0, new NextAction("void traveler priority", ACTION_EMERGENCY), nullptr)));
-
     triggers.push_back(new TriggerNode("vorpil spread",
         NextAction::array(0, new NextAction("vorpil spread", ACTION_MOVE + 3), nullptr)));
     
     triggers.push_back(new TriggerNode("vorpil rain of fire",
-        NextAction::array(0, new NextAction("move from rain of fire", ACTION_MOVE + 5), nullptr)));
+        NextAction::array(0, new NextAction("move from rain of fire", ACTION_EMERGENCY + 1), nullptr)));
     
     triggers.push_back(new TriggerNode("vorpil draw shadows",
-        NextAction::array(0, new NextAction("draw shadows react", ACTION_MOVE + 6), nullptr)));
+        NextAction::array(0, new NextAction("draw shadows react", ACTION_EMERGENCY + 2), nullptr)));
     
     // Murmur
     triggers.push_back(new TriggerNode("murmur sonic boom",
@@ -56,6 +53,4 @@ void ShadowLabyrinthStrategy::InitMultipliers(std::vector<Multiplier*> &multipli
     multipliers.push_back(new BlackheartMultiplier(botAI));
     multipliers.push_back(new VorpilMultiplier(botAI));
     multipliers.push_back(new MurmurMultiplier(botAI));
-    // CRITICAL: Block DpsAssist when Void Travelers present - prevents boss/add oscillation
-    multipliers.push_back(new VorpilVoidTravelerMultiplier(botAI));
 }

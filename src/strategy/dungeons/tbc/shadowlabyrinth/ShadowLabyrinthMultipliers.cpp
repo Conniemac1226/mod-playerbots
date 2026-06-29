@@ -72,21 +72,6 @@ float VorpilMultiplier::GetValue(Action* action)
     if (!player)
         return 1.0f;
 
-    if (dynamic_cast<VoidTravelerPriorityAction*>(action))
-    {
-        if (botAI->IsHeal(player))
-            return 0.0f;
-
-        Unit* voidTraveler = ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, player, boss, 80.0f);
-        if (!voidTraveler)
-            return 0.0f;
-
-        if (botAI->IsTank(player))
-            return voidTraveler->GetDistance(boss) < 20.0f ? 1.0f : 0.0f;
-
-        return boss->GetHealthPct() > 12.0f ? 1.0f : 0.0f;
-    }
-
     if (dynamic_cast<VorpilSpreadAction*>(action))
     {
         if (botAI->IsTank(player) || boss->GetHealthPct() <= 12.0f)
@@ -109,12 +94,15 @@ float VorpilMultiplier::GetValue(Action* action)
         return 0.0f;
     }
 
+    Position const centerPos = ShadowLabyrinth::GetVorpilCenter();
+
     if (dynamic_cast<MoveFromRainOfFireAction*>(action))
     {
-        if (boss->HasAura(SPELL_RAIN_OF_FIRE) || boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE))
+        if (boss->HasAura(SPELL_RAIN_OF_FIRE) || boss->FindCurrentSpellBySpellId(SPELL_RAIN_OF_FIRE) ||
+            boss->HasAura(SPELL_DRAW_SHADOWS) || boss->FindCurrentSpellBySpellId(SPELL_DRAW_SHADOWS))
         {
-            Position centerPos = ShadowLabyrinth::GetVorpilCenter();
-            if (player->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY()) < 12.0f)
+            if (ShadowLabyrinth::IsVorpilOnUpperPlatform(player) ||
+                player->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY()) < 24.0f)
                 return 1.0f;
         }
         return 0.0f;
@@ -123,7 +111,11 @@ float VorpilMultiplier::GetValue(Action* action)
     if (dynamic_cast<DrawShadowsReactAction*>(action))
     {
         if (boss->HasAura(SPELL_DRAW_SHADOWS) || boss->FindCurrentSpellBySpellId(SPELL_DRAW_SHADOWS))
-            return 1.0f;
+        {
+            if (ShadowLabyrinth::IsVorpilOnUpperPlatform(player) ||
+                player->GetExactDist2d(centerPos.GetPositionX(), centerPos.GetPositionY()) < 24.0f)
+                return 1.0f;
+        }
         return 0.0f;
     }
 
@@ -206,24 +198,4 @@ float MurmurMultiplier::GetValue(Action* action)
     }
 
     return 1.0f;
-}
-
-float VorpilVoidTravelerMultiplier::GetValue(Action* action)
-{
-    if (!action || action->getName() != "dps assist")
-        return 1.0f;
-
-    Player* bot = botAI->GetBot();
-    Unit* boss = AI_VALUE2(Unit*, "find target", "grandmaster vorpil");
-    if (!bot || !ShadowLabyrinth::IsGrandmasterVorpil(boss) || !boss->IsAlive() || !boss->IsInCombat())
-        return 1.0f;
-
-    if (botAI->IsTank(bot))
-        return 1.0f;
-
-    Unit* voidTraveler = ShadowLabyrinth::FindNearestVoidTravelerCached(botAI, bot, boss, 80.0f);
-    if (!voidTraveler)
-        return 1.0f;
-
-    return boss->GetHealthPct() > 12.0f ? 0.0f : 1.0f;
 }

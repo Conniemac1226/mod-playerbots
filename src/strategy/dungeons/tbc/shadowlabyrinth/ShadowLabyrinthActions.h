@@ -43,14 +43,6 @@ public:
     bool Execute(Event event) override;
 };
 
-class VoidTravelerPriorityAction : public AttackAction
-{
-public:
-    VoidTravelerPriorityAction(PlayerbotAI* botAI) : AttackAction(botAI, "void traveler priority") {}
-    bool isUseful() override;
-    bool Execute(Event event) override;
-};
-
 class VorpilSpreadAction : public MovementAction
 {
 public:

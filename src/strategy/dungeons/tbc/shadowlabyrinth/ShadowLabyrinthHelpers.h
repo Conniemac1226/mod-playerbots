@@ -70,6 +70,8 @@ bool ShouldIssueMovement(uint32& lastMoveMs, Position& lastMovePos, Position con
     uint32 now, uint32 cooldownMs, float minimumDelta);
 
 Position GetVorpilCenter();
+bool IsVorpilOnUpperPlatform(Player const* bot);
+Position GetVorpilEscapePosition(Player* bot, Unit* boss);
 Position GetVorpilSafeSpreadPosition(Player* bot, Unit* boss, Player const* nearestAlly);
 Position GetMurmurSafeMovePosition(Player* bot, Unit* boss, Unit const* threatSource, float desiredDistance);
 
