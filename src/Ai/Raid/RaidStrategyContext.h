@@ -20,6 +20,7 @@
 #include "UldStrategy.h"
 #include "OnyStrategy.h"
 #include "ICCStrategy.h"
+#include "RSStrategy.h"
 #include "OutlandWorldBossStrategy.h"
 #include "../../strategy/raids/blacktemple/BlackTempleStrategy.h"
 
@@ -46,6 +47,7 @@ public:
         creators["ulduar"] = &RaidStrategyContext::ulduar;
         creators["onyxia"] = &RaidStrategyContext::onyxia;
         creators["icc"] = &RaidStrategyContext::icc;
+        creators["rs"] = &RaidStrategyContext::rs;
 
         // Custom / Unique to this branch
         creators["doomwalker"] = &RaidStrategyContext::doomwalker;
@@ -80,6 +82,7 @@ private:
     static Strategy* onyxia(PlayerbotAI* botAI) { return new RaidOnyxiaStrategy(botAI); }
     static Strategy* ulduar(PlayerbotAI* botAI) { return new RaidUlduarStrategy(botAI); }
     static Strategy* icc(PlayerbotAI* botAI) { return new RaidIccStrategy(botAI); }
+    static Strategy* rs(PlayerbotAI* botAI) { return new RaidRsStrategy(botAI); }
     static Strategy* doomwalker(PlayerbotAI* botAI) { return new RaidDoomwalkerStrategy(botAI); }
     static Strategy* doom_lord_kazzak(PlayerbotAI* botAI) { return new RaidDoomLordKazzakStrategy(botAI); }
 

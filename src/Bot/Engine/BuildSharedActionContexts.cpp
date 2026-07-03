@@ -20,6 +20,7 @@
 #include "UldActionContext.h"
 #include "OnyActionContext.h"
 #include "ICCActionContext.h"
+#include "RSActionContext.h"
 #include "OutlandWorldBossActionContext.h"
 #include "Ai/Dungeon/DungeonAutoPullActionContext.h"
 #include "Ai/Dungeon/TbcDungeonActionContext.h"
@@ -64,6 +65,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidUlduarActionContext());
     actionContexts.Add(new RaidOnyxiaActionContext());
     actionContexts.Add(new RaidIccActionContext());
+    actionContexts.Add(new RaidRsActionContext());
     actionContexts.Add(new RaidOutlandWorldBossActionContext());
     actionContexts.Add(new DungeonAutoPullActionContext());
     actionContexts.Add(new TbcDungeonAuchenaiCryptsActionContext());
