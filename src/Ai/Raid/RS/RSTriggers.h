@@ -73,7 +73,7 @@ enum SpellIdsRS
     SPELL_FLAME_BREATH_ALT4             = 74526,
     SPELL_FLAME_BREATH_ALT5             = 74527,
     SPELL_FLAME_BREATH_ALT6             = 74528,
-    SPELL_CLEAVE                        = 74524,
+    RS_SPELL_CLEAVE                     = 74524,
     SPELL_TAIL_LASH                     = 74531,
 
     SPELL_FIERY_COMBUSTION              = 74562,
