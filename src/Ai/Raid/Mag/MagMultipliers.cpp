@@ -1,136 +1,139 @@
+/*
+ * This file is part of the mod-playerbots module for AzerothCore. See AUTHORS file for Copyright
+ * information; released under GNU GPL v2 license, redistribute/modify under version 2 of the License,
+ * or (at your option) any later version.
+ */
+
 #include <unordered_map>
 #include <ctime>
 
-#include "Log.h"
 #include "MagMultipliers.h"
 #include "MagActions.h"
 #include "MagHelpers.h"
+#include "DruidBearActions.h"
+#include "DKActions.h"
 #include "ChooseTargetActions.h"
+#include "FollowActions.h"
 #include "GenericSpellActions.h"
+#include "HunterActions.h"
+#include "MageActions.h"
+#include "MovementActions.h"
+#include "PaladinActions.h"
 #include "Playerbots.h"
-#include "WarlockActions.h"
+#include "ReachTargetActions.h"
+#include "WarriorActions.h"
 #include "WipeAction.h"
 
 using namespace MagtheridonHelpers;
 
-namespace
-{
-    std::string DescribeMagtheridonAction(Action* action)
-    {
-        if (!action)
-            return "action=none";
-
-        std::string type = "other";
-        if (dynamic_cast<AttackAction*>(action))
-            type = "attack";
-        else if (dynamic_cast<CastSpellAction*>(action))
-            type = "cast";
-        else if (dynamic_cast<MovementAction*>(action))
-            type = "move";
-        else if (dynamic_cast<WipeAction*>(action))
-            type = "wipe";
-
-        return "action_name=" + action->getName() + " action_type=" + type;
-    }
-}
-
-// Don't do anything other than clicking cubes when Magtheridon is casting Blast Nova
+// When a cube clicker is in the handling phase (waiting near cube or moving
+// to use), suppress movement actions that would pull them away from the cube
 float MagtheridonUseManticronCubeMultiplier::GetValue(Action* action)
 {
-    Unit* magtheridon = FindMagtheridon(botAI, bot);
+    if (!AI_VALUE2(Unit*, "find target", "magtheridon"))
+        return 1.0f;
+
+    if (!IsCubeClicker(bot))
+        return 1.0f;
+
+    auto timerIt = blastNovaTimer.find(bot->GetMap()->GetInstanceId());
+    if (timerIt == blastNovaTimer.end() ||
+        time(nullptr) - timerIt->second < BLAST_NOVA_INTERIM_SECONDS)
+    {
+        return 1.0f;
+    }
+
+    if (dynamic_cast<FleeAction*>(action) ||
+        dynamic_cast<FollowAction*>(action) ||
+        dynamic_cast<ReachTargetAction*>(action) ||
+        dynamic_cast<CastBlinkBackAction*>(action) ||
+        dynamic_cast<CastReachTargetSpellAction*>(action) ||
+        dynamic_cast<CastDisengageAction*>(action))
+    {
+        return 0.0f;
+    }
+
+    return 1.0f;
+}
+
+// Wait for 6 seconds after Magtheridon becomes attackable before engaging
+float MagtheridonWaitToAttackMultiplier::GetValue(Action* action)
+{
+    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
+    if (!magtheridon || !IsMagtheridonActive(magtheridon))
+        return 1.0f;
+
+    if (botAI->IsHeal(bot) || botAI->IsMainTank(bot))
+        return 1.0f;
+
+    constexpr uint8 dpsWaitSeconds = 6;
+    auto it = dpsWaitTimer.find(magtheridon->GetMap()->GetInstanceId());
+    if (it != dpsWaitTimer.end() && time(nullptr) - it->second > dpsWaitSeconds)
+        return 1.0f;
+
+    if (dynamic_cast<AttackAction*>(action) ||
+        dynamic_cast<CastSpellAction*>(action))
+    {
+        return 0.0f;
+    }
+
+    return 1.0f;
+}
+
+float MagtheridonControlTankActionsMultiplier::GetValue(Action* action)
+{
+    if (!botAI->IsTank(bot) || bot->GetVictim() == nullptr)
+        return 1.0f;
+
+    Unit* magtheridon = AI_VALUE2(Unit*, "find target", "magtheridon");
     if (!magtheridon)
         return 1.0f;
 
-    if (magtheridon->HasUnitState(UNIT_STATE_CASTING) &&
-        magtheridon->FindCurrentSpellBySpellId(SPELL_BLAST_NOVA))
-    {
-        auto it = botToCubeAssignment.find(bot->GetGUID());
-        if (it != botToCubeAssignment.end())
-        {
-            if (dynamic_cast<WipeAction*>(action))
-                return 1.0f;
-            else if (!dynamic_cast<MagtheridonUseManticronCubeAction*>(action))
-            {
-                LogMagtheridonDebug(botAI, bot, "multiplier_cube_block",
-                    DescribeMagtheridonAction(action) + " reason=blast_nova_active " +
-                    GetMagtheridonTargetDecisionFields(botAI ? botAI->GetUnit(bot->GetTarget()) : nullptr, magtheridon, nullptr, "multiplier_cube_block", "non_cube_action"),
-                    magtheridon, 5);
-                return 0.0f;
-            }
-        }
-    }
-
-    return 1.0f;
-}
-
-// Bots will wait for 6 seconds after Magtheridon becomes attackable before engaging
-float MagtheridonWaitToAttackMultiplier::GetValue(Action* action)
-{
-    Unit* magtheridon = FindMagtheridon(botAI, bot);
-    if (!magtheridon || magtheridon->HasAura(SPELL_SHADOW_CAGE))
-        return 1.0f;
-
-    if (botAI->IsMainTank(bot))
-        return 1.0f;
-
-    const uint8 dpsWaitSeconds = 6;
-    auto it = dpsWaitTimer.find(magtheridon->GetMap()->GetInstanceId());
-    if (it == dpsWaitTimer.end() ||
-        (time(nullptr) - it->second) < dpsWaitSeconds)
-    {
-        if (dynamic_cast<AttackAction*>(action) ||
-            (!botAI->IsHeal(bot) && dynamic_cast<CastSpellAction*>(action)))
-        {
-            LogMagtheridonDebug(botAI, bot, "multiplier_wait_block",
-                DescribeMagtheridonAction(action) + " reason=wait_to_attack " +
-                GetMagtheridonTargetDecisionFields(botAI ? botAI->GetUnit(bot->GetTarget()) : nullptr, magtheridon, nullptr, "multiplier_wait_block", "attack_or_cast"),
-                magtheridon, 5);
-            return 0.0f;
-        }
-    }
-
-    return 1.0f;
-}
-
-float MagtheridonDisableOffTankAssistMultiplier::GetValue(Action* action)
-{
-    Unit* magtheridon = FindMagtheridon(botAI, bot);
-    if (!magtheridon || !IsMagtheridonChannelerPhaseActive(botAI, bot))
-        return 1.0f;
-
-    if (bot->GetVictim() == nullptr)
-        return 1.0f;
-
-    if ((botAI->IsAssistTankOfIndex(bot, 0) || botAI->IsAssistTankOfIndex(bot, 1)) &&
+    if (dynamic_cast<CombatFormationMoveAction*>(action) ||
         dynamic_cast<TankAssistAction*>(action))
+    {
+        return 0.0f;
+    }
+
+    if (!botAI->IsMainTank(bot) && magtheridon->GetVictim() != bot)
+        return 1.0f;
+
+    if (dynamic_cast<AvoidAoeAction*>(action))
         return 0.0f;
 
+    if (IsMagtheridonActive(magtheridon) || GetChanneler(bot, SOUTH_CHANNELER) ||
+        GetChanneler(bot, WEST_CHANNELER) || GetChanneler(bot, EAST_CHANNELER))
+    {
+        return 1.0f;
+    }
+
+    if (dynamic_cast<CastReachTargetSpellAction*>(action) ||
+        dynamic_cast<CastTauntAction*>(action) ||
+        dynamic_cast<CastGrowlAction*>(action) ||
+        dynamic_cast<CastHandOfReckoningAction*>(action) ||
+        dynamic_cast<CastDarkCommandAction*>(action))
+    {
+        return 0.0f;
+    }
+
     return 1.0f;
 }
 
-float MagtheridonChannelerTargetMultiplier::GetValue(Action* action)
+float MagtheridonDebrisDangerMultiplier::GetValue(Action* action)
 {
-    Unit* magtheridon = FindMagtheridon(botAI, bot);
-    if (!magtheridon || botAI->IsHeal(bot) ||
-        !IsMagtheridonChannelerPhaseActive(botAI, bot))
-        return 1.0f;
-
-    bool const genericAssist =
-        dynamic_cast<DpsAssistAction*>(action) || dynamic_cast<TankAssistAction*>(action);
-    if (!genericAssist)
-        return 1.0f;
-
-    bool const channelerAlive = HasAliveMagtheridonChanneler(bot);
-    bool const bossActive = !magtheridon->HasAura(SPELL_SHADOW_CAGE);
-    bool const abyssalAlive = HasAliveBurningAbyssal(botAI, bot);
-
-    if (channelerAlive || (bossActive && abyssalAlive))
+    if (!AI_VALUE2(Unit*, "find target", "magtheridon") ||
+        dynamic_cast<WipeAction*>(action) ||
+        dynamic_cast<MagtheridonMoveOutOfDebrisAction*>(action))
     {
-        std::string const reason = channelerAlive ? "channelers_alive" : "boss_priority_while_abyssals_alive";
-        LogMagtheridonDebug(botAI, bot, "multiplier_channeler_block",
-            DescribeMagtheridonAction(action) + " reason=" + reason + " " +
-            GetMagtheridonTargetDecisionFields(botAI ? botAI->GetUnit(bot->GetTarget()) : nullptr, magtheridon, nullptr, "multiplier_channeler_block", "dps_or_tank_assist"),
-            magtheridon, 5);
+        return 1.0f;
+    }
+
+    // 15y is wider than the default hazard zone but is needed to
+    // keep the multiplier in effect
+    if (IsPositionInActiveDebris(
+            bot->GetMap()->GetInstanceId(), bot->GetPositionX(),
+            bot->GetPositionY(), 15.0f))
+    {
         return 0.0f;
     }
 
