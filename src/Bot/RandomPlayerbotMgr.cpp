@@ -485,13 +485,6 @@ void RandomPlayerbotMgr::PreloadArenaTeamBots()
         if (!arenaTeam)
             continue;
 
-        bool hasRandomCaptain = false;
-        if (CharacterCacheEntry const* captainInfo = sCharacterCache->GetCharacterCacheByGuid(arenaTeam->GetCaptain()))
-            hasRandomCaptain = sPlayerbotAIConfig.IsInRandomAccountList(captainInfo->AccountId);
-
-        if (!hasRandomCaptain)
-            continue;
-
         for (ArenaTeam::MemberList::const_iterator itr = arenaTeam->GetMembers().begin();
              itr != arenaTeam->GetMembers().end(); ++itr)
         {
