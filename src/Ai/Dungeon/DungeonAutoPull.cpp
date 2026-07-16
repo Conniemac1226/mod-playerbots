@@ -10,7 +10,7 @@
 
 namespace
 {
-constexpr float AUTO_PULL_SEARCH_RANGE = 55.0f;
+constexpr float AUTO_PULL_SEARCH_RANGE = 25.0f;
 constexpr float AUTO_PULL_GROUP_RANGE = 35.0f;
 constexpr float AUTO_PULL_HEALER_MANA_PCT = 45.0f;
 constexpr float AUTO_PULL_MEMBER_HP_PCT = 60.0f;
@@ -23,6 +23,8 @@ constexpr float AUTO_PULL_VERTICAL_PENALTY_STEP = 2.5f;
 constexpr float AUTO_PULL_PACK_RADIUS = 12.0f;
 constexpr float AUTO_PULL_SIDE_PACK_RADIUS = 20.0f;
 constexpr float AUTO_PULL_BOSS_TRASH_GUARD_RADIUS = 30.0f;
+constexpr float AUTO_PULL_HEALER_TANK_DISTANCE = 24.0f;
+constexpr float AUTO_PULL_HEALER_FOLLOW_DISTANCE = 18.0f;
 
 struct PullCandidateScore
 {
@@ -238,6 +240,17 @@ bool IsGroupReadyForAdvancePull(PlayerbotAI* botAI, Player* bot)
     return !foundHealer || healerReady;
 }
 
+bool IsDungeonHealerRegroupNeeded(PlayerbotAI* botAI, Player* bot)
+{
+    if (!botAI || !bot || !bot->GetMap() || !bot->GetMap()->IsDungeon() || !botAI->IsHeal(bot))
+        return false;
+
+    Unit* mainTank = botAI->GetAiObjectContext()->GetValue<Unit*>("main tank")->Get();
+    return mainTank && mainTank != bot && mainTank->IsAlive() && mainTank->GetMapId() == bot->GetMapId() &&
+        mainTank->GetInstanceId() == bot->GetInstanceId() &&
+        (bot->GetDistance(mainTank) > AUTO_PULL_HEALER_TANK_DISTANCE || !bot->IsWithinLOSInMap(mainTank));
+}
+
 Unit* SelectAdvancePullTarget(PlayerbotAI* botAI, Player* bot)
 {
     if (!botAI || !bot)
@@ -289,6 +302,8 @@ void DungeonAutoPull::AddDefaultPullTrigger(std::vector<TriggerNode*>& triggers)
 void DungeonAutoPull::AddDefaultPullTrigger(std::vector<TriggerNode*>& triggers, float relevance)
 {
     triggers.push_back(new TriggerNode("dungeon auto pull ready", { NextAction("dungeon auto pull", relevance) }));
+    triggers.push_back(new TriggerNode("dungeon healer regroup",
+                                      { NextAction("dungeon healer regroup", relevance + 1.0f) }));
 }
 
 bool DungeonAutoPullReadyTrigger::IsActive()
@@ -325,4 +340,24 @@ bool DungeonAutoPullAction::isUseful()
 {
     Player* bot = botAI->GetBot();
     return IsGroupReadyForAdvancePull(botAI, bot) && SelectAdvancePullTarget(botAI, bot);
+}
+
+bool DungeonHealerRegroupTrigger::IsActive()
+{
+    return IsDungeonHealerRegroupNeeded(botAI, botAI->GetBot());
+}
+
+bool DungeonHealerRegroupAction::Execute(Event /*event*/)
+{
+    Player* bot = botAI->GetBot();
+    if (!IsDungeonHealerRegroupNeeded(botAI, bot))
+        return false;
+
+    Unit* mainTank = botAI->GetAiObjectContext()->GetValue<Unit*>("main tank")->Get();
+    return Follow(mainTank, AUTO_PULL_HEALER_FOLLOW_DISTANCE);
+}
+
+bool DungeonHealerRegroupAction::isUseful()
+{
+    return IsDungeonHealerRegroupNeeded(botAI, botAI->GetBot());
 }
