@@ -730,8 +730,18 @@ bool BGStatusAction::LeaveBG(PlayerbotAI* botAI)
     bot->GetSession()->HandleBattlefieldLeaveOpcode(packet);
 
     if (bot->GetBattleground() && !bot->IsBeingTeleported())
-        LOG_WARN("playerbots", "Bot {} <{}> leave request did not start a teleport from {}",
-                 bot->GetGUID().ToString().c_str(), bot->GetName(), isArena ? "Arena" : "BG");
+    {
+        if (bot->GetBattleground() == bg && bg->GetStatus() == STATUS_WAIT_LEAVE &&
+            !bot->GetMap()->IsBattlegroundOrArena())
+        {
+            LOG_WARN("playerbots", "Bot {} <{}> had stale {} state after the match; clearing battleground state",
+                     bot->GetGUID().ToString().c_str(), bot->GetName(), isArena ? "Arena" : "BG");
+            bg->RemovePlayerAtLeave(bot);
+        }
+        else
+            LOG_WARN("playerbots", "Bot {} <{}> leave request did not start a teleport from {}",
+                     bot->GetGUID().ToString().c_str(), bot->GetName(), isArena ? "Arena" : "BG");
+    }
 
     botAI->ResetStrategies(!isRandomBot);
     botAI->GetAiObjectContext()->GetValue<uint32>("bg type")->Set(0);
