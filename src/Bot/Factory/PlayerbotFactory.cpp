@@ -606,12 +606,13 @@ uint8 PlayerbotFactory::GetPreferredArmorType(uint8 cls)
     {
         case CLASS_WARRIOR:
         case CLASS_PALADIN:
+            return bot->GetLevel() >= 40 ? ITEM_SUBCLASS_ARMOR_PLATE : ITEM_SUBCLASS_ARMOR_MAIL;
         case CLASS_DEATH_KNIGHT:
             return ITEM_SUBCLASS_ARMOR_PLATE;
 
         case CLASS_HUNTER:
         case CLASS_SHAMAN:
-            return ITEM_SUBCLASS_ARMOR_MAIL;
+            return bot->GetLevel() >= 40 ? ITEM_SUBCLASS_ARMOR_MAIL : ITEM_SUBCLASS_ARMOR_LEATHER;
 
         case CLASS_ROGUE:
         case CLASS_DRUID:
@@ -661,7 +662,7 @@ void PlayerbotFactory::Prepare()
     }
 }
 
-void PlayerbotFactory::Randomize(bool incremental)
+void PlayerbotFactory::Randomize(bool incremental, bool resetItems)
 {
     // if (sPlayerbotAIConfig.disableRandomLevels)
     //     return;
@@ -684,7 +685,7 @@ void PlayerbotFactory::Randomize(bool incremental)
         ClearSkills();
         ClearSpells();
         ResetQuests();
-        if (!sPlayerbotAIConfig.equipAndSpecPersistence ||
+        if (resetItems || !sPlayerbotAIConfig.equipAndSpecPersistence ||
             level < uint32(sPlayerbotAIConfig.equipAndSpecPersistenceLevel))
         {
             ClearAllItems();
@@ -3105,6 +3106,7 @@ void PlayerbotFactory::InitSkills()
 
     uint32 skillLevel = bot->GetLevel() < 40 ? 0 : 1;
     uint32 dualWieldLevel = bot->GetLevel() < 20 ? 0 : 1;
+    uint32 rogueDualWieldLevel = bot->GetLevel() < 10 ? 0 : 1;
     SetRandomSkill(SKILL_DEFENSE);
     SetRandomSkill(SKILL_UNARMED);
     switch (bot->getClass())
@@ -3202,8 +3204,8 @@ void PlayerbotFactory::InitSkills()
             SetRandomSkill(SKILL_FIST_WEAPONS);
             SetRandomSkill(SKILL_THROWN);
             SetRandomSkill(SKILL_LOCKPICKING);
-            bot->SetSkill(SKILL_DUAL_WIELD, 0, 1, 1);
-            bot->SetCanDualWield(true);
+            bot->SetSkill(SKILL_DUAL_WIELD, 0, rogueDualWieldLevel, rogueDualWieldLevel);
+            bot->SetCanDualWield(rogueDualWieldLevel);
             break;
         case CLASS_DEATH_KNIGHT:
             SetRandomSkill(SKILL_SWORDS);

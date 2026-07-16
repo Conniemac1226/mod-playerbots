@@ -827,14 +827,15 @@ AiPlayerbot.RandomGearQualityLimit = 3
 AiPlayerbot.RandomGearScoreLimit = 0
 
 # Prefer armor of the class's ideal type: apply 3x score multiplier to class-appropriate armor.
-# When enabled, Warriors strongly prefer plate, Shamans prefer mail, etc.
+# The preferred type follows proficiency level: Warriors/Paladins prefer mail before 40 and plate afterward;
+# Hunters/Shamans prefer leather before 40 and mail afterward.
 # A truly superior item can still win (no hard filtering), but same-quality
 # armor of the preferred type will score 3x higher and be equipped instead.
 #
 # ARMOR TYPE PREFERENCES:
-#   Plate:   Warriors, Paladins, Death Knights
-#   Mail:    Hunters, Shamans
-#   Leather: Rogues, Druids
+#   Plate:   level 40+ Warriors/Paladins, Death Knights
+#   Mail:    low-level Warriors/Paladins, level 40+ Hunters/Shamans
+#   Leather: low-level Hunters/Shamans, Rogues, Druids
 #   Cloth:   Priests, Mages, Warlocks
 #
 # Default: 0 (disabled)
