@@ -11,6 +11,7 @@
 #include "BattlegroundMgr.h"
 #include "Event.h"
 #include "GroupMgr.h"
+#include "MapMgr.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
 #include "PositionValue.h"
@@ -700,6 +701,7 @@ bool BGStatusAction::LeaveBG(PlayerbotAI* botAI)
         return false;
     bool isArena = bg->isArena();
     bool isRandomBot = sRandomPlayerbotMgr.IsRandomBot(bot);
+    WorldLocation entryPoint = bot->GetEntryPoint();
 
     if (isRandomBot)
         botAI->SetMaster(nullptr);
@@ -721,24 +723,34 @@ bool BGStatusAction::LeaveBG(PlayerbotAI* botAI)
              bot->GetTeamId() == TEAM_ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(),
              isArena ? "Arena" : "BG");
 
-    WorldPacket packet(CMSG_LEAVE_BATTLEFIELD);
-    packet << uint8(0);
-    packet << uint8(0);  // BattlegroundTypeId-1 ?
-    packet << uint32(0);
-    packet << uint16(0);
-
-    bot->GetSession()->HandleBattlefieldLeaveOpcode(packet);
-
-    if (bot->GetBattleground() && !bot->IsBeingTeleported())
+    if (bg->GetStatus() == STATUS_WAIT_LEAVE)
     {
-        if (bot->GetBattleground() == bg && bg->GetStatus() == STATUS_WAIT_LEAVE &&
-            !bot->GetMap()->IsBattlegroundOrArena())
+        // The match has already ended, so RemovePlayerAtLeave will not apply arena rating changes again.
+        LOG_WARN("playerbots", "Bot {} <{}> had stale {} state; clearing it",
+                 bot->GetGUID().ToString().c_str(), bot->GetName(), isArena ? "Arena" : "BG");
+
+        if (!MapMgr::IsValidMapCoord(entryPoint))
         {
-            LOG_WARN("playerbots", "Bot {} <{}> had stale {} state after the match; clearing battleground state",
-                     bot->GetGUID().ToString().c_str(), bot->GetName(), isArena ? "Arena" : "BG");
-            bg->RemovePlayerAtLeave(bot);
+            bot->SetEntryPoint();
+            entryPoint = bot->GetEntryPoint();
         }
-        else
+
+        if (!bot->IsBeingTeleported() && MapMgr::IsValidMapCoord(entryPoint))
+            bot->TeleportTo(entryPoint);
+
+        bg->RemovePlayerAtLeave(bot);
+    }
+    else
+    {
+        WorldPacket packet(CMSG_LEAVE_BATTLEFIELD);
+        packet << uint8(0);
+        packet << uint8(0);  // BattlegroundTypeId-1 ?
+        packet << uint32(0);
+        packet << uint16(0);
+
+        bot->GetSession()->HandleBattlefieldLeaveOpcode(packet);
+
+        if (bot->GetBattleground() && !bot->IsBeingTeleported())
             LOG_WARN("playerbots", "Bot {} <{}> leave request did not start a teleport from {}",
                      bot->GetGUID().ToString().c_str(), bot->GetName(), isArena ? "Arena" : "BG");
     }
