@@ -146,9 +146,11 @@ bool FindDoomwalkerMeleeSpreadPosition(Player* bot, Unit* doomwalker,
     return false;
 }
 
-bool HasActiveDoomwalker(Unit* doomwalker)
+bool IsDoomwalkerCasting(Unit* doomwalker, uint32 spellId)
 {
-    return doomwalker && doomwalker->IsAlive() && doomwalker->IsInCombat();
+    return doomwalker && doomwalker->IsAlive() && doomwalker->IsInCombat() &&
+           doomwalker->HasUnitState(UNIT_STATE_CASTING) &&
+           doomwalker->FindCurrentSpellBySpellId(spellId);
 }
 
 bool IsOffensiveSpellAction(Action* action)
@@ -171,7 +173,7 @@ bool DoomwalkerChainLightningSpreadAction::Execute(Event /*event*/)
         return false;
 
     Unit* doomwalker = AI_VALUE2(Unit*, "find target", "doomwalker");
-    if (!HasActiveDoomwalker(doomwalker))
+    if (!IsDoomwalkerCasting(doomwalker, SPELL_DOOMWALKER_CHAIN_LIGHTNING))
         return false;
 
     if (!HasGroupMemberWithinDistance(bot, DOOMWALKER_SPREAD_DISTANCE))
@@ -208,7 +210,7 @@ bool DoomwalkerChainLightningSpreadAction::isUseful()
         return false;
 
     Unit* doomwalker = AI_VALUE2(Unit*, "find target", "doomwalker");
-    return HasActiveDoomwalker(doomwalker) &&
+    return IsDoomwalkerCasting(doomwalker, SPELL_DOOMWALKER_CHAIN_LIGHTNING) &&
            HasGroupMemberWithinDistance(bot, DOOMWALKER_SPREAD_DISTANCE);
 }
 
@@ -295,9 +297,7 @@ bool DoomwalkerChainLightningTrigger::IsActive()
         return false;
 
     Unit* doomwalker = AI_VALUE2(Unit*, "find target", "doomwalker");
-    return doomwalker && doomwalker->IsAlive() && doomwalker->IsInCombat() &&
-           doomwalker->HasUnitState(UNIT_STATE_CASTING) &&
-           doomwalker->FindCurrentSpellBySpellId(SPELL_DOOMWALKER_CHAIN_LIGHTNING) &&
+    return IsDoomwalkerCasting(doomwalker, SPELL_DOOMWALKER_CHAIN_LIGHTNING) &&
            HasGroupMemberWithinDistance(bot, DOOMWALKER_SPREAD_DISTANCE);
 }
 
@@ -354,16 +354,6 @@ float DoomLordKazzakTwistedReflectionMultiplier::GetValue(Action* action)
         return 0.0f;
 
     return 1.0f;
-}
-
-std::vector<NextAction> RaidDoomwalkerStrategy::getDefaultActions()
-{
-    // Keep non-tanks spread for the full fight.
-    // The emergency trigger still handles the cast window.
-    return {
-        NextAction("doomwalker spread for chain lightning",
-                   ACTION_RAID + 2)
-    };
 }
 
 void RaidDoomwalkerStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
