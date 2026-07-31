@@ -2748,7 +2748,7 @@ void PlayerbotFactory::EnchantItem(Item* item)
             uint8 sp = 0;
             uint8 ap = 0;
             uint8 tank = 0;
-            for (uint8 i = ITEM_MOD_MANA; i < MAX_ITEM_MOD; ++i)
+            for (uint8 i = 0; i < MAX_SPELL_ITEM_ENCHANTMENT_EFFECTS; ++i)
             {
                 if (enchant->type[i] != ITEM_ENCHANTMENT_TYPE_STAT)
                     continue;
