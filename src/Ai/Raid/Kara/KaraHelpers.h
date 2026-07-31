@@ -7,6 +7,7 @@
 #ifndef PLAYERBOTS_KARAHELPERS_H
 #define PLAYERBOTS_KARAHELPERS_H
 
+#include <array>
 #include <ctime>
 #include <unordered_map>
 #include <set>
@@ -75,6 +76,7 @@ namespace KarazhanHelpers
         NPC_ATTUMEN_THE_HUNTSMAN_MOUNTED = 16152,
 
         // Terestian Illhoof
+        NPC_TERESTIAN_ILLHOOF            = 15688,
         NPC_DEMON_CHAINS                 = 17248,
         NPC_KILREK                       = 17229,
 
@@ -151,7 +153,7 @@ namespace KarazhanHelpers
     extern const Position NIGHTBANE_FLIGHT_STACK_POSITION;
     extern const Position NIGHTBANE_RAIN_OF_BONES_POSITION;
 
-    Unit* GetFirstAliveUnit(const std::vector<Unit*>& units);
+    std::array<const char*, 5> const& GetOzTargets();
     bool IsFlameWreathActive(PlayerbotAI* botAI, Player* bot);
     std::vector<Player*> GetRedBlockers(PlayerbotAI* botAI, Player* bot);
     std::vector<Player*> GetBlueBlockers(PlayerbotAI* botAI, Player* bot);
