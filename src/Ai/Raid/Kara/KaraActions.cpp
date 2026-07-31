@@ -667,6 +667,7 @@ namespace
     std::unordered_map<ObjectGuid, time_t> chessLastMoveCommandByPiece;
     std::unordered_map<ObjectGuid, time_t> chessLastAbilityCommandByPiece;
     std::unordered_map<ObjectGuid, uint32> chessLastAnyCommandMsByPiece;
+    std::unordered_map<ObjectGuid, ObjectGuid> chessOffensiveTargetByPiece;
     std::unordered_map<ObjectGuid, ChessSquare> chessLastEnemyKingSquareByBot;
     std::unordered_map<uint32, time_t> chessEventStartByInstance;
     std::unordered_map<ObjectGuid, ChessSquare> chessLastSquareByPiece;
@@ -897,15 +898,33 @@ namespace
         }
     }
 
-    static void CastOffensiveChessSpell(Creature* piece, Unit* target, uint32 spellId)
+    static bool CompleteChessSpellCast(Creature* piece, uint32 spellId, SpellCastResult result)
     {
-        if (!piece)
-            return;
+        if (!piece || result != SPELL_CAST_OK)
+            return false;
+
+        // Server-side bot casts bypass the pet opcode path which normally records creature cooldowns.
+        piece->AddSpellCooldown(spellId, 0, 0);
+        return true;
+    }
+
+    static bool CastChessSpell(Creature* piece, Unit* target, uint32 spellId)
+    {
+        if (!piece || !target || !spellId || piece->HasSpellCooldown(spellId))
+            return false;
+
+        return CompleteChessSpellCast(piece, spellId, piece->CastSpell(target, spellId, true));
+    }
+
+    static bool CastOffensiveChessSpell(Creature* piece, Unit* target, uint32 spellId)
+    {
+        if (!piece || !spellId || piece->HasSpellCooldown(spellId))
+            return false;
 
         if (IsCasterCenteredOffensiveChessSpell(spellId))
-            piece->CastSpell(piece, spellId, true);
-        else if (target)
-            piece->CastSpell(target, spellId, true);
+            return CastChessSpell(piece, piece, spellId);
+
+        return target && CastChessSpell(piece, target, spellId);
     }
 
     static bool IsKingAttackOffensiveChessSpell(uint32 spellId, std::string& rejectReason)
@@ -1622,33 +1641,42 @@ namespace
         return entry == NPC_ROOK_A || entry == NPC_ROOK_H;
     }
 
-    static float GetChessPracticalAttackRange(Creature* piece)
+    static float GetReadyChessAttackRange(Creature* piece)
     {
         if (!piece)
-            return 22.0f;
-
-        if (IsShortRangeChessAoePiece(piece->GetEntry()))
-            return 10.0f;
+            return 0.0f;
 
         float bestRange = 0.0f;
         for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
         {
             uint32 const spellId = piece->m_spells[i];
-            if (!spellId)
+            if (!spellId || piece->HasSpellCooldown(spellId))
                 continue;
 
             std::string rejectReason;
             if (!IsKingAttackOffensiveChessSpell(spellId, rejectReason))
                 continue;
 
-            if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId))
+            if (IsCasterCenteredOffensiveChessSpell(spellId))
+                bestRange = std::max(bestRange, GetCasterCenteredChessSpellRadius(spellId));
+            else if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId))
                 bestRange = std::max(bestRange, spellInfo->GetMaxRange(false));
         }
 
-        if (IsOrcWarlockChessPiece(piece->GetEntry()))
-            return bestRange > 0.0f ? bestRange : 30.0f;
+        return bestRange;
+    }
 
-        return bestRange > 0.0f ? bestRange : 22.0f;
+    static bool IsChessSpellTargetInRange(Creature* piece, Unit* target, uint32 spellId)
+    {
+        if (!piece || !target)
+            return false;
+
+        if (IsCasterCenteredOffensiveChessSpell(spellId))
+            return piece->GetExactDist2d(target) <= GetCasterCenteredChessSpellRadius(spellId);
+
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
+        float const maxRange = spellInfo ? spellInfo->GetMaxRange(false) : 0.0f;
+        return maxRange <= 0.0f || piece->GetExactDist2d(target) <= maxRange;
     }
 
     static ChessOffensiveTargetSelection SelectSummonedDaemonChessTarget(PlayerbotAI* botAI, Player* bot, Creature* piece, ChessBoardState const& board, char const* source)
@@ -1765,6 +1793,47 @@ namespace
         return selection;
     }
 
+    static ChessOffensiveTargetSelection SelectPersistentChessTarget(
+        PlayerbotAI* botAI, Player* bot, Creature* piece, ChessBoardState const& board, char const* source)
+    {
+        ChessOffensiveTargetSelection selection;
+        if (!botAI || !bot || !piece)
+        {
+            selection.rejectReason = "invalid_context";
+            return selection;
+        }
+
+        auto targetIt = chessOffensiveTargetByPiece.find(piece->GetGUID());
+        if (targetIt != chessOffensiveTargetByPiece.end())
+        {
+            Creature* target = ObjectAccessor::GetCreature(*piece, targetIt->second);
+            ChessSquare targetSquare;
+            bool targetActiveBoardPiece = false;
+            std::string rejectReason;
+            if (IsActiveBoardEnemyChessPiece(
+                    bot, board, target, false, targetSquare, targetActiveBoardPiece, rejectReason) &&
+                piece->GetExactDist2d(target) <= 35.0f)
+            {
+                selection.target = target;
+                selection.category = IsHealerChessPieceEntry(target->GetEntry()) ? "support" :
+                    (IsPawnEntry(target->GetEntry()) ? "pawn" : "damage");
+                selection.distance = piece->GetExactDist2d(target);
+                selection.rejectReason = "none";
+                return selection;
+            }
+
+            chessOffensiveTargetByPiece.erase(targetIt);
+        }
+
+        selection = IsShortRangeChessAoePiece(piece->GetEntry())
+            ? SelectSummonedDaemonChessTarget(botAI, bot, piece, board, source)
+            : SelectNonKingChessTarget(botAI, bot, piece, board, source);
+        if (selection.target)
+            chessOffensiveTargetByPiece[piece->GetGUID()] = selection.target->GetGUID();
+
+        return selection;
+    }
+
     static void PurgeChessPieceCacheForGuid(Player* bot, ObjectGuid const& pieceGuid, std::string const& source)
     {
         chessLastSquareByPiece.erase(pieceGuid);
@@ -1775,6 +1844,7 @@ namespace
         chessLastMoveCommandByPiece.erase(pieceGuid);
         chessLastAbilityCommandByPiece.erase(pieceGuid);
         chessLastAnyCommandMsByPiece.erase(pieceGuid);
+        chessOffensiveTargetByPiece.erase(pieceGuid);
         chessMovementCooldownUntilByPiece.erase(pieceGuid);
         chessOpeningMoveRetryUntilByPiece.erase(pieceGuid);
         chessReclaimSuppressedUntilByPiece.erase(pieceGuid);
@@ -1816,6 +1886,7 @@ namespace
         collectPieceGuid(chessLastMoveCommandByPiece);
         collectPieceGuid(chessLastAbilityCommandByPiece);
         collectPieceGuid(chessLastAnyCommandMsByPiece);
+        collectPieceGuid(chessOffensiveTargetByPiece);
         collectPieceGuid(chessMovementCooldownUntilByPiece);
         collectPieceGuid(chessOpeningMoveRetryUntilByPiece);
         collectPieceGuid(chessReclaimSuppressedUntilByPiece);
@@ -3002,9 +3073,7 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
         if (nonPawnMovement)
         {
             ChessOffensiveTargetSelection movementTarget =
-                IsShortRangeChessAoePiece(piece->GetEntry())
-                    ? SelectSummonedDaemonChessTarget(botAI, bot, piece, board, "movement")
-                    : SelectNonKingChessTarget(botAI, bot, piece, board, "movement");
+                SelectPersistentChessTarget(botAI, bot, piece, board, "movement");
             if (movementTarget.target)
             {
                 moveTarget = movementTarget.target;
@@ -3053,23 +3122,14 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
                 }
             }
 
-            if (IsShortRangeChessAoePiece(piece->GetEntry()))
-            {
-                if (!moveTarget)
-                {
-                }
-            }
-
             if (moveTarget)
             {
-                if (IsShortRangeChessAoePiece(piece->GetEntry()))
+                float const readyAttackRange = GetReadyChessAttackRange(piece);
+                if (readyAttackRange > 0.0f &&
+                    IsChessAbilityReady(piece, now, GetChessAbilityWindowSec(controlledNonPawn)))
                 {
-                    float const practicalAttackRange = GetChessPracticalAttackRange(piece);
-                    uint32 const nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(bot, board, piece, practicalAttackRange);
-                    if (nearbyEnemyCount || piece->GetExactDist2d(moveTarget) <= practicalAttackRange)
-                    {
+                    if (piece->GetExactDist2d(moveTarget) <= readyAttackRange)
                         return false;
-                    }
                 }
             }
         }
@@ -3119,7 +3179,7 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
 
             int dRow = row - curSq.row;
             int absForward = std::abs(dRow);
-            float candidateScore = static_cast<float>(absForward) * 15.0f;
+            float candidateScore = IsPawnEntry(piece->GetEntry()) ? static_cast<float>(absForward) * 15.0f : 0.0f;
             int edgePenalty = 0;
             int cornerPenalty = 0;
             int centerPenalty = 0;
@@ -3177,12 +3237,14 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
             return false;
         }
 
-        if (!moveSpell)
+        if (!moveSpell || piece->HasSpellCooldown(moveSpell))
         {
             return false;
         }
 
-        piece->CastSpell(bestForwardTrigger, moveSpell, true);
+        if (!CastChessSpell(piece, bestForwardTrigger, moveSpell))
+            return false;
+
         RecordPendingChessMove(
             bot, piece, instanceId, curSq, ChessSquare{ toRow, toCol }, moveSpell,
             bestForwardTrigger->GetGUID(), "pawn-move", nowTick, 5);
@@ -3289,12 +3351,14 @@ bool KarazhanChessMoveOutOfFireAction::Execute(Event /*event*/)
         return false;
     }
 
-    if (!moveSpell)
+    if (!moveSpell || piece->HasSpellCooldown(moveSpell))
     {
         return false;
     }
 
-    piece->CastSpell(safe, moveSpell, true);
+    if (!CastChessSpell(piece, safe, moveSpell))
+        return false;
+
     RecordPendingChessMove(
         bot, piece, instanceId, hasOldSq ? oldSq : ChessSquare{}, ChessSquare{ toRow, toCol }, moveSpell,
         safe->GetGUID(), "move-out-of-fire", now, 5);
@@ -3366,10 +3430,7 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
     ChessOffensiveTargetSelection nonKingTarget;
     if (useNonKingOffensePrecheck)
     {
-        nonKingTarget =
-            IsShortRangeChessAoePiece(piece->GetEntry())
-                ? SelectSummonedDaemonChessTarget(botAI, bot, piece, board, "offense")
-                : SelectNonKingChessTarget(botAI, bot, piece, board, "offense");
+        nonKingTarget = SelectPersistentChessTarget(botAI, bot, piece, board, "offense");
 
         if (!nonKingTarget.target)
         {
@@ -3525,13 +3586,14 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 if (piece->GetEntry() == NPC_BISHOP_H || piece->GetEntry() == NPC_BISHOP_A)
                 {
                 }
-                piece->CastSpell(friendlyKing, spellId, true);
-                if (piece->HasSpellCooldown(spellId))
+                if (!IsChessSpellTargetInRange(piece, friendlyKing, spellId))
+                    continue;
+
+                if (CastChessSpell(piece, friendlyKing, spellId))
                 {
                     ClearChessSpellNoOpBackoff(pieceGuid, spellId);
                     StampChessPieceCommandGcd(piece);
                     chessLastAbilityCommandByPiece[pieceGuid] = now;
-                    if (openingPawnMoved)
                     return true;
                 }
                 StampChessSpellNoOpBackoff(pieceGuid, spellId, now, 2);
@@ -3559,8 +3621,10 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                     continue;
                 }
 
-                piece->CastSpell(supportTarget.target, spellId, true);
-                if (piece->HasSpellCooldown(spellId))
+                if (!IsChessSpellTargetInRange(piece, supportTarget.target, spellId))
+                    continue;
+
+                if (CastChessSpell(piece, supportTarget.target, spellId))
                 {
                     ClearChessSpellNoOpBackoff(pieceGuid, spellId);
                     StampChessPieceCommandGcd(piece);
@@ -3595,13 +3659,11 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 if (ShouldThrottlePoisonCloudCast(bot, piece, enemyKing, spellId, now, poisonReason))
                     continue;
             }
-            if (IsCasterCenteredOffensiveChessSpell(spellId) &&
-                piece->GetExactDist2d(enemyKing) > GetCasterCenteredChessSpellRadius(spellId))
+            if (!IsChessSpellTargetInRange(piece, enemyKing, spellId))
                 continue;
             if (IsChessHealSpellBlockedOnEnemy(spellId))
                 continue;
-            CastOffensiveChessSpell(piece, enemyKing, spellId);
-            if (piece->HasSpellCooldown(spellId))
+            if (CastOffensiveChessSpell(piece, enemyKing, spellId))
             {
                 ClearChessSpellNoOpBackoff(pieceGuid, spellId);
                 StampChessPieceCommandGcd(piece);
@@ -3639,6 +3701,10 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
             if (IsChessHealSpellBlockedOnEnemy(spellId))
                 continue;
 
+            if (!IsCasterCenteredOffensiveChessSpell(spellId) &&
+                !IsChessSpellTargetInRange(piece, nonKingTarget.target, spellId))
+                continue;
+
             time_t nonKingBackoffRemaining = 0;
             if (IsChessSpellNoOpBackoffActive(pieceGuid, spellId, now, nonKingBackoffRemaining))
             {
@@ -3651,8 +3717,7 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
             {
                 continue;
             }
-            CastOffensiveChessSpell(piece, nonKingTarget.target, spellId);
-            if (piece->HasSpellCooldown(spellId))
+            if (CastOffensiveChessSpell(piece, nonKingTarget.target, spellId))
             {
                 ClearChessSpellNoOpBackoff(pieceGuid, spellId);
                 StampChessPieceCommandGcd(piece);
@@ -3711,8 +3776,7 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
             continue;
         }
 
-        piece->CastSpell(piece, spellId, true);
-        if (piece->HasSpellCooldown(spellId))
+        if (CastChessSpell(piece, piece, spellId))
         {
             selfThrottle = now;
             StampChessPieceCommandGcd(piece);
@@ -3784,18 +3848,18 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
                 continue;
             }
 
-            piece->CastSpell(king, spellId, true);
-            if (piece->HasSpellCooldown(spellId))
+            if (!IsChessSpellTargetInRange(piece, king, spellId))
+                continue;
+
+            if (CastChessSpell(piece, king, spellId))
             {
                 ClearChessSpellNoOpBackoff(piece->GetGUID(), spellId);
                 StampChessPieceCommandGcd(piece);
                 chessLastAbilityCommandByPiece[piece->GetGUID()] = now;
+                return true;
             }
-            else
-            {
-                StampChessSpellNoOpBackoff(piece->GetGUID(), spellId, now, 2);
-            }
-            return true;
+
+            StampChessSpellNoOpBackoff(piece->GetGUID(), spellId, now, 2);
         }
     }
 
@@ -3847,9 +3911,7 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
     std::string kingGateReason = "no_enemy_king";
     bool const kingAttackAllowed = IsKarazhanChessKingFocusAllowedActiveBoard(bot, board, enemyKing, enemySupportAlive, enemyDamageAlive, enemyPawnAlive, kingGateReason);
     ChessOffensiveTargetSelection nonKingTarget =
-        IsShortRangeChessAoePiece(piece->GetEntry())
-            ? SelectSummonedDaemonChessTarget(botAI, bot, piece, board, "offense")
-            : SelectNonKingChessTarget(botAI, bot, piece, board, "offense");
+        SelectPersistentChessTarget(botAI, bot, piece, board, "offense");
     bool const noActionableNonKingTarget =
         !nonKingTarget.target &&
         IsNoActionableNonKingRejectReason(nonKingTarget.rejectReason);
@@ -3922,12 +3984,10 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
             if (IsChessHealSpellBlockedOnEnemy(spellId))
                 continue;
 
-            if (IsCasterCenteredOffensiveChessSpell(spellId) &&
-                piece->GetExactDist2d(enemyKing) > GetCasterCenteredChessSpellRadius(spellId))
+            if (!IsChessSpellTargetInRange(piece, enemyKing, spellId))
                 continue;
 
-            CastOffensiveChessSpell(piece, enemyKing, spellId);
-            if (piece->HasSpellCooldown(spellId))
+            if (CastOffensiveChessSpell(piece, enemyKing, spellId))
             {
                 ClearChessSpellNoOpBackoff(piece->GetGUID(), spellId);
                 StampChessPieceCommandGcd(piece);
@@ -4004,7 +4064,7 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
     if (!best)
         return false;
 
-    if (!moveSpell)
+    if (!moveSpell || piece->HasSpellCooldown(moveSpell))
     {
         return false;
     }
@@ -4017,7 +4077,9 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
         return false;
     }
 
-    piece->CastSpell(best, moveSpell, true);
+    if (!CastChessSpell(piece, best, moveSpell))
+        return false;
+
     RecordPendingChessMove(
         bot, piece, instanceId, oldSq, ChessSquare{ toRow, toCol }, moveSpell, best->GetGUID(), "block-path", now, 5);
     return true;
@@ -4044,6 +4106,7 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
             chessLastMoveToSquareByPiece.erase(pg);
             chessLastMoveCommandByPiece.erase(pg);
             chessLastAbilityCommandByPiece.erase(pg);
+            chessOffensiveTargetByPiece.erase(pg);
             chessMovementCooldownUntilByPiece.erase(pg);
             chessAbilityNoOpBackoffByPiece.erase(pg);
             chessPawnOpeningAdvanceCountByPiece.erase(pg);
@@ -4060,6 +4123,7 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
     {
         chessSelfAbilityThrottleByPiece.erase(charm->GetGUID());
         chessPendingMoveByPiece.erase(charm->GetGUID());
+        chessOffensiveTargetByPiece.erase(charm->GetGUID());
         chessAbilityNoOpBackoffByPiece.erase(charm->GetGUID());
         chessPawnOpeningAdvanceCountByPiece.erase(charm->GetGUID());
         chessLastEnemyKingSquareByBot.erase(bot->GetGUID());
@@ -4086,6 +4150,7 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
         SuppressReclaimForPiece(assigned->GetGUID(), now, 20);
         chessSelfAbilityThrottleByPiece.erase(assigned->GetGUID());
         chessPendingMoveByPiece.erase(assigned->GetGUID());
+        chessOffensiveTargetByPiece.erase(assigned->GetGUID());
         chessAbilityNoOpBackoffByPiece.erase(assigned->GetGUID());
         chessPawnOpeningAdvanceCountByPiece.erase(assigned->GetGUID());
         ClearPendingChessClaim(bot, "assigned-invalid");
@@ -4144,6 +4209,7 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
             }
             chessSelfAbilityThrottleByPiece.erase(assigned->GetGUID());
             chessPendingMoveByPiece.erase(assigned->GetGUID());
+            chessOffensiveTargetByPiece.erase(assigned->GetGUID());
             chessAbilityNoOpBackoffByPiece.erase(assigned->GetGUID());
             chessPawnOpeningAdvanceCountByPiece.erase(assigned->GetGUID());
             chessLastAbilityCommandByPiece.erase(assigned->GetGUID());
@@ -4174,6 +4240,7 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
                 (!openingProgressConfirmed && notSelectable ? "not-selectable" : "not-claimable")))));
             chessSelfAbilityThrottleByPiece.erase(assigned->GetGUID());
             SuppressReclaimForPiece(assigned->GetGUID(), std::time(nullptr), 20);
+            chessOffensiveTargetByPiece.erase(assigned->GetGUID());
             chessAbilityNoOpBackoffByPiece.erase(assigned->GetGUID());
             ClearPendingChessClaim(bot, "assigned-not-allowed");
             ClearAssignedChessPiece(bot);

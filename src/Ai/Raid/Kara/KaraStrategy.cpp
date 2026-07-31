@@ -99,8 +99,8 @@ void RaidKarazhanStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode("karazhan chess event active",
         { NextAction("karazhan chess release or reassign", ACTION_EMERGENCY + 11),
           NextAction("karazhan chess claim piece", ACTION_EMERGENCY + 10),
-          NextAction("karazhan chess move piece", ACTION_RAID + 6),
-          NextAction("karazhan chess use ability", ACTION_RAID + 6) }
+          NextAction("karazhan chess use ability", ACTION_RAID + 7),
+          NextAction("karazhan chess move piece", ACTION_RAID + 6) }
     ));
     triggers.push_back(new TriggerNode("karazhan chess piece needs controller",
         { NextAction("karazhan chess claim piece", ACTION_EMERGENCY + 10) }
