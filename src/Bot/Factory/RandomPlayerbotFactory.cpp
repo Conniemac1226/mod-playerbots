@@ -715,6 +715,11 @@ void RandomPlayerbotFactory::CreateRandomBots()
             if ((1 << (cls - 1)) & sWorld->getIntConfig(CONFIG_CHARACTER_CREATING_DISABLED_CLASSMASK))
                 continue;
 
+            // Keep the random-bot roster aligned with login eligibility. Without this,
+            // disabled Death Knights are still created and consume character slots.
+            if (cls == CLASS_DEATH_KNIGHT && sPlayerbotAIConfig.disableDeathKnightLogin)
+                continue;
+
             Player* playerBot = factory.CreateRandomBot(session, cls, nameCache);
             if (!playerBot)
             {

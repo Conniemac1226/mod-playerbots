@@ -389,6 +389,15 @@ bool PlayerbotAIConfig::Initialize()
     summonAtInnkeepersEnabled = sConfigMgr->GetOption<bool>("AiPlayerbot.SummonAtInnkeepersEnabled", true);
     randomBotMinLevel = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotMinLevel", 1);
     randomBotMaxLevel = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotMaxLevel", 80);
+    bool const automaticExpansionCaps =
+        sConfigMgr->GetOption<bool>("IndividualProgression.AutomaticExpansionCaps", false);
+    uint32 const configuredProgressionLimit =
+        sConfigMgr->GetOption<uint32>("IndividualProgression.ProgressionLimit", 0);
+    if (automaticExpansionCaps && configuredProgressionLimit > 0)
+    {
+        randomBotMaxLevel = configuredProgressionLimit < 8 ? 60 :
+            (configuredProgressionLimit < 13 ? 70 : 80);
+    }
     if (randomBotMaxLevel > sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL))
         randomBotMaxLevel = sWorld->getIntConfig(CONFIG_MAX_PLAYER_LEVEL);
     randomBotTeleLowerLevel = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotTeleLowerLevel", 1);
@@ -653,6 +662,16 @@ bool PlayerbotAIConfig::Initialize()
     randomBotAllianceRatio = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotAllianceRatio", 50);
     randomBotHordeRatio = sConfigMgr->GetOption<int32>("AiPlayerbot.RandomBotHordeRatio", 50);
     disableDeathKnightLogin = sConfigMgr->GetOption<bool>("AiPlayerbot.DisableDeathKnightLogin", 0);
+    bool const autoDisableDeathKnightBeforeWotLK =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.AutoDisableDeathKnightBeforeWotLK", false);
+    uint32 const progressionLimit =
+        sConfigMgr->GetOption<uint32>("IndividualProgression.ProgressionLimit", 0);
+
+    // A non-zero progression limit is the server-wide content ceiling. When automatic
+    // gating is enabled, it is authoritative so the old manual switch can safely stay
+    // enabled for binaries that predate this option. Stage 13 is the start of WotLK.
+    if (autoDisableDeathKnightBeforeWotLK && progressionLimit > 0)
+        disableDeathKnightLogin = progressionLimit < 13;
     limitTalentsExpansion = sConfigMgr->GetOption<bool>("AiPlayerbot.LimitTalentsExpansion", 0);
     botActiveAlone = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAlone", 10);
     BotActiveAloneDurationSeconds = sConfigMgr->GetOption<int32>("AiPlayerbot.BotActiveAloneDurationSeconds", 30);

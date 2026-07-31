@@ -733,6 +733,13 @@ AiPlayerbot.RandomBotHordeRatio = 50
 # Disable logging in of death knight bots
 AiPlayerbot.DisableDeathKnightLogin = 0
 
+# Automatically derive Death Knight bot eligibility from
+# IndividualProgression.ProgressionLimit. With a non-zero progression limit,
+# stages 1-12 disable Death Knights and stage 13+ enables them. This setting
+# overrides DisableDeathKnightLogin while the progression limit is non-zero.
+# Default: 0 (disabled)
+AiPlayerbot.AutoDisableDeathKnightBeforeWotLK = 0
+
 # Enable simulated expansion limitation for talents and glyphs
 # If enabled, limits talent trees to 6 rows plus the middle talent of the 7th row for bots until level 61
 # and 8 rows plus the middle talent of the 9th row for bots from level 61 until level 71
