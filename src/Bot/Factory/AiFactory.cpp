@@ -515,11 +515,9 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         case CLASS_PALADIN:
             if (tab == PALADIN_TAB_PROTECTION)
             {
-                nonCombatEngine->addStrategiesNoInit("bthreat", "tank assist", "pull", "barmor", nullptr);
+                nonCombatEngine->addStrategiesNoInit("bthreat", "tank assist", "pull", "barmor", "bmight", nullptr);
                 if (player->GetLevel() >= 20)
                     nonCombatEngine->addStrategy("bsanc", false);
-                else
-                    nonCombatEngine->addStrategy("bmight", false);
             }
             else if (tab == PALADIN_TAB_HOLY)
                 nonCombatEngine->addStrategiesNoInit("dps assist", "bwisdom", "bcast", nullptr);
