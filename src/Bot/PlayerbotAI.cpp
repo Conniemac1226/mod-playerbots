@@ -832,6 +832,7 @@ void PlayerbotAI::HandleTeleportAck()
      */
     if (bot->IsBeingTeleportedFar())
     {
+        bool const wasInTaxiFlight = bot->IsInFlight();
         bot->GetSession()->HandleMoveWorldportAck();
 
         // after worldport ACK the player should be in a valid map
@@ -849,6 +850,14 @@ void PlayerbotAI::HandleTeleportAck()
 
         if (sPlayerbotAIConfig.restrictHealerDPS)
             EvaluateHealerDpsStrategy();
+
+        // HandleMoveWorldportAck reinitializes a preserved taxi movement generator on the new map.
+        // Do not reset or clear it while the bot continues the next portion of a cross-map flight.
+        if (wasInTaxiFlight && bot->IsInFlight())
+        {
+            SetNextCheckDelay(urand(2000, 5000));
+            return;
+        }
 
         // reset AI state after teleport
         Reset(true);

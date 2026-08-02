@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <openssl/sha.h>
 #include <iomanip>
@@ -17,6 +18,7 @@
 #include "CharacterCache.h"
 #include "CharacterPackets.h"
 #include "Common.h"
+#include "DBCStores.h"
 #include "Define.h"
 #include "Group.h"
 #include "GuildMgr.h"
@@ -34,6 +36,7 @@
 #include "PlayerbotGuildMgr.h"
 #include "RandomPlayerbotMgr.h"
 #include "SharedDefines.h"
+#include "Timer.h"
 #include "WorldSession.h"
 #include "BroadcastHelper.h"
 #include "WorldSessionMgr.h"
@@ -67,6 +70,78 @@ private:
 
 std::unordered_set<ObjectGuid> BotInitGuard::botsBeingInitialized;
 std::unordered_map<ObjectGuid, uint32> PlayerbotHolder::botLoading;
+
+namespace
+{
+constexpr uint32 TAXI_PROGRESS_CHECK_INTERVAL = 5 * IN_MILLISECONDS;
+constexpr uint32 TAXI_STALL_TIMEOUT = 15 * IN_MILLISECONDS;
+constexpr float TAXI_PROGRESS_DISTANCE_SQ = 1.0f;
+
+struct TaxiProgress
+{
+    uint32 LastCheckTime;
+    uint32 LastMovementTime;
+    uint32 MapId;
+    float X;
+    float Y;
+    float Z;
+};
+
+std::unordered_map<ObjectGuid, TaxiProgress> taxiProgress;
+
+bool CompleteStalledTaxiLeg(Player* bot, uint32 destination)
+{
+    TaxiNodesEntry const* destinationNode = sTaxiNodesStore.LookupEntry(destination);
+    if (!destinationNode)
+        return false;
+
+    // A stalled spline can no longer be resumed reliably. Complete the current leg at its flightmaster so the bot
+    // can recalculate any remaining travel instead of staying mounted in transit indefinitely.
+    bot->GetMotionMaster()->Clear();
+    bot->CleanupAfterTaxiFlight();
+    return bot->TeleportTo(destinationNode->map_id, destinationNode->x, destinationNode->y, destinationNode->z,
+                           bot->GetOrientation());
+}
+
+void UpdateTaxiFlight(Player* bot)
+{
+    ObjectGuid guid = bot->GetGUID();
+    uint32 destination = bot->m_taxi.GetTaxiDestination();
+    if (!destination)
+        return;
+
+    uint32 now = getMSTime();
+    auto [progressItr, inserted] = taxiProgress.try_emplace(
+        guid, TaxiProgress{now, now, bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()});
+    if (inserted || getMSTimeDiff(progressItr->second.LastCheckTime, now) < TAXI_PROGRESS_CHECK_INTERVAL)
+        return;
+
+    TaxiProgress& progress = progressItr->second;
+    progress.LastCheckTime = now;
+
+    float xDiff = bot->GetPositionX() - progress.X;
+    float yDiff = bot->GetPositionY() - progress.Y;
+    float zDiff = bot->GetPositionZ() - progress.Z;
+    if (bot->GetMapId() != progress.MapId ||
+        xDiff * xDiff + yDiff * yDiff + zDiff * zDiff > TAXI_PROGRESS_DISTANCE_SQ)
+    {
+        progress.LastMovementTime = now;
+        progress.MapId = bot->GetMapId();
+        progress.X = bot->GetPositionX();
+        progress.Y = bot->GetPositionY();
+        progress.Z = bot->GetPositionZ();
+        return;
+    }
+
+    if (getMSTimeDiff(progress.LastMovementTime, now) < TAXI_STALL_TIMEOUT ||
+        (!bot->IsInFlight() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != FLIGHT_MOTION_TYPE &&
+         !bot->IsMounted()))
+        return;
+
+    if (CompleteStalledTaxiLeg(bot, destination))
+        taxiProgress.erase(progressItr);
+}
+}
 
 PlayerbotHolder::PlayerbotHolder() : PlayerbotAIBase(false) {}
 class PlayerbotLoginQueryHolder : public LoginQueryHolder
@@ -242,6 +317,9 @@ void PlayerbotHolder::UpdateSessions()
     for (PlayerBotMap::const_iterator itr = GetPlayerBotsBegin(); itr != GetPlayerBotsEnd(); ++itr)
     {
         Player* const bot = itr->second;
+        if (!bot->IsBeingTeleported() && bot->IsInWorld() && bot->m_taxi.GetTaxiDestination())
+            UpdateTaxiFlight(bot);
+
         if (bot->IsBeingTeleported())
         {
             PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
@@ -449,6 +527,7 @@ void PlayerbotHolder::DisablePlayerBot(ObjectGuid guid)
 
 void PlayerbotHolder::RemoveFromPlayerbotsMap(ObjectGuid guid)
 {
+    taxiProgress.erase(guid);
     playerBots.erase(guid);
 }
 
@@ -1941,5 +2020,3 @@ void PlayerbotMgr::HandleUnlinkAccountCommand(Player* player, const std::string&
 
     ChatHandler(player->GetSession()).PSendSysMessage("Account unlinked successfully.");
 }
-
-
