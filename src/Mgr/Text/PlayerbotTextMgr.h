@@ -7,7 +7,9 @@
 #ifndef PLAYERBOTS_PLAYERBOTTEXTMGR_H
 #define PLAYERBOTS_PLAYERBOTTEXTMGR_H
 
+#include <limits>
 #include <map>
+#include <mutex>
 #include <vector>
 
 #include "Common.h"
@@ -86,6 +88,13 @@ public:
     void ResetLocalePriority();
 
 private:
+    struct TextSelectionState
+    {
+        std::vector<uint32> remainingIndexes;
+        uint32 lastIndex = std::numeric_limits<uint32>::max();
+        uint32 poolSize = 0;
+    };
+
     PlayerbotTextMgr()
     {
         for (uint8 i = 0; i < TOTAL_LOCALES; ++i)
@@ -101,8 +110,13 @@ private:
     PlayerbotTextMgr(PlayerbotTextMgr&&) = delete;
     PlayerbotTextMgr& operator=(PlayerbotTextMgr&&) = delete;
 
+    uint32 SelectTextIndex(std::string const& selectionKey, uint32 poolSize);
+
     std::map<std::string, std::vector<BotTextEntry>> botTexts;
     std::map<std::string, uint32> botTextChance;
+    std::map<uint32, std::vector<uint32>> replyTextIndexes;
+    std::map<std::string, TextSelectionState> textSelectionStates;
+    std::mutex botTextMutex;
     uint32 botTextLocalePriority[TOTAL_LOCALES];
 };
 

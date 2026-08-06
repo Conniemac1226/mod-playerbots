@@ -28,6 +28,8 @@ void PlayerbotTextMgr::LoadBotTexts()
 {
     LOG_INFO("playerbots", "Loading playerbots texts...");
 
+    std::map<std::string, std::vector<BotTextEntry>> loadedBotTexts;
+    std::map<uint32, std::vector<uint32>> loadedReplyTextIndexes;
     uint32 count = 0;
     if (PreparedQueryResult result =
             PlayerbotsDatabase.Query(PlayerbotsDatabase.GetPreparedStatement(PLAYERBOTS_SEL_TEXT)))
@@ -45,9 +47,20 @@ void PlayerbotTextMgr::LoadBotTexts()
                 text[i] = fields[i + 3].Get<std::string>();
             }
 
-            botTexts[name].push_back(BotTextEntry(name, text, sayType, replyType));
+            std::vector<BotTextEntry>& textList = loadedBotTexts[name];
+            if (name == "reply")
+                loadedReplyTextIndexes[replyType].push_back(static_cast<uint32>(textList.size()));
+
+            textList.push_back(BotTextEntry(name, text, sayType, replyType));
             ++count;
         } while (result->NextRow());
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(botTextMutex);
+        botTexts.swap(loadedBotTexts);
+        replyTextIndexes.swap(loadedReplyTextIndexes);
+        textSelectionStates.clear();
     }
 
     LOG_INFO("playerbots", "{} playerbots texts loaded", count);
@@ -74,23 +87,61 @@ void PlayerbotTextMgr::LoadBotTextChance()
 
 // general texts
 
+uint32 PlayerbotTextMgr::SelectTextIndex(std::string const& selectionKey, uint32 poolSize)
+{
+    TextSelectionState& state = textSelectionStates[selectionKey];
+
+    if (state.poolSize != poolSize)
+    {
+        state.remainingIndexes.clear();
+        state.lastIndex = std::numeric_limits<uint32>::max();
+        state.poolSize = poolSize;
+    }
+
+    if (state.remainingIndexes.empty())
+    {
+        // Drawing from the remaining indexes is a lightweight shuffle bag: every line is used once
+        // before the pool refills, without reshuffling or scanning on each chat message.
+        state.remainingIndexes.reserve(poolSize);
+        for (uint32 index = 0; index < poolSize; ++index)
+            state.remainingIndexes.push_back(index);
+    }
+
+    uint32 choice = urand(0, static_cast<uint32>(state.remainingIndexes.size() - 1));
+    if (poolSize > 1 && state.remainingIndexes.size() == poolSize &&
+        state.remainingIndexes[choice] == state.lastIndex)
+    {
+        choice = choice == 0 ? 1 : 0;
+    }
+
+    uint32 selectedIndex = state.remainingIndexes[choice];
+    state.remainingIndexes[choice] = state.remainingIndexes.back();
+    state.remainingIndexes.pop_back();
+    state.lastIndex = selectedIndex;
+    return selectedIndex;
+}
+
 std::string PlayerbotTextMgr::GetBotText(std::string name)
 {
+    std::lock_guard<std::mutex> lock(botTextMutex);
     if (botTexts.empty())
     {
         LOG_ERROR("playerbots", "Can't get bot text {}! No bots texts loaded!", name);
         return "";
     }
 
-    if (botTexts[name].empty())
+    auto textList = botTexts.find(name);
+    if (textList == botTexts.end() || textList->second.empty())
     {
         LOG_ERROR("playerbots", "Can't get bot text {}! No bots texts for this name!", name);
         return "";
     }
 
-    std::vector<BotTextEntry>& list = botTexts[name];
-    BotTextEntry textEntry = list[urand(0, list.size() - 1)];
-    return !textEntry.m_text[GetLocalePriority()].empty() ? textEntry.m_text[GetLocalePriority()] : textEntry.m_text[0];
+    std::vector<BotTextEntry> const& list = textList->second;
+    BotTextEntry const& textEntry = list[SelectTextIndex(name, static_cast<uint32>(list.size()))];
+    uint32 locale = GetLocalePriority();
+    std::string const& localizedText = textEntry.m_text.at(locale);
+    return !localizedText.empty() ? localizedText : textEntry.m_text.at(0);
 }
 
 std::string PlayerbotTextMgr::GetBotText(std::string name, std::map<std::string, std::string> placeholders)
@@ -125,31 +176,31 @@ std::string PlayerbotTextMgr::GetBotTextOrDefault(std::string name, std::string 
 
 std::string PlayerbotTextMgr::GetBotText(ChatReplyType replyType, std::map<std::string, std::string> placeholders)
 {
-    if (botTexts.empty())
+    std::string botText;
     {
-        LOG_ERROR("playerbots", "Can't get bot text reply {}! No bots texts loaded!", replyType);
-        return "";
-    }
-    if (botTexts["reply"].empty())
-    {
-        LOG_ERROR("playerbots", "Can't get bot text reply {}! No bots texts replies!", replyType);
-        return "";
+        std::lock_guard<std::mutex> lock(botTextMutex);
+        if (botTexts.empty())
+        {
+            LOG_ERROR("playerbots", "Can't get bot text reply {}! No bots texts loaded!", replyType);
+            return "";
+        }
+        auto textList = botTexts.find("reply");
+        auto replyList = replyTextIndexes.find(replyType);
+        if (textList == botTexts.end() || replyList == replyTextIndexes.end() || replyList->second.empty())
+        {
+            LOG_ERROR("playerbots", "Can't get bot text reply {}! No bots texts replies!", replyType);
+            return "";
+        }
+
+        std::string selectionKey = "reply:" + std::to_string(replyType);
+        std::vector<uint32> const& indexes = replyList->second;
+        uint32 selectedIndex = SelectTextIndex(selectionKey, static_cast<uint32>(indexes.size()));
+        BotTextEntry const& textEntry = textList->second[indexes[selectedIndex]];
+        uint32 locale = GetLocalePriority();
+        std::string const& localizedText = textEntry.m_text.at(locale);
+        botText = !localizedText.empty() ? localizedText : textEntry.m_text.at(0);
     }
 
-    std::vector<BotTextEntry>& list = botTexts["reply"];
-    std::vector<BotTextEntry> proper_list;
-    for (auto text : list)
-    {
-        if (text.m_replyType == replyType)
-            proper_list.push_back(text);
-    }
-
-    if (proper_list.empty())
-        return "";
-
-    BotTextEntry textEntry = proper_list[urand(0, proper_list.size() - 1)];
-    std::string botText =
-        !textEntry.m_text[GetLocalePriority()].empty() ? textEntry.m_text[GetLocalePriority()] : textEntry.m_text[0];
     for (auto& placeholder : placeholders)
         replaceAll(botText, placeholder.first, placeholder.second);
 

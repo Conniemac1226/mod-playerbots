@@ -591,11 +591,8 @@ std::string ChatReplyAction::GenerateReplyMessage(Player* bot, std::string& inco
         word.push_back(segment);
     }
 
-    for (uint32 i = 0; i < 15; i++)
-    {
-        if (word.size() < i)
-            word.push_back("");
-    }
+    while (word.size() < 15)
+        word.emplace_back();
 
     if (incomingMessage.find("?") != std::string::npos)
         is_quest = 1;
@@ -653,28 +650,11 @@ std::string ChatReplyAction::GenerateReplyMessage(Player* bot, std::string& inco
             else if (word[i] == "shut" || word[i] == "noob")
             {
                 if (incomingMessage.find(bot->GetName()) == std::string::npos)
-                {
                     continue;  // not react
-                    uint32 rnd = urand(0, 2);
-                    std::string msg = "";
-                    if (rnd == 0)
-                        msg = "sorry %s, ill shut up now";
-                    if (rnd == 1)
-                        msg = "ok ok %s";
-                    if (rnd == 2)
-                        msg = "fine, i wont talk to you anymore %s";
 
-                    msg = std::regex_replace(msg, std::regex("%s"), name);
-                    respondsText = msg;
-                    found = true;
-                    break;
-                }
-                else
-                {
-                    replyType = REPLY_GRUDGE;
-                    found = true;
-                    break;
-                }
+                replyType = REPLY_GRUDGE;
+                found = true;
+                break;
             }
         }
     }
@@ -683,164 +663,25 @@ std::string ChatReplyAction::GenerateReplyMessage(Player* bot, std::string& inco
         switch (is_quest)
         {
         case 2:
-        {
-            uint32 rnd = urand(0, 3);
-            std::string msg = "";
-
-            switch (rnd)
-            {
-            case 0:
-                msg = "i dont know what";
-                break;
-            case 1:
-                msg = "i dont know %s";
-                break;
-            case 2:
-                msg = "who cares";
-                break;
-            case 3:
-                msg = "afraid that was before i was around or paying attention";
-                break;
-            }
-
-            msg = std::regex_replace(msg, std::regex("%s"), name);
-            respondsText = msg;
-            found = true;
+            respondsText = PlayerbotTextMgr::instance().GetBotText("reply_question_what", { { "%s", name } });
+            found = !respondsText.empty();
             break;
-        }
         case 3:
-        {
-            uint32 rnd = urand(0, 4);
-            std::string msg = "";
-
-            switch (rnd)
-            {
-            case 0:
-                msg = "nobody";
-                break;
-            case 1:
-                msg = "we all do";
-                break;
-            case 2:
-                msg = "perhaps its you, %s";
-                break;
-            case 3:
-                msg = "dunno %s";
-                break;
-            case 4:
-                msg = "is it me?";
-                break;
-            }
-
-            msg = std::regex_replace(msg, std::regex("%s"), name);
-            respondsText = msg;
-            found = true;
+            respondsText = PlayerbotTextMgr::instance().GetBotText("reply_question_who", { { "%s", name } });
+            found = !respondsText.empty();
             break;
-        }
         case 4:
-        {
-            uint32 rnd = urand(0, 6);
-            std::string msg = "";
-
-            switch (rnd)
-            {
-            case 0:
-                msg = "soon perhaps %s";
-                break;
-            case 1:
-                msg = "probably later";
-                break;
-            case 2:
-                msg = "never";
-                break;
-            case 3:
-                msg = "what do i look like, a psychic?";
-                break;
-            case 4:
-                msg = "a few minutes, maybe an hour ... years?";
-                break;
-            case 5:
-                msg = "when? good question %s";
-                break;
-            case 6:
-                msg = "dunno %s";
-                break;
-            }
-
-            msg = std::regex_replace(msg, std::regex("%s"), name);
-            respondsText = msg;
-            found = true;
+            respondsText = PlayerbotTextMgr::instance().GetBotText("reply_question_when", { { "%s", name } });
+            found = !respondsText.empty();
             break;
-        }
         case 5:
-        {
-            uint32 rnd = urand(0, 6);
-            std::string msg = "";
-
-            switch (rnd)
-            {
-            case 0:
-                msg = "really want me to answer that?";
-                break;
-            case 1:
-                msg = "on the map?";
-                break;
-            case 2:
-                msg = "who cares";
-                break;
-            case 3:
-                msg = "afk?";
-                break;
-            case 4:
-                msg = "none of your buisiness where";
-                break;
-            case 5:
-                msg = "yeah, where?";
-                break;
-            case 6:
-                msg = "dunno %s";
-                break;
-            }
-
-            msg = std::regex_replace(msg, std::regex("%s"), name);
-            respondsText = msg;
-            found = true;
+            respondsText = PlayerbotTextMgr::instance().GetBotText("reply_question_where", { { "%s", name } });
+            found = !respondsText.empty();
             break;
-        }
         case 6:
-        {
-            uint32 rnd = urand(0, 6);
-            std::string msg = "";
-
-            switch (rnd)
-            {
-            case 0:
-                msg = "dunno %s";
-                break;
-            case 1:
-                msg = "why? just because %s";
-                break;
-            case 2:
-                msg = "why is the sky blue?";
-                break;
-            case 3:
-                msg = "dont ask me %s, im just a bot";
-                break;
-            case 4:
-                msg = "your asking the wrong person";
-                break;
-            case 5:
-                msg = "who knows?";
-                break;
-            case 6:
-                msg = "dunno %s";
-                break;
-            }
-            msg = std::regex_replace(msg, std::regex("%s"), name);
-            respondsText = msg;
-            found = true;
+            respondsText = PlayerbotTextMgr::instance().GetBotText("reply_question_why", { { "%s", name } });
+            found = !respondsText.empty();
             break;
-        }
         default:
         {
             switch (verb_type)
@@ -998,7 +839,7 @@ std::string ChatReplyAction::GenerateReplyMessage(Player* bot, std::string& inco
         }
         case 3:
         {
-            uint32 rnd = urand(0, 1);
+            uint32 rnd = urand(0, 2);
             std::string msg = "";
 
             switch (rnd)
