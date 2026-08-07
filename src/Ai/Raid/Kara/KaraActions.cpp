@@ -6,6 +6,7 @@
 
 #include "KaraActions.h"
 #include "KaraHelpers.h"
+#include "Group.h"
 #include "Playerbots.h"
 #include "PlayerbotTextMgr.h"
 #include "RaidBossHelpers.h"
@@ -679,7 +680,6 @@ namespace
     std::unordered_map<ObjectGuid, time_t> chessMovementCooldownUntilByPiece;
     std::unordered_map<ObjectGuid, time_t> chessOpeningMoveRetryUntilByPiece;
     std::unordered_map<ObjectGuid, time_t> chessReclaimSuppressedUntilByPiece;
-    std::unordered_map<ObjectGuid, uint8> chessPawnOpeningAdvanceCountByPiece;
     std::unordered_map<uint32, std::set<ObjectGuid>> chessOpenedLanePawnsByInstance;
     std::unordered_set<uint32> chessOpeningProgressConfirmedByInstance;
     struct ChessBoardState
@@ -725,25 +725,11 @@ namespace
         return instanceId != 0 && chessOpeningProgressConfirmedByInstance.find(instanceId) != chessOpeningProgressConfirmedByInstance.end();
     }
 
-    static uint8 GetPawnOpeningAdvanceCount(ObjectGuid const& pieceGuid)
+    static bool IsOpeningChessPawnFile(ChessSquare const& square)
     {
-        auto it = chessPawnOpeningAdvanceCountByPiece.find(pieceGuid);
-        return it != chessPawnOpeningAdvanceCountByPiece.end() ? it->second : 0;
-    }
-
-    static void IncrementPawnOpeningAdvanceCount(ObjectGuid const& pieceGuid)
-    {
-        if (!pieceGuid)
-            return;
-
-        uint8& count = chessPawnOpeningAdvanceCountByPiece[pieceGuid];
-        if (count < std::numeric_limits<uint8>::max())
-            ++count;
-    }
-
-    static bool IsCentralChessPawnFile(ChessSquare const& square)
-    {
-        return square.col >= 2 && square.col <= 5;
+        // Open both rooks and bishops. Queens, kings, and knights can then use the adjacent gaps
+        // allowed by Karazhan's box-shaped movement rules.
+        return square.col == 0 || square.col == 2 || square.col == 5 || square.col == 7;
     }
 
     static bool IsPawnEntry(uint32 e);
@@ -755,25 +741,6 @@ namespace
 
     static bool IsInsideBoard(ChessBoardState const& b, int row, int col);
     static bool WorldToChessSquare(ChessBoardState const& s, float x, float y, int& row, int& col);
-
-    static bool HasClearBacklineRoute(ChessBoardState const& board, ChessSquare const& pawnSquare, int forward)
-    {
-        int retreat = -forward;
-        if (retreat == 0)
-            retreat = 1;
-
-        for (int step = 1; step <= 2; ++step)
-        {
-            int row = pawnSquare.row + (retreat * step);
-            int col = pawnSquare.col;
-            if (!IsInsideBoard(board, row, col))
-                return false;
-            if (board.occupied.find({ row, col }) != board.occupied.end())
-                return false;
-        }
-
-        return true;
-    }
 
     static void MarkOpeningProgressConfirmed(uint32 instanceId, Player* bot, Creature* piece, ChessSquare const& from, ChessSquare const& to, std::string const& source)
     {
@@ -1314,7 +1281,6 @@ namespace
         if (sqIt != board.pieceSquare.end())
             boardSq = sqIt->second;
 
-
         PurgeChessPieceCacheForGuid(bot, piece->GetGUID(), source + "-invalid-controlled-piece");
         chessSelfAbilityThrottleByPiece.erase(piece->GetGUID());
         chessLastEnemyKingSquareByBot.erase(bot->GetGUID());
@@ -1443,18 +1409,8 @@ namespace
         return false;
     }
 
-    static bool IsChessSupportSpellForNonKingTarget(uint32 spellId, std::string& rejectReason)
-    {
-        if (spellId == 37456) // Shadow Mend applies to king-style support targets, but repeatedly fails on non-king pieces.
-        {
-            rejectReason = "necrolyte_shadow_mend_nonking_unsupported";
-            return false;
-        }
-
-        return IsChessSupportSpell(spellId, rejectReason);
-    }
-
-    static ChessSupportTargetSelection SelectDamagedFriendlyActiveBoardNonKingTarget(Player* bot, ChessBoardState const& board, Creature* piece)
+    static ChessSupportTargetSelection SelectDamagedFriendlyActiveBoardTarget(
+        Player* bot, ChessBoardState const& board, Creature* piece)
     {
         ChessSupportTargetSelection selection;
         if (!bot || !piece)
@@ -1469,7 +1425,7 @@ namespace
         {
             Creature* candidate = ObjectAccessor::GetCreature(*piece, boardEntry.first);
             if (!candidate || !candidate->IsInWorld() || !candidate->IsAlive() || !IsChessPieceEntry(candidate->GetEntry()) ||
-                !IsFriendlyChessPieceForBot(bot, candidate) || IsKingChessPieceEntry(candidate->GetEntry()))
+                !IsFriendlyChessPieceForBot(bot, candidate))
                 continue;
 
             auto occupiedIt = board.occupied.find({ boardEntry.second.row, boardEntry.second.col });
@@ -1477,13 +1433,20 @@ namespace
                 continue;
 
             sawFriendly = true;
+            uint32 const missingHealth = candidate->GetMaxHealth() - candidate->GetHealth();
             float const hpPct = candidate->GetHealthPct();
-            if (hpPct >= 90.0f)
+            float const distance = piece->GetExactDist2d(candidate);
+            if (missingHealth <= 5000)
                 continue;
 
             sawDamaged = true;
-            float const distance = piece->GetExactDist2d(candidate);
-            if (!selection.target || hpPct < selection.healthPct || (hpPct == selection.healthPct && distance < selection.distance))
+            if (distance > 25.0f)
+                continue;
+
+            uint32 const selectedMissingHealth = selection.target ?
+                selection.target->GetMaxHealth() - selection.target->GetHealth() : 0;
+            if (!selection.target || missingHealth > selectedMissingHealth ||
+                (missingHealth == selectedMissingHealth && distance < selection.distance))
             {
                 selection.target = candidate;
                 selection.healthPct = hpPct;
@@ -1675,7 +1638,8 @@ namespace
             return piece->GetExactDist2d(target) <= GetCasterCenteredChessSpellRadius(spellId);
 
         SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
-        float const maxRange = spellInfo ? spellInfo->GetMaxRange(false) : 0.0f;
+        bool const positive = spellId == 37455 || spellId == 37456;
+        float const maxRange = spellInfo ? spellInfo->GetMaxRange(positive) : 0.0f;
         return maxRange <= 0.0f || piece->GetExactDist2d(target) <= maxRange;
     }
 
@@ -1848,7 +1812,6 @@ namespace
         chessMovementCooldownUntilByPiece.erase(pieceGuid);
         chessOpeningMoveRetryUntilByPiece.erase(pieceGuid);
         chessReclaimSuppressedUntilByPiece.erase(pieceGuid);
-        chessPawnOpeningAdvanceCountByPiece.erase(pieceGuid);
         chessAbilityNoOpBackoffByPiece.erase(pieceGuid);
 
         if (chessPendingMoveByPiece.erase(pieceGuid))
@@ -1890,7 +1853,6 @@ namespace
         collectPieceGuid(chessMovementCooldownUntilByPiece);
         collectPieceGuid(chessOpeningMoveRetryUntilByPiece);
         collectPieceGuid(chessReclaimSuppressedUntilByPiece);
-        collectPieceGuid(chessPawnOpeningAdvanceCountByPiece);
         collectPieceGuid(chessAbilityNoOpBackoffByPiece);
 
         for (auto const& pending : chessPendingClaimByBot)
@@ -2139,7 +2101,6 @@ namespace
     static ChessPendingMoveResult TryResolvePendingChessMove(
         PlayerbotAI* botAI, Player* bot, Creature* piece, ChessBoardState const& board, time_t now, std::string& confirmSource)
     {
-        (void)botAI;
         confirmSource.clear();
         if (!piece)
             return ChessPendingMoveResult::NONE;
@@ -2182,17 +2143,38 @@ namespace
         chessLastFailedMoveTimeByPiece.erase(piece->GetGUID());
         chessLastMoveCommandByPiece[piece->GetGUID()] = now;
         chessMovementCooldownUntilByPiece[piece->GetGUID()] = now + 5;
-        chessOpenedLanePawnsByInstance[pending.instanceId].insert(piece->GetGUID());
         chessLastMoveFromSquareByPiece[piece->GetGUID()] = pending.fromSquare;
         chessLastMoveToSquareByPiece[piece->GetGUID()] = pending.toSquare;
         chessLastSquareByPiece[piece->GetGUID()] = pending.toSquare;
         if (IsPawnEntry(piece->GetEntry()))
         {
-            IncrementPawnOpeningAdvanceCount(piece->GetGUID());
+            chessOpenedLanePawnsByInstance[pending.instanceId].insert(piece->GetGUID());
+            uint32 friendlyPawns = 0;
+            for (auto const& pieceEntry : board.pieceSquare)
+            {
+                Creature* candidate = botAI->GetCreature(pieceEntry.first);
+                if (candidate && candidate->IsAlive() && IsPawnEntry(candidate->GetEntry()) &&
+                    IsFriendlyChessPieceForBot(bot, candidate))
+                {
+                    ++friendlyPawns;
+                }
+            }
+
+            uint32 availableBotControllers = 1;
+            if (Group* group = bot->GetGroup())
+            {
+                uint32 const groupMembers = group->GetMembersCount();
+                availableBotControllers = groupMembers > 1 ? groupMembers - 1 : 1;
+            }
+            uint32 const requiredOpenLanes = std::min<uint32>(
+                4, std::min(std::max<uint32>(1, friendlyPawns), availableBotControllers));
+            if (chessOpenedLanePawnsByInstance[pending.instanceId].size() >= requiredOpenLanes)
+            {
+                MarkOpeningProgressConfirmed(
+                    pending.instanceId, bot, piece, pending.fromSquare, pending.toSquare,
+                    "pending-" + pending.source + "-" + confirmSource);
+            }
         }
-        MarkOpeningProgressConfirmed(
-            pending.instanceId, bot, piece, pending.fromSquare, pending.toSquare,
-            "pending-" + pending.source + "-" + confirmSource);
         return ChessPendingMoveResult::CONFIRMED;
     }
 
@@ -2429,21 +2411,6 @@ namespace
             out.insert({ r, c });
     }
 
-    static void AppendRayMoves(ChessBoardState const& b, int row, int col, int dr, int dc,
-                               std::set<std::pair<int, int>>& out)
-    {
-        int r = row + dr;
-        int c = col + dc;
-        while (IsInsideBoard(b, r, c))
-        {
-            if (b.occupied.find({ r, c }) != b.occupied.end())
-                break;
-            out.insert({ r, c });
-            r += dr;
-            c += dc;
-        }
-    }
-
     static std::vector<Creature*> GetLegalMoveTriggersForPiece(PlayerbotAI* botAI, Player* bot, Creature* piece,
                                                                ChessBoardState const& b, std::string& dbgLegal)
     {
@@ -2456,70 +2423,23 @@ namespace
             return legal;
 
         ChessSquare sq = itSq->second;
-        Creature* enemyKing = nullptr;
-        for (auto const& pieceEntry : b.pieceSquare)
-        {
-            Creature* candidate = botAI->GetCreature(pieceEntry.first);
-            if (candidate && candidate->IsAlive() && IsKingChessPieceEntry(candidate->GetEntry()) &&
-                IsEnemyChessPieceForBot(bot, candidate))
-            {
-                enemyKing = candidate;
-                break;
-            }
-        }
-        int forward = 0;
-        if (enemyKing)
-        {
-            auto itEnemy = b.pieceSquare.find(enemyKing->GetGUID());
-            if (itEnemy != b.pieceSquare.end())
-                forward = (itEnemy->second.row > sq.row) ? 1 : -1;
-        }
-        if (forward == 0)
-            forward = 1;
-
         std::set<std::pair<int, int>> candidates;
         uint32 e = piece->GetEntry();
-        if (e == NPC_PAWN_A || e == NPC_PAWN_H)
-        {
-            AppendStepMoves(b, sq.row, sq.col, forward, 0, candidates);
-        }
+        int maxDelta = 1;
+        if (e == NPC_QUEEN_A || e == NPC_QUEEN_H)
+            maxDelta = 3;
         else if (e == NPC_KNIGHT_A || e == NPC_KNIGHT_H)
+            maxDelta = 2;
+
+        // Karazhan only limits the row/column delta. It does not use normal chess movement paths:
+        // pawns, bishops, rooks, and kings move within a one-square box; knights within two; queens within three.
+        for (int dr = -maxDelta; dr <= maxDelta; ++dr)
         {
-            int d[8][2] = { {2,1},{2,-1},{-2,1},{-2,-1},{1,2},{1,-2},{-1,2},{-1,-2} };
-            for (auto& v : d)
-                AppendStepMoves(b, sq.row, sq.col, v[0], v[1], candidates);
-        }
-        else if (e == NPC_BISHOP_A || e == NPC_BISHOP_H)
-        {
-            AppendRayMoves(b, sq.row, sq.col, 1, 1, candidates);
-            AppendRayMoves(b, sq.row, sq.col, 1, -1, candidates);
-            AppendRayMoves(b, sq.row, sq.col, -1, 1, candidates);
-            AppendRayMoves(b, sq.row, sq.col, -1, -1, candidates);
-        }
-        else if (e == NPC_ROOK_A || e == NPC_ROOK_H)
-        {
-            AppendRayMoves(b, sq.row, sq.col, 1, 0, candidates);
-            AppendRayMoves(b, sq.row, sq.col, -1, 0, candidates);
-            AppendRayMoves(b, sq.row, sq.col, 0, 1, candidates);
-            AppendRayMoves(b, sq.row, sq.col, 0, -1, candidates);
-        }
-        else if (e == NPC_QUEEN_A || e == NPC_QUEEN_H)
-        {
-            AppendRayMoves(b, sq.row, sq.col, 1, 1, candidates);
-            AppendRayMoves(b, sq.row, sq.col, 1, -1, candidates);
-            AppendRayMoves(b, sq.row, sq.col, -1, 1, candidates);
-            AppendRayMoves(b, sq.row, sq.col, -1, -1, candidates);
-            AppendRayMoves(b, sq.row, sq.col, 1, 0, candidates);
-            AppendRayMoves(b, sq.row, sq.col, -1, 0, candidates);
-            AppendRayMoves(b, sq.row, sq.col, 0, 1, candidates);
-            AppendRayMoves(b, sq.row, sq.col, 0, -1, candidates);
-        }
-        else
-        {
-            for (int dr = -1; dr <= 1; ++dr)
-                for (int dc = -1; dc <= 1; ++dc)
-                    if (dr || dc)
-                        AppendStepMoves(b, sq.row, sq.col, dr, dc, candidates);
+            for (int dc = -maxDelta; dc <= maxDelta; ++dc)
+            {
+                if (dr || dc)
+                    AppendStepMoves(b, sq.row, sq.col, dr, dc, candidates);
+            }
         }
 
         dbgLegal.clear();
@@ -2676,7 +2596,6 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
                     return MoveTo(KARAZHAN_MAP_ID, pendingPiece->GetPositionX(), pendingPiece->GetPositionY(), pendingPiece->GetPositionZ(),
                                   false, false, false, false, MovementPriority::MOVEMENT_FORCED, true, false);
                 }
-
 
                 if (!pending->controlAttempted)
                 {
@@ -2859,7 +2778,12 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         if (phase == ChessPhase::OPENING)
         {
             if (IsPawnEntry(piece->GetEntry()))
+            {
                 score += 1200;
+                auto squareIt = board.pieceSquare.find(piece->GetGUID());
+                if (squareIt != board.pieceSquare.end() && IsOpeningChessPawnFile(squareIt->second))
+                    score += 500;
+            }
             else
                 score -= 500;
         }
@@ -3062,6 +2986,17 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
             }
         }
         ChessSquare curSq = pieceSqIt->second;
+        bool const pawnOpening = IsPawnEntry(piece->GetEntry()) && phase == ChessPhase::OPENING;
+        int pawnOpeningForward = 0;
+        int pawnOpeningPreferredCol = curSq.col;
+        if (pawnOpening)
+        {
+            if (!IsOpeningChessPawnFile(curSq) || kingSqIt == board.pieceSquare.end())
+                return false;
+
+            pawnOpeningForward = kingSqIt->second.row > curSq.row ? 1 : -1;
+            pawnOpeningPreferredCol += curSq.col <= 2 ? 1 : -1;
+        }
         int bestForward = 0;
         float bestMoveScore = -std::numeric_limits<float>::max();
         Creature* bestForwardTrigger = nullptr;
@@ -3069,8 +3004,8 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
         std::string moveTargetReason = "enemy_king";
         float targetDistBefore = std::numeric_limits<float>::max();
         float targetDistAfter = std::numeric_limits<float>::max();
-        bool const nonPawnMovement = controlledNonPawn;
-        if (nonPawnMovement)
+        bool const targetDrivenMovement = controlledNonPawn || !pawnOpening;
+        if (targetDrivenMovement)
         {
             ChessOffensiveTargetSelection movementTarget =
                 SelectPersistentChessTarget(botAI, bot, piece, board, "movement");
@@ -3180,6 +3115,16 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
             int dRow = row - curSq.row;
             int absForward = std::abs(dRow);
             float candidateScore = IsPawnEntry(piece->GetEntry()) ? static_cast<float>(absForward) * 15.0f : 0.0f;
+            if (pawnOpening)
+            {
+                if (row != curSq.row + pawnOpeningForward)
+                    continue;
+
+                // Stagger four pawn lanes diagonally. This opens both rooks and bishops without
+                // building another straight pawn wall directly in front of the back-rank pieces.
+                candidateScore += col == pawnOpeningPreferredCol ? 10000.0f :
+                    (col == curSq.col ? 1000.0f : 0.0f);
+            }
             int edgePenalty = 0;
             int cornerPenalty = 0;
             int centerPenalty = 0;
@@ -3201,7 +3146,6 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
             }
 
             candidateScore -= static_cast<float>(edgePenalty + cornerPenalty + centerPenalty);
-
 
             if (!bestForwardTrigger || candidateScore > bestMoveScore ||
                 (candidateScore == bestMoveScore && absForward > bestForward))
@@ -3387,11 +3331,9 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
         return false;
     }
 
-    Creature* friendlyKing = GetFriendlyChessKing(botAI, bot);
     Creature* enemyKing = GetEnemyChessKing(botAI, bot);
     const bool canMove = !piece->HasAura(SPELL_MOVE_COOLDOWN);
     const bool needsMovement = canMove && enemyKing && piece->GetExactDist2d(enemyKing) > 22.0f;
-    const bool healerNeedsTarget = IsHealerChessPieceEntry(piece->GetEntry()) && friendlyKing && friendlyKing->GetHealthPct() < 90.0f;
     const time_t now = std::time(nullptr);
     const ObjectGuid pieceGuid = piece->GetGUID();
     const bool isPawn = piece->GetEntry() == NPC_PAWN_A || piece->GetEntry() == NPC_PAWN_H;
@@ -3404,6 +3346,10 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
         HandleInvalidControlledChessPiece(botAI, bot, piece, board, "use_ability", controlledRejectReason);
         return false;
     }
+    ChessSupportTargetSelection healingTarget;
+    if (IsHealerChessPieceEntry(piece->GetEntry()))
+        healingTarget = SelectDamagedFriendlyActiveBoardTarget(bot, board, piece);
+    bool const healerNeedsTarget = healingTarget.target != nullptr;
     ChessPhase phase = GetChessPhase(botAI, bot, board);
     bool const openingPawnMoved = openingProgressConfirmed ||
         (instanceId && chessOpenedLanePawnsByInstance.count(instanceId) &&
@@ -3416,7 +3362,6 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
     std::string kingGateReason = "no_enemy_king";
     bool const kingAttackAllowed = enemyKing && IsKarazhanChessKingFocusAllowedActiveBoard(bot, board, enemyKing, enemySupportAlive, enemyDamageAlive, enemyPawnAlive, kingGateReason);
     const bool hasValidChessTarget = healerNeedsTarget || enemyKing;
-
 
     if (enemyKing)
     {
@@ -3468,12 +3413,12 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 std::string offensiveRejectReason;
                 bool const offensiveAllowed = IsKingAttackOffensiveChessSpell(candidateSpellId, offensiveRejectReason);
                 std::string supportRejectReason;
-                bool const supportAllowed = IsChessSupportSpellForNonKingTarget(candidateSpellId, supportRejectReason);
+                bool const supportAllowed = IsChessSupportSpell(candidateSpellId, supportRejectReason);
             }
         }
         if (spellCandidates.empty())
         {
-            supportTarget = SelectDamagedFriendlyActiveBoardNonKingTarget(bot, board, piece);
+            supportTarget = SelectDamagedFriendlyActiveBoardTarget(bot, board, piece);
 
             if (!supportTarget.target)
             {
@@ -3487,7 +3432,7 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                     continue;
 
                 std::string supportRejectReason;
-                bool const supportAllowed = IsChessSupportSpellForNonKingTarget(supportSpellId, supportRejectReason);
+                bool const supportAllowed = IsChessSupportSpell(supportSpellId, supportRejectReason);
                 if (supportAllowed)
                     spellCandidates.push_back(supportSpellId);
             }
@@ -3543,7 +3488,6 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
     else if (!noActionableMovementTarget)
         kingFallbackRejectedReason = "movement_path_available_or_within_range";
 
-
     if (allowKingFocusDueToNoActionableNonKing)
     {
     }
@@ -3586,10 +3530,10 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 if (piece->GetEntry() == NPC_BISHOP_H || piece->GetEntry() == NPC_BISHOP_A)
                 {
                 }
-                if (!IsChessSpellTargetInRange(piece, friendlyKing, spellId))
+                if (!IsChessSpellTargetInRange(piece, healingTarget.target, spellId))
                     continue;
 
-                if (CastChessSpell(piece, friendlyKing, spellId))
+                if (CastChessSpell(piece, healingTarget.target, spellId))
                 {
                     ClearChessSpellNoOpBackoff(pieceGuid, spellId);
                     StampChessPieceCommandGcd(piece);
@@ -3597,11 +3541,6 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                     return true;
                 }
                 StampChessSpellNoOpBackoff(pieceGuid, spellId, now, 2);
-                continue;
-            }
-
-            if ((piece->GetEntry() == NPC_BISHOP_H || piece->GetEntry() == NPC_BISHOP_A) && spellId == 37456)
-            {
                 continue;
             }
 
@@ -3613,7 +3552,6 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                     supportTarget.target->IsAlive() &&
                     IsChessPieceEntry(supportTarget.target->GetEntry()) &&
                     IsFriendlyChessPieceForBot(bot, supportTarget.target) &&
-                    !IsKingChessPieceEntry(supportTarget.target->GetEntry()) &&
                     supportSqIt != board.pieceSquare.end() &&
                     board.occupied.find({ supportSqIt->second.row, supportSqIt->second.col }) != board.occupied.end();
                 if (!supportTargetValid)
@@ -3798,9 +3736,6 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
         return false;
     if (!IsChessEncounterRelevant(botAI, bot))
         return false;
-    Creature* king = GetFriendlyChessKing(botAI, bot);
-    if (!king)
-        return false;
     const uint32 instanceId = bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0;
     bool const openingProgressConfirmed = HasConfirmedOpeningProgress(instanceId);
     bool const controlledNonPawn = !IsPawnEntry(piece->GetEntry()) && openingProgressConfirmed;
@@ -3821,6 +3756,9 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
         HandleInvalidControlledChessPiece(botAI, bot, piece, board, "heal_friendly", controlledRejectReason);
         return false;
     }
+    ChessSupportTargetSelection healingTarget = SelectDamagedFriendlyActiveBoardTarget(bot, board, piece);
+    if (!healingTarget.target)
+        return false;
     const time_t now = std::time(nullptr);
     uint32 const abilityWindowSec = GetChessAbilityWindowSec(controlledNonPawn);
 
@@ -3848,10 +3786,10 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
                 continue;
             }
 
-            if (!IsChessSpellTargetInRange(piece, king, spellId))
+            if (!IsChessSpellTargetInRange(piece, healingTarget.target, spellId))
                 continue;
 
-            if (CastChessSpell(piece, king, spellId))
+            if (CastChessSpell(piece, healingTarget.target, spellId))
             {
                 ClearChessSpellNoOpBackoff(piece->GetGUID(), spellId);
                 StampChessPieceCommandGcd(piece);
@@ -3936,7 +3874,6 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
         kingFallbackRejectedReason = "no_offensive_spells";
     else if (enemyDamageAlive > 1)
         kingFallbackRejectedReason = "enemy_damage_alive_gt_1";
-
 
     if (allowKingFocusDueToNoActionableNonKing)
     {
@@ -4096,7 +4033,12 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
             chessSelfAbilityThrottleByPiece.erase(controlled->GetGUID());
         chessLastEnemyKingSquareByBot.erase(bot->GetGUID());
         if (bot->GetMap())
-            chessEventStartByInstance.erase(bot->GetMap()->GetInstanceId());
+        {
+            uint32 const instanceId = bot->GetMap()->GetInstanceId();
+            chessEventStartByInstance.erase(instanceId);
+            chessOpenedLanePawnsByInstance.erase(instanceId);
+            chessOpeningProgressConfirmedByInstance.erase(instanceId);
+        }
         if (Creature* controlled = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr)
         {
             ObjectGuid pg = controlled->GetGUID();
@@ -4109,7 +4051,6 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
             chessOffensiveTargetByPiece.erase(pg);
             chessMovementCooldownUntilByPiece.erase(pg);
             chessAbilityNoOpBackoffByPiece.erase(pg);
-            chessPawnOpeningAdvanceCountByPiece.erase(pg);
         }
         ClearPendingChessClaim(bot, "event-inactive");
         ClearAssignedChessPiece(bot);
@@ -4125,7 +4066,6 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
         chessPendingMoveByPiece.erase(charm->GetGUID());
         chessOffensiveTargetByPiece.erase(charm->GetGUID());
         chessAbilityNoOpBackoffByPiece.erase(charm->GetGUID());
-        chessPawnOpeningAdvanceCountByPiece.erase(charm->GetGUID());
         chessLastEnemyKingSquareByBot.erase(bot->GetGUID());
         ClearPendingChessClaim(bot, "non-chess-charm");
         ClearAssignedChessPiece(bot);
@@ -4152,14 +4092,11 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
         chessPendingMoveByPiece.erase(assigned->GetGUID());
         chessOffensiveTargetByPiece.erase(assigned->GetGUID());
         chessAbilityNoOpBackoffByPiece.erase(assigned->GetGUID());
-        chessPawnOpeningAdvanceCountByPiece.erase(assigned->GetGUID());
         ClearPendingChessClaim(bot, "assigned-invalid");
         ClearAssignedChessPiece(bot);
     }
     else if (assigned)
     {
-        ChessBoardState board = BuildChessBoardState(botAI, bot);
-        ChessPhase phase = GetChessPhase(botAI, bot, board);
         bool const openingProgressConfirmed = HasConfirmedOpeningProgress(bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0);
         bool const pawnOnlyMode = !openingProgressConfirmed;
         bool const isPawn = IsPawnEntry(assigned->GetEntry());
@@ -4167,34 +4104,7 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
         bool const notSelectable = assigned->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
         bool const assignedToOtherBot = IsPieceAssignedToOtherBot(bot, assigned);
 
-        bool const pawnOpenedLane = openingProgressConfirmed && isPawn && HasPawnMovedDuringOpening(bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0, assigned->GetGUID());
-        bool const pawnEnemyContact = openingProgressConfirmed && isPawn && (assigned->IsInCombat() || assigned->GetVictim());
-        ChessSquare assignedSq{};
-        bool const hasAssignedSq = board.pieceSquare.find(assigned->GetGUID()) != board.pieceSquare.end();
-        if (hasAssignedSq)
-            assignedSq = board.pieceSquare.find(assigned->GetGUID())->second;
-
-        Creature* enemyKingForRetire = GetEnemyChessKing(botAI, bot);
-        int forward = 0;
-        if (hasAssignedSq && enemyKingForRetire)
-        {
-            auto kingSqIt = board.pieceSquare.find(enemyKingForRetire->GetGUID());
-            if (kingSqIt != board.pieceSquare.end())
-                forward = (kingSqIt->second.row > assignedSq.row) ? 1 : -1;
-        }
-        if (forward == 0)
-            forward = 1;
-
-        uint8 const advanceCount = GetPawnOpeningAdvanceCount(assigned->GetGUID());
-        bool const centralPawn = hasAssignedSq ? IsCentralChessPawnFile(assignedSq) : false;
-        bool const backlineRouteOpen = hasAssignedSq ? HasClearBacklineRoute(board, assignedSq, forward) : false;
-        bool const laneDepthSatisfied = pawnEnemyContact ||
-            (centralPawn ? advanceCount >= 2 : (advanceCount >= 1 && backlineRouteOpen));
-        bool const pawnRetireCandidate = openingProgressConfirmed && isPawn && laneDepthSatisfied;
-
-        if (openingProgressConfirmed && isPawn)
-        {
-        }
+        bool const pawnRetireCandidate = openingProgressConfirmed && isPawn;
 
         if (pawnRetireCandidate)
         {
@@ -4211,7 +4121,6 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
             chessPendingMoveByPiece.erase(assigned->GetGUID());
             chessOffensiveTargetByPiece.erase(assigned->GetGUID());
             chessAbilityNoOpBackoffByPiece.erase(assigned->GetGUID());
-            chessPawnOpeningAdvanceCountByPiece.erase(assigned->GetGUID());
             chessLastAbilityCommandByPiece.erase(assigned->GetGUID());
             chessLastMoveCommandByPiece.erase(assigned->GetGUID());
             chessMovementCooldownUntilByPiece.erase(assigned->GetGUID());
@@ -4222,10 +4131,6 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
             ClearAssignedChessPiece(bot);
             return false;
         }
-        if (openingProgressConfirmed && isPawn)
-        {
-        }
-
         bool const openingAssignedAllowed = pawnOnlyMode ? IsClaimableFriendlyPawnForOpening(bot, assigned) : IsClaimableChessPieceForBot(bot, assigned, openingProgressConfirmed);
         bool const assignedAllowed = openingAssignedAllowed && !assignedToOtherBot && (!pawnOnlyMode || isPawn);
 
@@ -5031,7 +4936,6 @@ bool NightbaneGroundPhaseDynamicPositionAction::Execute(Event /*event*/)
         Position wantedEscape(escapeX, escapeY, escapeZ);
         Position safeEscape;
         bool hasSafeEscape = FindNearestSafeNightbaneAnchor(bot, nightbane, wantedEscape, safeEscape);
-
 
         if (!hasSafeEscape)
         {

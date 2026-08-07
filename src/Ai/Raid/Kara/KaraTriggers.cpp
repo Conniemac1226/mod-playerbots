@@ -477,7 +477,7 @@ bool KarazhanFriendlyKingUnderThreatTrigger::IsActive()
     if (!king)
         return false;
 
-    return king->GetHealthPct() < 75.0f || king->IsInCombat();
+    return king->GetMaxHealth() - king->GetHealth() > 5000;
 }
 
 bool KarazhanEnemyKingVulnerableTrigger::IsActive()
@@ -499,7 +499,6 @@ bool KarazhanEnemyKingVulnerableTrigger::IsActive()
     uint32 activeNonKingRemaining = 0;
     std::string gateReason;
     bool const attackAllowed = IsKarazhanChessKingFocusAllowedActiveBoard(botAI, bot, enemyKing, supportAlive, damageAlive, pawnAlive, activeNonKingRemaining, gateReason);
-
 
     if (!attackAllowed)
         return false;
