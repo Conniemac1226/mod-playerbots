@@ -469,12 +469,147 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 /*elapsed*/, bool /*minimal*/)
     }
 }
 
+void RandomPlayerbotMgr::ReplaceDisabledDeathKnightsInArenaTeams()
+{
+    if (!sPlayerbotAIConfig.disableDeathKnightLogin)
+        return;
+
+    std::vector<ObjectGuid> replacementCandidates;
+    PlayerbotsDatabasePreparedStatement* stmt =
+        PlayerbotsDatabase.GetPreparedStatement(PLAYERBOTS_SEL_RANDOM_BOTS_BOT);
+    stmt->SetData(0, "add");
+    if (PreparedQueryResult result = PlayerbotsDatabase.Query(stmt))
+    {
+        do
+        {
+            ObjectGuid const candidateGuid =
+                ObjectGuid::Create<HighGuid::Player>(result->Fetch()[0].Get<uint32>());
+            CharacterCacheEntry const* candidateInfo = sCharacterCache->GetCharacterCacheByGuid(candidateGuid);
+            if (!candidateInfo || candidateInfo->Level != 70 || candidateInfo->Class == CLASS_DEATH_KNIGHT ||
+                !sPlayerbotAIConfig.IsInRandomAccountList(candidateInfo->AccountId))
+            {
+                continue;
+            }
+
+            bool hasArenaTeam = false;
+            for (uint8 slot = 0; slot < MAX_ARENA_SLOT; ++slot)
+            {
+                if (candidateInfo->ArenaTeamId[slot])
+                {
+                    hasArenaTeam = true;
+                    break;
+                }
+            }
+
+            if (!hasArenaTeam)
+                replacementCandidates.push_back(candidateGuid);
+        } while (result->NextRow());
+    }
+
+    uint32 replacedDeathKnights = 0;
+    uint32 replacedCaptains = 0;
+    uint32 teamsRepaired = 0;
+    uint32 replacementsUnavailable = 0;
+
+    for (auto const& arenaTeamEntry : sArenaTeamMgr->GetArenaTeams())
+    {
+        ArenaTeam* arenaTeam = arenaTeamEntry.second;
+        if (!arenaTeam)
+            continue;
+
+        CharacterCacheEntry const* captainInfo =
+            sCharacterCache->GetCharacterCacheByGuid(arenaTeam->GetCaptain());
+        if (!captainInfo || !sPlayerbotAIConfig.IsInRandomAccountList(captainInfo->AccountId))
+            continue;
+
+        std::vector<ObjectGuid> disabledMembers;
+        for (auto const& member : arenaTeam->GetMembers())
+        {
+            CharacterCacheEntry const* memberInfo = sCharacterCache->GetCharacterCacheByGuid(member.Guid);
+            if (memberInfo && sPlayerbotAIConfig.IsInRandomAccountList(memberInfo->AccountId) &&
+                memberInfo->Class == CLASS_DEATH_KNIGHT)
+            {
+                disabledMembers.push_back(member.Guid);
+            }
+        }
+
+        if (disabledMembers.empty())
+            continue;
+
+        uint32 const teamFaction = sCharacterCache->GetCharacterTeamByGuid(arenaTeam->GetCaptain());
+        uint32 teamReplacements = 0;
+        for (ObjectGuid const& disabledGuid : disabledMembers)
+        {
+            ObjectGuid replacementGuid;
+            for (auto candidateIt = replacementCandidates.begin(); candidateIt != replacementCandidates.end();
+                 ++candidateIt)
+            {
+                if (sCharacterCache->GetCharacterTeamByGuid(*candidateIt) != teamFaction)
+                    continue;
+
+                if (!arenaTeam->AddMember(*candidateIt))
+                    continue;
+
+                replacementGuid = *candidateIt;
+                replacementCandidates.erase(candidateIt);
+                break;
+            }
+
+            if (!replacementGuid)
+            {
+                ++replacementsUnavailable;
+                LOG_ERROR("playerbots",
+                    "Unable to replace disabled death knight {} in random arena team {} <{}> with a level-70 bot",
+                    disabledGuid.ToString(), arenaTeam->GetId(), arenaTeam->GetName());
+                continue;
+            }
+
+            bool const replacingCaptain = arenaTeam->GetCaptain() == disabledGuid;
+            if (replacingCaptain)
+            {
+                arenaTeam->SetCaptain(replacementGuid);
+                ++replacedCaptains;
+            }
+
+            arenaTeam->DelMember(disabledGuid, true);
+            ++replacedDeathKnights;
+            ++teamReplacements;
+
+            LOG_INFO("playerbots",
+                "Replaced disabled death knight {} with {} in random arena team {} <{}>{}",
+                disabledGuid.ToString(), replacementGuid.ToString(), arenaTeam->GetId(), arenaTeam->GetName(),
+                replacingCaptain ? " and transferred captaincy" : "");
+        }
+
+        if (!teamReplacements)
+            continue;
+
+        ++teamsRepaired;
+        uint32 const teamRating = arenaTeam->GetRating();
+        arenaTeam->SetRatingForAll(teamRating);
+        for (auto& member : arenaTeam->GetMembers())
+        {
+            member.MatchMakerRating = member.PersonalRating;
+            member.MaxMMR = std::max(member.MaxMMR, member.PersonalRating);
+        }
+        arenaTeam->SaveToDB(true);
+    }
+
+    LOG_INFO("playerbots",
+        "Random arena team progression repair: {} disabled death knights replaced across {} teams, {} captaincies "
+        "transferred, {} replacements unavailable",
+        replacedDeathKnights, teamsRepaired, replacedCaptains, replacementsUnavailable);
+}
+
 void RandomPlayerbotMgr::PreloadArenaTeamBots()
 {
-    if (arenaTeamBotsPreloaded || !sPlayerbotAIConfig.preloadArenaTeamBots)
+    if (arenaTeamBotsPreloaded)
         return;
 
     arenaTeamBotsPreloaded = true;
+    ReplaceDisabledDeathKnightsInArenaTeams();
+    if (!sPlayerbotAIConfig.preloadArenaTeamBots)
+        return;
 
     std::unordered_set<ObjectGuid> arenaMemberGuids;
     uint32 skippedNonRandomAccount = 0;

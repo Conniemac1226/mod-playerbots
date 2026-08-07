@@ -234,6 +234,7 @@ private:
     time_t DelayLoginBotsTimer;
     time_t printStatsTimer;
     uint32 AddRandomBots();
+    void ReplaceDisabledDeathKnightsInArenaTeams();
     void PreloadArenaTeamBots();
     bool IsRandomArenaTeamBot(Player* bot);
     bool ProcessBot(uint32 bot);
