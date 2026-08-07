@@ -234,7 +234,7 @@ private:
     time_t DelayLoginBotsTimer;
     time_t printStatsTimer;
     uint32 AddRandomBots();
-    void ReplaceDisabledDeathKnightsInArenaTeams();
+    bool ReplaceDisabledDeathKnightsInArenaTeams();
     void PreloadArenaTeamBots();
     bool IsRandomArenaTeamBot(Player* bot);
     bool ProcessBot(uint32 bot);
@@ -252,6 +252,8 @@ private:
     std::unordered_map<uint32, BotEventCache> eventCache;
     std::list<uint32> currentBots;
     bool arenaTeamBotsPreloaded = false;
+    bool arenaTeamRepairComplete = false;
+    time_t arenaTeamRepairNextAttempt = 0;
     uint32 bgBotsCount;
     uint32 playersLevel;
 

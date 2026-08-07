@@ -113,6 +113,14 @@ public:
     virtual float GetValue(Action* action);
 };
 
+class PrinceMalchezaarMeleeHoldSafePositionMultiplier : public Multiplier
+{
+public:
+    PrinceMalchezaarMeleeHoldSafePositionMultiplier(
+        PlayerbotAI* botAI) : Multiplier(botAI, "prince malchezaar melee hold safe position multiplier") {}
+    virtual float GetValue(Action* action);
+};
+
 class PrinceMalchezaarEnfeebleKeepDistanceMultiplier : public Multiplier
 {
 public:

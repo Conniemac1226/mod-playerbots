@@ -282,7 +282,7 @@ bool PrinceMalchezaarInfernalsAreSpawnedTrigger::IsActive()
         return false;
 
     Unit* malchezaar = AI_VALUE2(Unit*, "find target", "prince malchezaar");
-    return malchezaar != nullptr;
+    return malchezaar && !GetSpawnedInfernals(botAI).empty();
 }
 
 bool PrinceMalchezaarBossEngagedByMainTankTrigger::IsActive()

@@ -190,6 +190,7 @@ void RaidKarazhanStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers
     multipliers.push_back(new NetherspiteKeepBlockingBeamMultiplier(botAI));
     multipliers.push_back(new NetherspiteWaitForDpsMultiplier(botAI));
     multipliers.push_back(new PrinceMalchezaarDisableAvoidAoeMultiplier(botAI));
+    multipliers.push_back(new PrinceMalchezaarMeleeHoldSafePositionMultiplier(botAI));
     multipliers.push_back(new PrinceMalchezaarEnfeebleKeepDistanceMultiplier(botAI));
     multipliers.push_back(new PrinceMalchezaarDelayBloodlustAndHeroismMultiplier(botAI));
     multipliers.push_back(new NightbaneDisablePetsMultiplier(botAI));

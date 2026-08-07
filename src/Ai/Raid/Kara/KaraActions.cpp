@@ -1604,6 +1604,11 @@ namespace
         return entry == NPC_ROOK_A || entry == NPC_ROOK_H;
     }
 
+    static bool IsRangedChessDamagePiece(uint32 entry)
+    {
+        return entry == NPC_QUEEN_A || entry == NPC_QUEEN_H;
+    }
+
     static float GetReadyChessAttackRange(Creature* piece)
     {
         if (!piece)
@@ -3004,60 +3009,96 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
         std::string moveTargetReason = "enemy_king";
         float targetDistBefore = std::numeric_limits<float>::max();
         float targetDistAfter = std::numeric_limits<float>::max();
+        float preferredTargetDistance = 0.0f;
         bool const targetDrivenMovement = controlledNonPawn || !pawnOpening;
         if (targetDrivenMovement)
         {
-            ChessOffensiveTargetSelection movementTarget =
-                SelectPersistentChessTarget(botAI, bot, piece, board, "movement");
-            if (movementTarget.target)
-            {
-                moveTarget = movementTarget.target;
-                moveTargetReason = "selected_nonking_" + movementTarget.category;
-                targetDistBefore = movementTarget.distance;
-            }
-            else if (enemyKing)
-            {
-                uint32 supportAlive = 0;
-                uint32 damageAlive = 0;
-                uint32 pawnAlive = 0;
-                std::string gateReason = "no_enemy_king";
-                bool const kingMovementAllowed = IsKarazhanChessKingFocusAllowedActiveBoard(bot, board, enemyKing, supportAlive, damageAlive, pawnAlive, gateReason);
-                bool const noActionableMovementTarget = IsNoActionableNonKingRejectReason(movementTarget.rejectReason);
-                bool const movementDeadlockBreaker =
-                    !kingMovementAllowed &&
-                    noActionableMovementTarget &&
-                    gateReason == "board_not_cleared" &&
-                    damageAlive <= 1 &&
-                    !GetLikelyOffensiveChessSpells(piece).empty();
-                if (movementDeadlockBreaker)
-                {
-                }
-                else
-                {
-                    std::string kingFallbackRejectedReason = "none";
-                    if (!noActionableMovementTarget)
-                        kingFallbackRejectedReason = "target_actionable";
-                    else if (gateReason != "board_not_cleared")
-                        kingFallbackRejectedReason = "gate_" + gateReason;
-                    else if (damageAlive > 1)
-                        kingFallbackRejectedReason = "enemy_damage_alive_gt_1";
-                    else if (GetLikelyOffensiveChessSpells(piece).empty())
-                        kingFallbackRejectedReason = "no_offensive_spells";
-                }
+            bool const healerPositioning = IsHealerChessPieceEntry(piece->GetEntry());
+            bool const rangedDamagePositioning = IsRangedChessDamagePiece(piece->GetEntry());
+            ChessOffensiveTargetSelection movementTarget;
 
-                if (kingMovementAllowed || movementDeadlockBreaker)
-                {
-                    moveTarget = enemyKing;
-                    moveTargetReason = movementDeadlockBreaker ? "enemy_king_fallback_breaker" : "enemy_king_fallback";
-                    targetDistBefore = piece->GetExactDist2d(enemyKing);
-                }
-                else
-                {
+            if (healerPositioning)
+            {
+                // Bishops are support pieces. Keep them near the friendly king where their 25-yard heal can cover
+                // the formation instead of letting their short offensive lance pull them across the board.
+                if (SelectDamagedFriendlyActiveBoardTarget(bot, board, piece).target)
                     return false;
+
+                moveTarget = GetFriendlyChessKing(botAI, bot);
+                if (!moveTarget)
+                    return false;
+
+                moveTargetReason = "friendly_king_support_anchor";
+                targetDistBefore = piece->GetExactDist2d(moveTarget);
+                preferredTargetDistance = 10.0f;
+                if (targetDistBefore >= 6.0f && targetDistBefore <= 16.0f)
+                    return false;
+            }
+            else
+            {
+                movementTarget = SelectPersistentChessTarget(botAI, bot, piece, board, "movement");
+                if (movementTarget.target)
+                {
+                    moveTarget = movementTarget.target;
+                    moveTargetReason = "selected_nonking_" + movementTarget.category;
+                    targetDistBefore = movementTarget.distance;
+                }
+                else if (enemyKing)
+                {
+                    uint32 supportAlive = 0;
+                    uint32 damageAlive = 0;
+                    uint32 pawnAlive = 0;
+                    std::string gateReason = "no_enemy_king";
+                    bool const kingMovementAllowed = IsKarazhanChessKingFocusAllowedActiveBoard(
+                        bot, board, enemyKing, supportAlive, damageAlive, pawnAlive, gateReason);
+                    bool const noActionableMovementTarget =
+                        IsNoActionableNonKingRejectReason(movementTarget.rejectReason);
+                    bool const movementDeadlockBreaker =
+                        !kingMovementAllowed &&
+                        noActionableMovementTarget &&
+                        gateReason == "board_not_cleared" &&
+                        damageAlive <= 1 &&
+                        !GetLikelyOffensiveChessSpells(piece).empty();
+                    if (movementDeadlockBreaker)
+                    {
+                    }
+                    else
+                    {
+                        std::string kingFallbackRejectedReason = "none";
+                        if (!noActionableMovementTarget)
+                            kingFallbackRejectedReason = "target_actionable";
+                        else if (gateReason != "board_not_cleared")
+                            kingFallbackRejectedReason = "gate_" + gateReason;
+                        else if (damageAlive > 1)
+                            kingFallbackRejectedReason = "enemy_damage_alive_gt_1";
+                        else if (GetLikelyOffensiveChessSpells(piece).empty())
+                            kingFallbackRejectedReason = "no_offensive_spells";
+                    }
+
+                    if (kingMovementAllowed || movementDeadlockBreaker)
+                    {
+                        moveTarget = enemyKing;
+                        moveTargetReason = movementDeadlockBreaker ?
+                            "enemy_king_fallback_breaker" : "enemy_king_fallback";
+                        targetDistBefore = piece->GetExactDist2d(enemyKing);
+                    }
+                    else
+                    {
+                        return false;
+                    }
+                }
+
+                if (moveTarget && rangedDamagePositioning)
+                {
+                    // Queens have 20- and 25-yard attacks in the encounter script. Hold a stable firing band even
+                    // while both abilities are cooling down; only reposition when genuinely too close or too far.
+                    preferredTargetDistance = 19.0f;
+                    if (targetDistBefore >= 14.0f && targetDistBefore <= 24.0f)
+                        return false;
                 }
             }
 
-            if (moveTarget)
+            if (moveTarget && !healerPositioning && !rangedDamagePositioning)
             {
                 float const readyAttackRange = GetReadyChessAttackRange(piece);
                 if (readyAttackRange > 0.0f &&
@@ -3142,7 +3183,10 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
             if (moveTarget)
             {
                 targetDistAfter = moveTarget->GetExactDist2d(mv.second);
-                candidateScore += (targetDistBefore - targetDistAfter) * 100.0f;
+                if (preferredTargetDistance > 0.0f)
+                    candidateScore -= std::fabs(targetDistAfter - preferredTargetDistance) * 100.0f;
+                else
+                    candidateScore += (targetDistBefore - targetDistAfter) * 100.0f;
             }
 
             candidateScore -= static_cast<float>(edgePenalty + cornerPenalty + centerPenalty);

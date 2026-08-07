@@ -302,6 +302,43 @@ float PrinceMalchezaarDisableAvoidAoeMultiplier::GetValue(Action* action)
     return 1.0f;
 }
 
+// Keep melee at the safe point selected by the encounter action while the tank moves Malchezaar away from an
+// infernal. Without this interlock, ordinary reach/formation movement immediately sends them back through Hellfire.
+float PrinceMalchezaarMeleeHoldSafePositionMultiplier::GetValue(Action* action)
+{
+    if (!botAI->IsMelee(bot) || botAI->IsTank(bot) || botAI->IsHeal(bot) || bot->HasAura(SPELL_ENFEEBLE))
+        return 1.0f;
+
+    Unit* malchezaar = AI_VALUE2(Unit*, "find target", "prince malchezaar");
+    if (!malchezaar)
+        return 1.0f;
+
+    constexpr float safeInfernalDistance = 23.0f;
+    bool unsafePosition = false;
+    for (Unit* infernal : GetSpawnedInfernals(botAI))
+    {
+        if (bot->GetExactDist2d(infernal) < safeInfernalDistance ||
+            malchezaar->GetExactDist2d(infernal) < safeInfernalDistance)
+        {
+            unsafePosition = true;
+            break;
+        }
+    }
+
+    if (!unsafePosition)
+        return 1.0f;
+
+    if (dynamic_cast<CastReachTargetSpellAction*>(action) ||
+        dynamic_cast<CastKillingSpreeAction*>(action))
+        return 0.0f;
+
+    if (dynamic_cast<MovementAction*>(action) &&
+        !dynamic_cast<PrinceMalchezaarNonTankAvoidInfernalAction*>(action))
+        return 0.0f;
+
+    return 1.0f;
+}
+
 // Don't run back into Shadow Nova when Enfeebled
 float PrinceMalchezaarEnfeebleKeepDistanceMultiplier::GetValue(Action* action)
 {

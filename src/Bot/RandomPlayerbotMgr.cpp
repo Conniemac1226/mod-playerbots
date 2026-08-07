@@ -469,10 +469,10 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 /*elapsed*/, bool /*minimal*/)
     }
 }
 
-void RandomPlayerbotMgr::ReplaceDisabledDeathKnightsInArenaTeams()
+bool RandomPlayerbotMgr::ReplaceDisabledDeathKnightsInArenaTeams()
 {
     if (!sPlayerbotAIConfig.disableDeathKnightLogin)
-        return;
+        return true;
 
     std::vector<ObjectGuid> replacementCandidates;
     PlayerbotsDatabasePreparedStatement* stmt =
@@ -558,9 +558,6 @@ void RandomPlayerbotMgr::ReplaceDisabledDeathKnightsInArenaTeams()
             if (!replacementGuid)
             {
                 ++replacementsUnavailable;
-                LOG_ERROR("playerbots",
-                    "Unable to replace disabled death knight {} in random arena team {} <{}> with a level-70 bot",
-                    disabledGuid.ToString(), arenaTeam->GetId(), arenaTeam->GetName());
                 continue;
             }
 
@@ -595,19 +592,36 @@ void RandomPlayerbotMgr::ReplaceDisabledDeathKnightsInArenaTeams()
         arenaTeam->SaveToDB(true);
     }
 
+    if (replacementsUnavailable)
+    {
+        LOG_WARN("playerbots",
+            "Random arena team progression repair: {} disabled death knights replaced across {} teams, {} "
+            "captaincies transferred, {} replacements unavailable; the repair will retry after bot initialization",
+            replacedDeathKnights, teamsRepaired, replacedCaptains, replacementsUnavailable);
+        return false;
+    }
+
     LOG_INFO("playerbots",
-        "Random arena team progression repair: {} disabled death knights replaced across {} teams, {} captaincies "
-        "transferred, {} replacements unavailable",
-        replacedDeathKnights, teamsRepaired, replacedCaptains, replacementsUnavailable);
+        "Random arena team progression repair complete: {} disabled death knights replaced across {} teams, {} "
+        "captaincies transferred",
+        replacedDeathKnights, teamsRepaired, replacedCaptains);
+    return true;
 }
 
 void RandomPlayerbotMgr::PreloadArenaTeamBots()
 {
+    time_t const now = time(nullptr);
+    if (!arenaTeamRepairComplete && (!arenaTeamRepairNextAttempt || now >= arenaTeamRepairNextAttempt))
+    {
+        arenaTeamRepairComplete = ReplaceDisabledDeathKnightsInArenaTeams();
+        if (!arenaTeamRepairComplete)
+            arenaTeamRepairNextAttempt = now + (_isBotInitializing ? 30 : 300);
+    }
+
     if (arenaTeamBotsPreloaded)
         return;
 
     arenaTeamBotsPreloaded = true;
-    ReplaceDisabledDeathKnightsInArenaTeams();
     if (!sPlayerbotAIConfig.preloadArenaTeamBots)
         return;
 
