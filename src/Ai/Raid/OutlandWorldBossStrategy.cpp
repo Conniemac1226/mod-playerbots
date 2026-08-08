@@ -14,8 +14,12 @@
 namespace
 {
 constexpr float DOOMWALKER_SPREAD_DISTANCE = 10.0f;
-constexpr float DOOMWALKER_MELEE_RING_BUFFER = 1.0f;
-constexpr uint8 DOOMWALKER_MELEE_CANDIDATES = 16;
+constexpr float DOOMWALKER_POSITION_TOLERANCE = 0.5f;
+constexpr float DOOMWALKER_PRIMARY_RING_RADIUS = 32.0f;
+constexpr float DOOMWALKER_SECONDARY_RING_RADIUS = 19.0f;
+constexpr float DOOMWALKER_OVERFLOW_RING_RADIUS = 45.0f;
+constexpr uint8 DOOMWALKER_PRIMARY_RING_SLOTS = 18;
+constexpr uint8 DOOMWALKER_SECONDARY_RING_SLOTS = 10;
 
 bool HasGroupMemberWithinDistance(Player* bot, float distance)
 {
@@ -37,120 +41,100 @@ bool HasGroupMemberWithinDistance(Player* bot, float distance)
     return false;
 }
 
-// Melee stay on Doomwalker's boss ring and choose the spot that is farthest from the group.
-bool FindDoomwalkerMeleeSpreadPosition(Player* bot, Unit* doomwalker,
-                                       float spreadDistance,
-                                       Position& destination)
+bool FindDoomwalkerSpreadPosition(PlayerbotAI* botAI, Player* bot,
+                                  Unit* doomwalker, Position& destination)
 {
     Group* group = bot->GetGroup();
     if (!group)
         return false;
 
-    std::vector<Player*> members;
+    bool const isMelee = botAI->IsMelee(bot);
+    uint32 botIndex = 0;
+    uint32 memberCount = 0;
     for (GroupReference* gref = group->GetFirstMember(); gref; gref = gref->next())
     {
         Player* member = gref->GetSource();
-        if (!member || member == bot || !member->IsAlive() ||
-            member->GetMapId() != bot->GetMapId())
+        if (!member || !member->IsAlive() || member->GetMapId() != bot->GetMapId() ||
+            botAI->IsTank(member) || botAI->IsMelee(member) != isMelee)
             continue;
 
-        members.push_back(member);
+        if (member == bot)
+            botIndex = memberCount;
+
+        ++memberCount;
     }
 
-    if (members.empty())
+    if (!memberCount)
         return false;
 
-    float const bossReach = doomwalker->GetCombatReach();
-    float const botReach = bot->GetCombatReach();
-    float const meleeMoveDistance = bossReach + DOOMWALKER_MELEE_RING_BUFFER;
-    float const meleeRange = bot->GetMeleeRange(doomwalker);
-
-    bool foundDesired = false;
-    bool foundFallback = false;
-    float bestDesiredScore = -1.0f;
-    float bestFallbackScore = -1.0f;
-    Position bestDesiredPosition;
-    Position bestFallbackPosition;
-
-    for (uint8 i = 0; i < DOOMWALKER_MELEE_CANDIDATES; ++i)
+    float radius = 0.0f;
+    float angle = 0.0f;
+    if (isMelee)
     {
-        float const angle = static_cast<float>(
-            2.0f * M_PI * i / DOOMWALKER_MELEE_CANDIDATES);
-        float x = 0.0f;
-        float y = 0.0f;
-        float z = 0.0f;
+        // Melee cannot all maintain 10 yards without leaving attack range. Split them
+        // into two stable groups on opposite sides to limit the number of chained hits.
+        radius = std::max(1.0f, bot->GetMeleeRange(doomwalker) - 0.1f);
+        float const tankAngle = doomwalker->GetVictim() ?
+            doomwalker->GetAngle(doomwalker->GetVictim()) : doomwalker->GetOrientation();
+        angle = tankAngle + (botIndex % 2 ? M_PI / 2.0f : -M_PI / 2.0f);
+    }
+    else
+    {
+        // A normal 25-player composition fits on the 32-yard ring, outside the
+        // Earthquake movement threshold. Extra ranged use rings 13 yards apart.
+        uint32 ringIndex = botIndex;
+        uint32 ringCount = std::min<uint32>(memberCount, DOOMWALKER_PRIMARY_RING_SLOTS);
+        radius = DOOMWALKER_PRIMARY_RING_RADIUS;
 
-        doomwalker->GetNearPoint(
-            bot, x, y, z, botReach, meleeMoveDistance, angle);
-
-        if (!bot->GetMap()->CheckCollisionAndGetValidCoords(
-                bot, bot->GetPositionX(), bot->GetPositionY(),
-                bot->GetPositionZ(), x, y, z))
+        if (botIndex >= DOOMWALKER_PRIMARY_RING_SLOTS)
         {
-            continue;
+            ringIndex -= DOOMWALKER_PRIMARY_RING_SLOTS;
+            ringCount = std::min<uint32>(
+                memberCount - DOOMWALKER_PRIMARY_RING_SLOTS,
+                DOOMWALKER_SECONDARY_RING_SLOTS);
+            radius = DOOMWALKER_SECONDARY_RING_RADIUS;
         }
 
-        Position candidate(x, y, z);
-        float const candidateX = candidate.GetPositionX();
-        float const candidateY = candidate.GetPositionY();
-        if (candidate.GetExactDist2d(doomwalker->GetPositionX(),
-                                     doomwalker->GetPositionY()) >= meleeRange)
-            continue;
-
-        float nearestMemberDistance = 0.0f;
-        bool hasMember = false;
-        for (Player* member : members)
+        if (botIndex >= DOOMWALKER_PRIMARY_RING_SLOTS + DOOMWALKER_SECONDARY_RING_SLOTS)
         {
-            float const memberDistance =
-                member->GetExactDist2d(candidateX, candidateY);
-            if (!hasMember || memberDistance < nearestMemberDistance)
-            {
-                nearestMemberDistance = memberDistance;
-                hasMember = true;
-            }
+            ringIndex -= DOOMWALKER_SECONDARY_RING_SLOTS;
+            ringCount = memberCount - DOOMWALKER_PRIMARY_RING_SLOTS -
+                        DOOMWALKER_SECONDARY_RING_SLOTS;
+            radius = DOOMWALKER_OVERFLOW_RING_RADIUS;
         }
 
-        if (!hasMember)
-            return false;
-
-        if (nearestMemberDistance >= spreadDistance)
-        {
-            if (!foundDesired || nearestMemberDistance > bestDesiredScore)
-            {
-                bestDesiredScore = nearestMemberDistance;
-                bestDesiredPosition = candidate;
-                foundDesired = true;
-            }
-        }
-        else if (!foundDesired &&
-                 (!foundFallback || nearestMemberDistance > bestFallbackScore))
-        {
-            bestFallbackScore = nearestMemberDistance;
-            bestFallbackPosition = candidate;
-            foundFallback = true;
-        }
+        angle = 2.0f * M_PI * static_cast<float>(ringIndex) /
+                static_cast<float>(ringCount);
+        if (radius == DOOMWALKER_SECONDARY_RING_RADIUS)
+            angle += M_PI / static_cast<float>(ringCount);
     }
 
-    if (foundDesired)
+    float x = doomwalker->GetPositionX() + radius * std::cos(angle);
+    float y = doomwalker->GetPositionY() + radius * std::sin(angle);
+    float z = bot->GetPositionZ();
+    if (!bot->GetMap()->CheckCollisionAndGetValidCoords(
+            bot, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
+            x, y, z))
     {
-        destination = bestDesiredPosition;
-        return true;
+        return false;
     }
 
-    if (foundFallback)
-    {
-        destination = bestFallbackPosition;
-        return true;
-    }
-
-    return false;
+    destination.Relocate(x, y, z);
+    return true;
 }
 
-bool IsDoomwalkerCasting(Unit* doomwalker, uint32 spellId)
+bool NeedsDoomwalkerSpread(PlayerbotAI* botAI, Player* bot, Unit* doomwalker)
 {
-    return doomwalker && doomwalker->IsAlive() && doomwalker->IsInCombat() &&
-           doomwalker->HasUnitState(UNIT_STATE_CASTING) &&
-           doomwalker->FindCurrentSpellBySpellId(spellId);
+    if (!doomwalker || !doomwalker->IsAlive() || !doomwalker->IsInCombat() ||
+        !HasGroupMemberWithinDistance(bot, DOOMWALKER_SPREAD_DISTANCE))
+    {
+        return false;
+    }
+
+    Position destination;
+    return FindDoomwalkerSpreadPosition(botAI, bot, doomwalker, destination) &&
+           bot->GetExactDist2d(destination.GetPositionX(), destination.GetPositionY()) >
+               DOOMWALKER_POSITION_TOLERANCE;
 }
 
 bool IsOffensiveSpellAction(Action* action)
@@ -173,35 +157,17 @@ bool DoomwalkerChainLightningSpreadAction::Execute(Event /*event*/)
         return false;
 
     Unit* doomwalker = AI_VALUE2(Unit*, "find target", "doomwalker");
-    if (!IsDoomwalkerCasting(doomwalker, SPELL_DOOMWALKER_CHAIN_LIGHTNING))
+    if (!NeedsDoomwalkerSpread(botAI, bot, doomwalker))
         return false;
 
-    if (!HasGroupMemberWithinDistance(bot, DOOMWALKER_SPREAD_DISTANCE))
+    Position spreadPosition;
+    if (!FindDoomwalkerSpreadPosition(botAI, bot, doomwalker, spreadPosition))
         return false;
 
-    bot->AttackStop();
-    bot->InterruptNonMeleeSpells(true);
-    if (botAI->IsMelee(bot))
-    {
-        Position spreadPosition;
-        if (FindDoomwalkerMeleeSpreadPosition(bot, doomwalker,
-                                              DOOMWALKER_SPREAD_DISTANCE,
-                                              spreadPosition))
-        {
-            return MoveTo(bot->GetMapId(), spreadPosition.GetPositionX(),
-                          spreadPosition.GetPositionY(),
-                          spreadPosition.GetPositionZ(), false, false, false,
-                          false,
-                          MovementPriority::MOVEMENT_COMBAT, true);
-        }
-
-        if (!bot->IsWithinMeleeRange(doomwalker))
-            return MoveFromGroup(DOOMWALKER_SPREAD_DISTANCE);
-
-        return false;
-    }
-
-    return MoveFromGroup(DOOMWALKER_SPREAD_DISTANCE);
+    return MoveTo(bot->GetMapId(), spreadPosition.GetPositionX(),
+                  spreadPosition.GetPositionY(), spreadPosition.GetPositionZ(),
+                  false, false, false, false,
+                  MovementPriority::MOVEMENT_COMBAT, true);
 }
 
 bool DoomwalkerChainLightningSpreadAction::isUseful()
@@ -210,8 +176,7 @@ bool DoomwalkerChainLightningSpreadAction::isUseful()
         return false;
 
     Unit* doomwalker = AI_VALUE2(Unit*, "find target", "doomwalker");
-    return IsDoomwalkerCasting(doomwalker, SPELL_DOOMWALKER_CHAIN_LIGHTNING) &&
-           HasGroupMemberWithinDistance(bot, DOOMWALKER_SPREAD_DISTANCE);
+    return NeedsDoomwalkerSpread(botAI, bot, doomwalker);
 }
 
 bool DoomwalkerEarthquakeMoveAwayAction::Execute(Event /*event*/)
@@ -297,8 +262,7 @@ bool DoomwalkerChainLightningTrigger::IsActive()
         return false;
 
     Unit* doomwalker = AI_VALUE2(Unit*, "find target", "doomwalker");
-    return IsDoomwalkerCasting(doomwalker, SPELL_DOOMWALKER_CHAIN_LIGHTNING) &&
-           HasGroupMemberWithinDistance(bot, DOOMWALKER_SPREAD_DISTANCE);
+    return NeedsDoomwalkerSpread(botAI, bot, doomwalker);
 }
 
 bool DoomwalkerEarthquakeTrigger::IsActive()
