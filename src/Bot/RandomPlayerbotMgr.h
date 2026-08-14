@@ -250,7 +250,7 @@ private:
     std::map<uint32, std::map<uint32, std::vector<WorldLocation>>> rpgLocsCacheLevel;
     std::map<TeamId, std::map<BattlegroundTypeId, std::vector<uint32>>> BattleMastersCache;
     std::unordered_map<uint32, BotEventCache> eventCache;
-    std::list<uint32> currentBots;
+    std::unordered_set<uint32> currentBots;
     bool arenaTeamBotsPreloaded = false;
     bool arenaTeamRepairComplete = false;
     time_t arenaTeamRepairNextAttempt = 0;

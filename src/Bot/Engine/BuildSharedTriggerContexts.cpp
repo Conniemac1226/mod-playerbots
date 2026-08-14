@@ -31,8 +31,9 @@
 #include "Ai/Dungeon/DungeonAutoPullTriggerContext.h"
 #include "Ai/Dungeon/TbcDungeonTriggerContext.h"
 #include "Ai/Dungeon/WotlkDungeonTriggerContext.h"
+#include "MechTriggerContext.h"
+#include "SethTriggerContext.h"
 #include "../../../strategy/raids/blacktemple/BlackTempleTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceTriggerContext.h"
@@ -46,7 +47,6 @@
 #include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/arcatraz/ArcatrazTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/botanica/BotanicaTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/mechanar/MechanarTriggerContext.h"
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
 {
@@ -75,6 +75,8 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidOutlandWorldBossTriggerContext());
     triggerContexts.Add(new DungeonAutoPullTriggerContext());
     triggerContexts.Add(new TbcDungeonAuchenaiCryptsTriggerContext());
+    triggerContexts.Add(new TbcDungeonSethekkHallsTriggerContext());
+    triggerContexts.Add(new TbcDungeonMechanarTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());
@@ -94,7 +96,6 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     // Custom / Unique
     triggerContexts.Add(new RaidBtTriggerContext());
     triggerContexts.Add(new EscapeFromDurnholdeTriggerContext());
-    triggerContexts.Add(new TbcDungeonSHTriggerContext());
     triggerContexts.Add(new BlackMorassTriggerContext());
     triggerContexts.Add(new MagistersTerraceTriggerContext());
     triggerContexts.Add(new SteamvaultTriggerContext());
@@ -107,5 +108,4 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new ShadowLabyrinthTriggerContext());
     triggerContexts.Add(new ArcatrazTriggerContext());
     triggerContexts.Add(new BotanicaTriggerContext());
-    triggerContexts.Add(new MechanarTriggerContext());
 }

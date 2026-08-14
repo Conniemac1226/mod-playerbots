@@ -1690,7 +1690,7 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         "wotlk-fos", "wotlk-gd", "wotlk-hol", "wotlk-hos", "wotlk-nex", "wotlk-occ",
         "wotlk-ok", "wotlk-os", "wotlk-pos", "wotlk-toc", "wotlk-uk", "wotlk-up", "wotlk-vh",
         "zulaman", "tbc-bf", "tbc-hr", "tbc-shh", "tbc-sv", "tbc-ub", "tbc-sp", "tbc-arc",
-        "tbc-bot", "tbc-mech", "tbc-sl", "tbc-sh", "tbc-mato", "tbc-mt", "tbc-efd", "tbc-bm"
+        "tbc-bot", "tbc-mech", "tbc-sl", "tbc-seth", "tbc-mato", "tbc-mt", "tbc-efd", "tbc-bm"
     };
 
     for (const std::string& strat : allInstanceStrategies)
@@ -1772,7 +1772,7 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
             strategyName = "tbc-sl";  // Shadow Labyrinth
             break;
         case 556:
-            strategyName = "tbc-sh";  // Sethekk Halls
+            strategyName = "tbc-seth";  // Sethekk Halls
             break;
         case 557:
             strategyName = "tbc-mato";  // Mana-Tombs

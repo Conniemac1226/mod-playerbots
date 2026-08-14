@@ -19,13 +19,14 @@
 #include "GDStrategy.h"
 #include "HoSStrategy.h"
 #include "HoLStrategy.h"
+#include "MechStrategy.h"
 #include "OCStrategy.h"
 #include "UPStrategy.h"
 #include "CoSStrategy.h"
 #include "FoSStrategy.h"
 #include "PoSStrategy.h"
 #include "TOCStrategy.h"
-#include "../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsStrategy.h"
+#include "SethStrategy.h"
 #include "../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeStrategy.h"
 #include "../../strategy/dungeons/tbc/blackmorass/BlackMorassStrategy.h"
 #include "../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceStrategy.h"
@@ -39,7 +40,6 @@
 #include "../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthStrategy.h"
 #include "../../strategy/dungeons/tbc/arcatraz/ArcatrazStrategy.h"
 #include "../../strategy/dungeons/tbc/botanica/BotanicaStrategy.h"
-#include "../../strategy/dungeons/tbc/mechanar/MechanarStrategy.h"
 
 class DungeonStrategyContext : public NamedObjectContext<Strategy>
 {
@@ -50,8 +50,8 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
             creators["classic-dungeon"] = &DungeonStrategyContext::classic_dungeon;
 
             // Burning Crusade
-            creators["tbc-sh"] = &DungeonStrategyContext::tbc_sh;       // Sethekk Halls
             creators["tbc-ac"] = &DungeonStrategyContext::tbc_ac;       // Auchindoun: Auchenai Crypts
+            creators["tbc-seth"] = &DungeonStrategyContext::tbc_seth;   // Auchindoun: Sethekk Halls
             creators["tbc-efd"] = &DungeonStrategyContext::tbc_efd;     // Escape from Durnholde
             creators["tbc-bm"] = &DungeonStrategyContext::tbc_bm;       // Black Morass
             creators["tbc-mt"] = &DungeonStrategyContext::tbc_mt;       // Magisters' Terrace
@@ -86,8 +86,8 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         }
     private:
         static Strategy* classic_dungeon(PlayerbotAI* botAI) { return new ClassicDungeonStrategy(botAI); }
-        static Strategy* tbc_sh(PlayerbotAI* botAI) { return new TbcDungeonSHStrategy(botAI); }
         static Strategy* tbc_ac(PlayerbotAI* botAI) { return new TbcDungeonAuchenaiCryptsStrategy(botAI); }
+        static Strategy* tbc_seth(PlayerbotAI* botAI) { return new TbcDungeonSethekkHallsStrategy(botAI); }
         static Strategy* tbc_efd(PlayerbotAI* botAI) { return new EscapeFromDurnholdeStrategy(botAI); }
         static Strategy* tbc_bm(PlayerbotAI* botAI) { return new BlackMorassStrategy(botAI); }
         static Strategy* tbc_mt(PlayerbotAI* botAI) { return new MagistersTerraceStrategy(botAI); }
@@ -101,7 +101,7 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         static Strategy* tbc_sl(PlayerbotAI* botAI) { return new ShadowLabyrinthStrategy(botAI); }
         static Strategy* tbc_arc(PlayerbotAI* botAI) { return new ArcatrazStrategy(botAI); }
         static Strategy* tbc_bot(PlayerbotAI* botAI) { return new BotanicaStrategy(botAI); }
-        static Strategy* tbc_mech(PlayerbotAI* botAI) { return new MechanarStrategy(botAI); }
+        static Strategy* tbc_mech(PlayerbotAI* botAI) { return new TbcDungeonMechanarStrategy(botAI); }
 
         static Strategy* wotlk_uk(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
         static Strategy* wotlk_nex(PlayerbotAI* botAI) { return new WotlkDungeonNexStrategy(botAI); }

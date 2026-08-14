@@ -31,8 +31,9 @@
 #include "Ai/Dungeon/DungeonAutoPullActionContext.h"
 #include "Ai/Dungeon/TbcDungeonActionContext.h"
 #include "Ai/Dungeon/WotlkDungeonActionContext.h"
+#include "MechActionContext.h"
+#include "SethActionContext.h"
 #include "../../../strategy/raids/blacktemple/BlackTempleActionContext.h"
-#include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsActionContext.h"
 #include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassActionContext.h"
 #include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeActionContext.h"
 #include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceActionContext.h"
@@ -46,7 +47,6 @@
 #include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthActionContext.h"
 #include "../../../strategy/dungeons/tbc/arcatraz/ArcatrazActionContext.h"
 #include "../../../strategy/dungeons/tbc/botanica/BotanicaActionContext.h"
-#include "../../../strategy/dungeons/tbc/mechanar/MechanarActionContext.h"
 
 void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Action>& actionContexts)
 {
@@ -75,6 +75,8 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidOutlandWorldBossActionContext());
     actionContexts.Add(new DungeonAutoPullActionContext());
     actionContexts.Add(new TbcDungeonAuchenaiCryptsActionContext());
+    actionContexts.Add(new TbcDungeonSethekkHallsActionContext());
+    actionContexts.Add(new TbcDungeonMechanarActionContext());
     actionContexts.Add(new WotlkDungeonUKActionContext());
     actionContexts.Add(new WotlkDungeonNexActionContext());
     actionContexts.Add(new WotlkDungeonANActionContext());
@@ -94,7 +96,6 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     // Custom / Unique
     actionContexts.Add(new RaidBtActionContext());
     actionContexts.Add(new EscapeFromDurnholdeActionContext());
-    actionContexts.Add(new TbcDungeonSHActionContext());
     actionContexts.Add(new BlackMorassActionContext());
     actionContexts.Add(new MagistersTerraceActionContext());
     actionContexts.Add(new SteamvaultActionContext());
@@ -107,5 +108,4 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new ShadowLabyrinthActionContext());
     actionContexts.Add(new ArcatrazActionContext());
     actionContexts.Add(new BotanicaActionContext());
-    actionContexts.Add(new MechanarActionContext());
 }

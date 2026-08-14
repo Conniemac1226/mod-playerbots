@@ -686,7 +686,7 @@ void PlayerbotFactory::Randomize(bool incremental, bool resetItems)
         ClearSpells();
         ResetQuests();
         if (resetItems || !sPlayerbotAIConfig.equipAndSpecPersistence ||
-            level < uint32(sPlayerbotAIConfig.equipAndSpecPersistenceLevel))
+            level < uint32(sPlayerbotAIConfig.equipAndSpecPersistenceLevel) || level < oldLevel)
         {
             ClearAllItems();
         }
