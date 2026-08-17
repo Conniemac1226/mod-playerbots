@@ -47,6 +47,8 @@
 #include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthActionContext.h"
 #include "../../../strategy/dungeons/tbc/arcatraz/ArcatrazActionContext.h"
 #include "../../../strategy/dungeons/tbc/botanica/BotanicaActionContext.h"
+#include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsActionContext.h"
+#include "../../../strategy/dungeons/tbc/mechanar/MechanarActionContext.h"
 
 void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Action>& actionContexts)
 {
@@ -77,6 +79,8 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new TbcDungeonAuchenaiCryptsActionContext());
     actionContexts.Add(new TbcDungeonSethekkHallsActionContext());
     actionContexts.Add(new TbcDungeonMechanarActionContext());
+    actionContexts.Add(new TbcDungeonSHActionContext());
+    actionContexts.Add(new MechanarActionContext());
     actionContexts.Add(new WotlkDungeonUKActionContext());
     actionContexts.Add(new WotlkDungeonNexActionContext());
     actionContexts.Add(new WotlkDungeonANActionContext());

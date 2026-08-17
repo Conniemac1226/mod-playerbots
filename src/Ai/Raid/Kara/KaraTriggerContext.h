@@ -95,6 +95,19 @@ public:
         creators["shade of aran boss casts counterspell nearby"] =
             &RaidKarazhanTriggerContext::shade_of_aran_boss_casts_counterspell_nearby;
 
+        // Chess Event
+        creators["karazhan chess event active"] = &RaidKarazhanTriggerContext::karazhan_chess_event_active;
+        creators["karazhan chess piece needs controller"] =
+            &RaidKarazhanTriggerContext::karazhan_chess_piece_needs_controller;
+        creators["karazhan controlled chess piece in fire"] =
+            &RaidKarazhanTriggerContext::karazhan_controlled_chess_piece_in_fire;
+        creators["karazhan friendly king under threat"] =
+            &RaidKarazhanTriggerContext::karazhan_friendly_king_under_threat;
+        creators["karazhan enemy king vulnerable"] =
+            &RaidKarazhanTriggerContext::karazhan_enemy_king_vulnerable;
+        creators["karazhan controlled chess piece ability ready"] =
+            &RaidKarazhanTriggerContext::karazhan_controlled_chess_piece_ability_ready;
+
         // Netherspite
         creators["netherspite red beam is active"] =
             &RaidKarazhanTriggerContext::netherspite_red_beam_is_active;
@@ -233,6 +246,26 @@ private:
     }
     static Trigger* shade_of_aran_boss_casts_counterspell_nearby(PlayerbotAI* botAI) {
         return new ShadeOfAranBossCastsCounterspellNearbyTrigger(botAI);
+    }
+
+    // Chess Event
+    static Trigger* karazhan_chess_event_active(PlayerbotAI* botAI) {
+        return new KarazhanChessEventActiveTrigger(botAI);
+    }
+    static Trigger* karazhan_chess_piece_needs_controller(PlayerbotAI* botAI) {
+        return new KarazhanChessPieceNeedsControllerTrigger(botAI);
+    }
+    static Trigger* karazhan_controlled_chess_piece_in_fire(PlayerbotAI* botAI) {
+        return new KarazhanControlledChessPieceInFireTrigger(botAI);
+    }
+    static Trigger* karazhan_friendly_king_under_threat(PlayerbotAI* botAI) {
+        return new KarazhanFriendlyKingUnderThreatTrigger(botAI);
+    }
+    static Trigger* karazhan_enemy_king_vulnerable(PlayerbotAI* botAI) {
+        return new KarazhanEnemyKingVulnerableTrigger(botAI);
+    }
+    static Trigger* karazhan_controlled_chess_piece_ability_ready(PlayerbotAI* botAI) {
+        return new KarazhanControlledChessPieceAbilityReadyTrigger(botAI);
     }
 
     // Netherspite

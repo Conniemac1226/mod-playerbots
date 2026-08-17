@@ -219,6 +219,78 @@ public:
     bool Execute(Event event) override;
 };
 
+class KarazhanChessPassiveHelperAction : public MovementAction
+{
+public:
+    KarazhanChessPassiveHelperAction(
+        PlayerbotAI* botAI, std::string const name = "karazhan chess passive helper") : MovementAction(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
+class KarazhanChessClaimPieceAction : public MovementAction
+{
+public:
+    KarazhanChessClaimPieceAction(
+        PlayerbotAI* botAI, std::string const name = "karazhan chess claim piece") : MovementAction(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
+class KarazhanChessMovePieceAction : public Action
+{
+public:
+    KarazhanChessMovePieceAction(
+        PlayerbotAI* botAI, std::string const name = "karazhan chess move piece") : Action(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
+class KarazhanChessMoveOutOfFireAction : public Action
+{
+public:
+    KarazhanChessMoveOutOfFireAction(
+        PlayerbotAI* botAI, std::string const name = "karazhan chess move out of fire") : Action(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
+class KarazhanChessUseAbilityAction : public Action
+{
+public:
+    KarazhanChessUseAbilityAction(
+        PlayerbotAI* botAI, std::string const name = "karazhan chess use ability") : Action(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
+class KarazhanChessHealFriendlyAction : public Action
+{
+public:
+    KarazhanChessHealFriendlyAction(
+        PlayerbotAI* botAI, std::string const name = "karazhan chess heal friendly piece") : Action(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
+class KarazhanChessAttackEnemyKingAction : public Action
+{
+public:
+    KarazhanChessAttackEnemyKingAction(
+        PlayerbotAI* botAI, std::string const name = "karazhan chess attack enemy king") : Action(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
+class KarazhanChessBlockEnemyPathAction : public Action
+{
+public:
+    KarazhanChessBlockEnemyPathAction(
+        PlayerbotAI* botAI, std::string const name = "karazhan chess block enemy path") : Action(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
+class KarazhanChessReleaseOrReassignAction : public Action
+{
+public:
+    KarazhanChessReleaseOrReassignAction(
+        PlayerbotAI* botAI, std::string const name = "karazhan chess release or reassign") : Action(botAI, name) {}
+    bool Execute(Event event) override;
+};
+
 class NetherspiteBlockRedBeamAction : public MovementAction
 {
 public:

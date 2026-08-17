@@ -56,7 +56,7 @@ public:
     static ObjectGuid GetRandomBot();
     static void Init();
     void Refresh();
-    void Randomize(bool incremental, bool resetItems = false);
+    void Randomize(bool incremental, bool resetItems = false, bool clearItemsOnLevelDown = true);
     static std::list<uint32> classQuestIds;
     void ClearEverything();
     void InitSkills();

@@ -47,6 +47,8 @@
 #include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/arcatraz/ArcatrazTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/botanica/BotanicaTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/mechanar/MechanarTriggerContext.h"
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
 {
@@ -77,6 +79,8 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new TbcDungeonAuchenaiCryptsTriggerContext());
     triggerContexts.Add(new TbcDungeonSethekkHallsTriggerContext());
     triggerContexts.Add(new TbcDungeonMechanarTriggerContext());
+    triggerContexts.Add(new TbcDungeonSHTriggerContext());
+    triggerContexts.Add(new MechanarTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());

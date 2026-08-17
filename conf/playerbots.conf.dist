@@ -842,6 +842,32 @@ AiPlayerbot.RandomBotXPRate = 1.0
 # Default: 0 (disabled)
 AiPlayerbot.LevelBrackets.Enabled = 0
 
+# Automatically generate evenly weighted decade brackets from RandomBotMinLevel and
+# RandomBotMaxLevel. Expansion caps are merged into the preceding bracket (for example 50-60).
+# When enabled, NumRanges and the per-faction RangeX settings are ignored.
+# Default: 0 (disabled)
+AiPlayerbot.LevelBrackets.AutoGenerateFromLevelCaps = 0
+
+# Delete old equipped and carried items before rebuilding a bot at its newly assigned bracket
+# level. This prevents down-leveled equipment from being retained or moved into bags.
+# Default: 1 (enabled)
+AiPlayerbot.LevelBrackets.CleanupGearOnLevelChange = 1
+
+# One-time rebuild generation for existing random bots. Increase this number to run another
+# gradual same-level spell/gear rebuild across the population. Progress is remembered per bot.
+# Requires EnablePlayerSettings = 1 in worldserver.conf so completion survives restarts.
+# 0 disables the sweep.
+# Default: 0 (disabled)
+AiPlayerbot.LevelBrackets.OneTimeCleanup.Generation = 0
+
+# Maximum bots rebuilt per pending-cleanup interval. 0 processes all eligible queued bots.
+# Default: 1
+AiPlayerbot.LevelBrackets.OneTimeCleanup.ProcessLimit = 1
+
+# Remove recovery mails created by earlier failed equipment rebuilds during the one-time sweep.
+# Default: 1 (enabled)
+AiPlayerbot.LevelBrackets.OneTimeCleanup.RemoveRecoveryMail = 1
+
 # The frequency (in seconds) at which the bot level distribution check is performed.
 # Default: 300
 AiPlayerbot.LevelBrackets.CheckFrequency = 300

@@ -487,6 +487,11 @@ public:
     // Random bot level brackets (periodic redistribution across per-faction level ranges). See
     // RandomBotLevelMgr; percentages here are the as-configured values, not the runtime working copy.
     bool levelBracketsEnabled;
+    bool levelBracketsAutoGenerateFromLevelCaps;
+    bool levelBracketsCleanupGearOnLevelChange;
+    uint32 levelBracketsOneTimeCleanupGeneration;
+    uint32 levelBracketsOneTimeCleanupProcessLimit;
+    bool levelBracketsOneTimeCleanupRemoveRecoveryMail;
     uint32 levelBracketsCheckFrequency;
     uint32 levelBracketsFlaggedCheckFrequency;
     uint32 levelBracketsFlaggedProcessLimit;

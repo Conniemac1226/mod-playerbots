@@ -105,6 +105,14 @@ public:
     float GetValue(Action* action) override;
 };
 
+class KarazhanChessDisableCombatActionsMultiplier : public Multiplier
+{
+public:
+    KarazhanChessDisableCombatActionsMultiplier(
+        PlayerbotAI* botAI) : Multiplier(botAI, "karazhan chess disable combat actions multiplier") {}
+    virtual float GetValue(Action* action);
+};
+
 class NetherspiteKeepBlockingBeamMultiplier : public Multiplier
 {
 public:

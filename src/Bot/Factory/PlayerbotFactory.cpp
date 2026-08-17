@@ -662,7 +662,7 @@ void PlayerbotFactory::Prepare()
     }
 }
 
-void PlayerbotFactory::Randomize(bool incremental, bool resetItems)
+void PlayerbotFactory::Randomize(bool incremental, bool resetItems, bool clearItemsOnLevelDown)
 {
     // if (sPlayerbotAIConfig.disableRandomLevels)
     //     return;
@@ -670,6 +670,7 @@ void PlayerbotFactory::Randomize(bool incremental, bool resetItems)
     LOG_DEBUG("playerbots", "{} randomizing {} (level {} class = {})...", (incremental ? "Incremental" : "Full"),
              bot->GetName().c_str(), level, bot->getClass());
     // LOG_DEBUG("playerbots", "Preparing to {} randomize...", (incremental ? "incremental" : "full"));
+    uint32 oldLevel = bot->GetLevel();
     Prepare();
     LOG_DEBUG("playerbots", "Resetting player...");
     PerfMonitorOperation* pmo = sPerfMonitor.start(PERF_MON_RNDBOT, "PlayerbotFactory_Reset");
@@ -686,7 +687,8 @@ void PlayerbotFactory::Randomize(bool incremental, bool resetItems)
         ClearSpells();
         ResetQuests();
         if (resetItems || !sPlayerbotAIConfig.equipAndSpecPersistence ||
-            level < uint32(sPlayerbotAIConfig.equipAndSpecPersistenceLevel) || level < oldLevel)
+            level < uint32(sPlayerbotAIConfig.equipAndSpecPersistenceLevel) ||
+            (clearItemsOnLevelDown && level < oldLevel))
         {
             ClearAllItems();
         }
@@ -3729,6 +3731,33 @@ uint32 PlayerbotFactory::CalcMixedGearScore(uint32 gs, uint32 quality)
     return gs * PlayerbotAI::GetItemScoreMultiplier(ItemQualities(quality));
 }
 
+void PlayerbotFactory::DestroyEquippedGear(Player* bot)
+{
+    for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
+    {
+        if (slot == EQUIPMENT_SLOT_TABARD || slot == EQUIPMENT_SLOT_BODY)
+            continue;
+        if (bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
+            bot->DestroyItem(INVENTORY_SLOT_BAG_0, slot, true);
+    }
+}
+
+void PlayerbotFactory::AutoGear(Player* bot, uint32 itemQuality, uint32 ilvl, bool incremental, bool secondChance,
+                                bool applyFinishers)
+{
+    uint32 gs = ilvl == 0 ? 0 : CalcMixedGearScore(ilvl, itemQuality);
+    PlayerbotFactory factory(bot, bot->GetLevel(), itemQuality, gs);
+    factory.InitEquipment(incremental, secondChance);
+
+    if (!applyFinishers)
+        return;
+
+    factory.InitAmmo();
+    if (bot->GetLevel() >= sPlayerbotAIConfig.minEnchantingBotLevel)
+        factory.ApplyEnchantAndGemsNew();
+    bot->DurabilityRepairAll(false, 1.0f, false);
+}
+
 void PlayerbotFactory::InitMounts()
 {
     uint32 firstmount = sPlayerbotAIConfig.useGroundMountAtMinLevel;
@@ -4812,7 +4841,7 @@ void PlayerbotFactory::InitArenaTeam()
                 {
                     Player* bot = ObjectAccessor::FindPlayer(arenateam->GetCaptain());
                     PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
-                    if (!botAI || botAI->IsRealPlayer())
+                    if (!botAI || IsSelfBot(bot))
                     {
                         continue;
                     }

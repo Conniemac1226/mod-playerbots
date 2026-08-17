@@ -17,6 +17,7 @@
 #include <vector>
 
 class Player;
+class Group;
 
 // Owns two ported sub-features: periodic redistribution of random bots across per-faction level
 // brackets, and resetting random bots that reach max level. Config lives in PlayerbotAIConfig;
@@ -37,6 +38,8 @@ public:
     void OnBotLogin(Player* player);
     void OnBotLevelChanged(Player* player, uint8 oldLevel);
     void OnPlayerLogout(Player* player);
+    void OnGroupMemberAdded(Group* group);
+    bool RunSelectedBotCleanup(Player* player, uint32& removedMails);
 
 private:
     RandomBotLevelMgr() = default;
@@ -62,7 +65,7 @@ private:
     void ClampAndBalanceBrackets();
     void ApplyBracketWeights(std::vector<LevelBracketConfig>& ranges, std::vector<float> const& weights);
     int GetLevelRangeIndex(uint8 level, TeamId team);
-    void AdjustBotToRange(Player* bot, int targetRangeIndex, TeamId team);
+    bool AdjustBotToRange(Player* bot, int targetRangeIndex, TeamId team);
     void LoadSocialFriendList();
     int GetOrFlagPlayerBracket(Player* player);
     void RunLevelBracketsDistribution();
@@ -71,6 +74,11 @@ private:
     void RedistributeSurplusBots(std::vector<Player*>& sourceBots, int fromRange, TeamId team,
         std::vector<int>& actualCounts, std::vector<int> const& desiredCounts, std::vector<int> const& targetRanges);
     void ProcessPendingLevelResets();
+    bool NeedsOneTimeCleanup(Player* bot);
+    void QueueBotForOneTimeCleanup(Player* bot);
+    bool RunOneTimeCleanup(Player* bot, bool allowRealPlayerGroup, char const* reason, uint32& removedMails);
+    void ProcessPendingOneTimeCleanups();
+    void CleanupPendingBotsForRealPlayerGroup(Group* group, char const* reason);
 
     // ---- Level reset sub-feature ----
     uint8 ComputeResetChance(uint8 level) const;
@@ -86,6 +94,7 @@ private:
     uint8 _randomBotMinLevel = 1;
     uint8 _randomBotMaxLevel = 80;
     std::vector<PendingResetEntry> _pendingLevelResets;
+    std::vector<ObjectGuid> _pendingOneTimeCleanups;
     std::vector<uint32> _socialFriendsList;
 
     uint32 _bracketsTimer = 0; // Level brackets: distribution adjustments

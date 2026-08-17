@@ -9,9 +9,15 @@
  */
 
 #include "RandomBotLevelMgr.h"
+#include "Chat.h"
+#include "CommandScript.h"
 #include "DatabaseEnv.h"
+#include "Group.h"
 #include "LFGMgr.h"
 #include "Log.h"
+#include "Mail.h"
+#include "MailMgr.h"
+#include "Map.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "PlayerbotFactory.h"
@@ -26,6 +32,11 @@
 #include <limits>
 #include <string>
 #include <vector>
+
+using namespace Acore::ChatCommands;
+
+static constexpr char ONE_TIME_CLEANUP_SETTING_SOURCE[] = "BotLevelBrackets";
+static constexpr uint32 ONE_TIME_CLEANUP_SETTING_INDEX = 0;
 
 // True if bot's name is present in excludeList.
 static bool IsNameInExcludeList(Player* bot, std::vector<std::string> const& excludeList)
@@ -101,6 +112,35 @@ static bool IsBotSafeForLevelReset(Player* bot)
         }
     }
     return true;
+}
+
+static bool IsBotSafeForOneTimeCleanup(Player* bot, bool allowRealPlayerGroup)
+{
+    if (!bot || !bot->GetSession() || bot->GetSession()->isLogingOut() || bot->IsDuringRemoveFromWorld() ||
+        !bot->IsInWorld() || !bot->IsAlive() || bot->IsInCombat() || bot->InBattleground() || bot->InArena() ||
+        bot->inRandomLfgDungeon() || bot->InBattlegroundQueue() || bot->IsInFlight())
+        return false;
+
+    if (sLFGMgr->GetState(bot->GetGUID()) != lfg::LFG_STATE_NONE)
+        return false;
+
+    if (Group* group = bot->GetGroup())
+    {
+        if (sLFGMgr->GetState(group->GetGUID()) != lfg::LFG_STATE_NONE)
+            return false;
+
+        if (!allowRealPlayerGroup)
+        {
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (member && member->IsInWorld() && !GET_PLAYERBOT_AI(member))
+                    return false;
+            }
+        }
+    }
+
+    return !bot->GetMap() || !bot->GetMap()->IsDungeon();
 }
 
 // =============================================================================
@@ -285,18 +325,18 @@ int RandomBotLevelMgr::GetLevelRangeIndex(uint8 level, TeamId team)
 // assigned below CONFIG_START_HEROIC_PLAYER_LEVEL. The faction's level ranges are resolved via
 // GetFactionRanges() at call time (rather than through a cached reference), since those vectors can
 // be resized on a config reload.
-void RandomBotLevelMgr::AdjustBotToRange(Player* bot, int targetRangeIndex, TeamId team)
+bool RandomBotLevelMgr::AdjustBotToRange(Player* bot, int targetRangeIndex, TeamId team)
 {
     if (!bot || !bot->IsInWorld() || !bot->GetSession() || bot->GetSession()->isLogingOut() ||
         bot->IsDuringRemoveFromWorld())
-        return;
+        return false;
 
     if (targetRangeIndex < 0 || targetRangeIndex >= _numRanges)
-        return;
+        return false;
 
     std::vector<LevelBracketConfig> const& factionRanges = GetFactionRanges(team);
     if (static_cast<size_t>(targetRangeIndex) >= factionRanges.size())
-        return;
+        return false;
 
     if (bot->IsMounted())
         bot->Dismount();
@@ -317,12 +357,12 @@ void RandomBotLevelMgr::AdjustBotToRange(Player* bot, int targetRangeIndex, Team
                 "(below level {}).",
                 (team == TEAM_ALLIANCE) ? "Alliance" : "Horde", bot->GetName(), botOriginalLevel, lowerBound,
                 upperBound, dkMinLevel);
-            return;
+            return false;
         }
         if (lowerBound < dkMinLevel)
             lowerBound = dkMinLevel;
         if (lowerBound > upperBound)
-            return;
+            return false;
         newLevel = urand(lowerBound, upperBound);
     }
     else
@@ -332,13 +372,14 @@ void RandomBotLevelMgr::AdjustBotToRange(Player* bot, int targetRangeIndex, Team
         {
             LOG_TRACE("playerbots", "[RandomBotLevelMgr] AdjustBotToRange: Invalid range {}-{} for {} bot '{}'.",
                 range.lower, range.upper, (team == TEAM_ALLIANCE) ? "Alliance" : "Horde", bot->GetName());
-            return;
+            return false;
         }
         newLevel = urand(range.lower, range.upper);
     }
 
     PlayerbotFactory newFactory(bot, newLevel);
-    newFactory.Randomize(false);
+    newFactory.Randomize(false, sPlayerbotAIConfig.levelBracketsCleanupGearOnLevelChange,
+        sPlayerbotAIConfig.levelBracketsCleanupGearOnLevelChange);
 
     // Force reset talents if equipment and spec persistence is enabled and the bot rolled to max
     // level. This works around an issue with how randomization interacts with equipment/spec
@@ -355,6 +396,7 @@ void RandomBotLevelMgr::AdjustBotToRange(Player* bot, int targetRangeIndex, Team
         (team == TEAM_ALLIANCE) ? "Alliance" : "Horde", bot->GetName(),
         botAI ? botAI->GetChatHelper()->FormatClass(bot->getClass()) : "Unknown", botOriginalLevel, newLevel,
         factionRanges[targetRangeIndex].lower, factionRanges[targetRangeIndex].upper);
+    return true;
 }
 
 // Loads the list of social friend low GUIDs (character_social, flags = 1) into _socialFriendsList.
@@ -484,6 +526,15 @@ void RandomBotLevelMgr::RedistributeSurplusBots(std::vector<Player*>& sourceBots
             continue;
         }
 
+        std::vector<LevelBracketConfig> const& ranges = GetFactionRanges(team);
+        uint8 const dkMinLevel = static_cast<uint8>(sWorld->getIntConfig(CONFIG_START_HEROIC_PLAYER_LEVEL));
+        if (bot->getClass() == CLASS_DEATH_KNIGHT && ranges[targetRange].upper < dkMinLevel)
+        {
+            ++targetIdx;
+            sourceBots.push_back(bot);
+            continue;
+        }
+
         ObjectGuid botGuid = bot->GetGUID();
         bool alreadyFlagged = false;
         for (auto const& entry : _pendingLevelResets)
@@ -517,9 +568,20 @@ void RandomBotLevelMgr::ProcessFactionDistribution(TeamId team, uint32 totalBots
     char const* factionName = (team == TEAM_ALLIANCE) ? "Alliance" : "Horde";
 
     std::vector<int> desiredCounts(_numRanges, 0);
+    uint32 totalWeight = 0;
+    for (LevelBracketConfig const& range : ranges)
+        totalWeight += range.pct;
+
+    uint64 cumulativeWeight = 0;
+    uint32 assigned = 0;
     for (uint8 i = 0; i < _numRanges; ++i)
     {
-        desiredCounts[i] = static_cast<int>(std::round((ranges[i].pct / 100.0) * totalBots));
+        cumulativeWeight += ranges[i].pct;
+        uint32 const cumulativeTarget = totalWeight > 0
+            ? static_cast<uint32>((cumulativeWeight * totalBots + totalWeight / 2) / totalWeight)
+            : 0;
+        desiredCounts[i] = cumulativeTarget - assigned;
+        assigned = cumulativeTarget;
         LOG_DEBUG("playerbots", "[RandomBotLevelMgr] {} Range {} ({}-{}): Desired = {}, Actual = {}.",
             factionName, i + 1, ranges[i].lower, ranges[i].upper, desiredCounts[i], actualCounts[i]);
     }
@@ -778,13 +840,177 @@ void RandomBotLevelMgr::ProcessPendingLevelResets()
 
         if (IsBotSafeForLevelReset(bot))
         {
-            AdjustBotToRange(bot, targetRange, it->team);
-            it = _pendingLevelResets.erase(it);
-            ++processed;
+            if (AdjustBotToRange(bot, targetRange, it->team))
+            {
+                it = _pendingLevelResets.erase(it);
+                ++processed;
+            }
+            else
+                ++it;
         }
         else
             ++it;
     }
+}
+
+bool RandomBotLevelMgr::NeedsOneTimeCleanup(Player* bot)
+{
+    return sPlayerbotAIConfig.levelBracketsOneTimeCleanupGeneration && bot &&
+        sRandomPlayerbotMgr.IsRandomBot(bot) &&
+        bot->GetPlayerSetting(ONE_TIME_CLEANUP_SETTING_SOURCE, ONE_TIME_CLEANUP_SETTING_INDEX).value <
+            sPlayerbotAIConfig.levelBracketsOneTimeCleanupGeneration;
+}
+
+void RandomBotLevelMgr::QueueBotForOneTimeCleanup(Player* bot)
+{
+    if (!NeedsOneTimeCleanup(bot))
+        return;
+
+    ObjectGuid guid = bot->GetGUID();
+    if (std::find(_pendingOneTimeCleanups.begin(), _pendingOneTimeCleanups.end(), guid) ==
+        _pendingOneTimeCleanups.end())
+        _pendingOneTimeCleanups.push_back(guid);
+}
+
+bool RandomBotLevelMgr::RunOneTimeCleanup(
+    Player* bot, bool allowRealPlayerGroup, char const* reason, uint32& removedMails)
+{
+    if (!NeedsOneTimeCleanup(bot) || !IsBotSafeForOneTimeCleanup(bot, allowRealPlayerGroup))
+        return false;
+
+    removedMails = 0;
+    if (sPlayerbotAIConfig.levelBracketsOneTimeCleanupRemoveRecoveryMail)
+    {
+        for (Mail* mail : bot->GetMails())
+        {
+            bool const isRecoveryMail = mail->state != MAIL_STATE_DELETED && mail->messageType == MAIL_NORMAL &&
+                mail->stationery == MAIL_STATIONERY_GM && mail->mailTemplateId == 0 &&
+                mail->sender == bot->GetGUID().GetCounter() && mail->money == 0 && mail->COD == 0 && mail->HasItems() &&
+                (mail->body == "There were problems with equipping item(s)." ||
+                    mail->body == "There were problems with equipping one or several items");
+            if (!isRecoveryMail)
+                continue;
+
+            mail->state = MAIL_STATE_DELETED;
+            bot->m_mailsUpdated = true;
+            sMailMgr->OnMailDeleted(bot->GetGUID().GetCounter());
+            ++removedMails;
+        }
+    }
+
+    std::string const botName = bot->GetName();
+    uint8 const botLevel = bot->GetLevel();
+    bot->UpdatePlayerSetting(ONE_TIME_CLEANUP_SETTING_SOURCE, ONE_TIME_CLEANUP_SETTING_INDEX,
+        sPlayerbotAIConfig.levelBracketsOneTimeCleanupGeneration);
+
+    PlayerbotFactory factory(bot, botLevel);
+    factory.Randomize(false, true);
+
+    LOG_INFO("playerbots",
+        "[RandomBotLevelMgr] Rebuilt bot {} at level {} for one-time cleanup generation {} (reason: {}, recovery "
+        "mails removed: {}).",
+        botName, botLevel, sPlayerbotAIConfig.levelBracketsOneTimeCleanupGeneration, reason, removedMails);
+    return true;
+}
+
+void RandomBotLevelMgr::ProcessPendingOneTimeCleanups()
+{
+    if (!sPlayerbotAIConfig.levelBracketsOneTimeCleanupGeneration || _pendingOneTimeCleanups.empty())
+        return;
+
+    uint32 processed = 0;
+    uint32 removedMails = 0;
+    for (auto it = _pendingOneTimeCleanups.begin(); it != _pendingOneTimeCleanups.end();)
+    {
+        if (sPlayerbotAIConfig.levelBracketsOneTimeCleanupProcessLimit > 0 &&
+            processed >= sPlayerbotAIConfig.levelBracketsOneTimeCleanupProcessLimit)
+            break;
+
+        Player* bot = ObjectAccessor::FindPlayer(*it);
+        if (!NeedsOneTimeCleanup(bot))
+        {
+            it = _pendingOneTimeCleanups.erase(it);
+            continue;
+        }
+
+        uint32 botRemovedMails = 0;
+        if (!RunOneTimeCleanup(bot, false, "scheduled sweep", botRemovedMails))
+        {
+            ++it;
+            continue;
+        }
+
+        removedMails += botRemovedMails;
+        it = _pendingOneTimeCleanups.erase(it);
+        ++processed;
+    }
+
+    if (processed > 0)
+        LOG_INFO("playerbots",
+            "[RandomBotLevelMgr] One-time cleanup generation {} processed {} bots and removed {} recovery mails; "
+            "{} bots remain queued.",
+            sPlayerbotAIConfig.levelBracketsOneTimeCleanupGeneration, processed, removedMails,
+            _pendingOneTimeCleanups.size());
+}
+
+void RandomBotLevelMgr::CleanupPendingBotsForRealPlayerGroup(Group* group, char const* reason)
+{
+    if (!group || !sPlayerbotAIConfig.levelBracketsEnabled ||
+        !sPlayerbotAIConfig.levelBracketsOneTimeCleanupGeneration)
+        return;
+
+    bool hasRealPlayer = false;
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (member && member->IsInWorld() && !GET_PLAYERBOT_AI(member))
+        {
+            hasRealPlayer = true;
+            break;
+        }
+    }
+
+    if (!hasRealPlayer)
+        return;
+
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* bot = ref->GetSource();
+        if (!NeedsOneTimeCleanup(bot))
+            continue;
+
+        uint32 removedMails = 0;
+        if (RunOneTimeCleanup(bot, true, reason, removedMails))
+        {
+            ObjectGuid guid = bot->GetGUID();
+            _pendingOneTimeCleanups.erase(
+                std::remove(_pendingOneTimeCleanups.begin(), _pendingOneTimeCleanups.end(), guid),
+                _pendingOneTimeCleanups.end());
+        }
+        else
+            QueueBotForOneTimeCleanup(bot);
+    }
+}
+
+void RandomBotLevelMgr::OnGroupMemberAdded(Group* group)
+{
+    CleanupPendingBotsForRealPlayerGroup(group, "joined a real-player group");
+}
+
+bool RandomBotLevelMgr::RunSelectedBotCleanup(Player* player, uint32& removedMails)
+{
+    if (!sPlayerbotAIConfig.levelBracketsEnabled ||
+        !sPlayerbotAIConfig.levelBracketsOneTimeCleanupGeneration)
+        return false;
+
+    if (!RunOneTimeCleanup(player, true, "administrator command", removedMails))
+        return false;
+
+    ObjectGuid guid = player->GetGUID();
+    _pendingOneTimeCleanups.erase(
+        std::remove(_pendingOneTimeCleanups.begin(), _pendingOneTimeCleanups.end(), guid),
+        _pendingOneTimeCleanups.end());
+    return true;
 }
 
 // =============================================================================
@@ -923,6 +1149,7 @@ void RandomBotLevelMgr::Update(uint32 diff)
 
         if (_flaggedTimer >= sPlayerbotAIConfig.levelBracketsFlaggedCheckFrequency * 1000)
         {
+            ProcessPendingOneTimeCleanups();
             ProcessPendingLevelResets();
             _flaggedTimer = 0;
         }
@@ -930,6 +1157,11 @@ void RandomBotLevelMgr::Update(uint32 diff)
         if (_bracketsTimer >= sPlayerbotAIConfig.levelBracketsCheckFrequency * 1000)
         {
             _bracketsTimer = 0;
+            for (auto const& [guid, player] : ObjectAccessor::GetPlayers())
+            {
+                (void)guid;
+                QueueBotForOneTimeCleanup(player);
+            }
             RunLevelBracketsDistribution();
         }
     }
@@ -949,6 +1181,13 @@ void RandomBotLevelMgr::Update(uint32 diff)
 void RandomBotLevelMgr::OnBotLogin(Player* player)
 {
     if (!sRandomPlayerbotMgr.IsRandomBot(player))
+        return;
+
+    QueueBotForOneTimeCleanup(player);
+    CleanupPendingBotsForRealPlayerGroup(
+        player->GetGroup(), "logged in while grouped with a real player");
+
+    if (!sPlayerbotAIConfig.resetBotLevelEnabled)
         return;
 
     if (IsNameInExcludeList(player, sPlayerbotAIConfig.resetBotLevelExcludeNames))
@@ -1070,6 +1309,9 @@ void RandomBotLevelMgr::OnPlayerLogout(Player* player)
         std::remove_if(_pendingLevelResets.begin(), _pendingLevelResets.end(),
             [guid](PendingResetEntry const& entry) { return entry.botGuid == guid; }),
         _pendingLevelResets.end());
+    _pendingOneTimeCleanups.erase(
+        std::remove(_pendingOneTimeCleanups.begin(), _pendingOneTimeCleanups.end(), guid),
+        _pendingOneTimeCleanups.end());
 }
 
 // =============================================================================
@@ -1124,7 +1366,7 @@ public:
 
     void OnPlayerLogin(Player* player) override
     {
-        if (!sPlayerbotAIConfig.resetBotLevelEnabled)
+        if (!sPlayerbotAIConfig.levelBracketsEnabled && !sPlayerbotAIConfig.resetBotLevelEnabled)
             return;
         RandomBotLevelMgr::instance().OnBotLogin(player);
     }
@@ -1142,6 +1384,60 @@ public:
     }
 };
 
+class RandomBotLevelGroupScript : public GroupScript
+{
+public:
+    RandomBotLevelGroupScript() : GroupScript("RandomBotLevelGroupScript") { }
+
+    void OnAddMember(Group* group, ObjectGuid guid) override
+    {
+        if (guid)
+            RandomBotLevelMgr::instance().OnGroupMemberAdded(group);
+    }
+};
+
+class RandomBotLevelCommandScript : public CommandScript
+{
+public:
+    RandomBotLevelCommandScript() : CommandScript("RandomBotLevelCommandScript") { }
+
+    ChatCommandTable GetCommands() const override
+    {
+        static ChatCommandTable levelBracketCommands =
+        {
+            { "cleanup", HandleCleanupSelectedBot, SEC_ADMINISTRATOR, Console::No }
+        };
+        static ChatCommandTable commandTable =
+        {
+            { "botlevelbrackets", levelBracketCommands }
+        };
+        return commandTable;
+    }
+
+    static bool HandleCleanupSelectedBot(ChatHandler* handler)
+    {
+        Player* bot = handler->getSelectedPlayer();
+        if (!bot || !sRandomPlayerbotMgr.IsRandomBot(bot))
+        {
+            handler->SendSysMessage("Select an online random Playerbot first.");
+            return false;
+        }
+
+        uint32 removedMails = 0;
+        if (!RandomBotLevelMgr::instance().RunSelectedBotCleanup(bot, removedMails))
+        {
+            handler->SendSysMessage("One-time cleanup must be enabled, and the selected bot must be alive, out of "
+                "combat, and outside a dungeon, battleground, arena, queue, or flight.");
+            return false;
+        }
+
+        handler->PSendSysMessage(
+            "Rebuilt {} at level {} with level-appropriate spells and gear; removed {} recovery mails.",
+            bot->GetName(), bot->GetLevel(), removedMails);
+        return true;
+    }
+};
+
 // -----------------------------------------------------------------------------
 // ENTRY POINT
 // -----------------------------------------------------------------------------
@@ -1149,4 +1445,6 @@ void AddSC_randombot_level_mgr()
 {
     new RandomBotLevelWorldScript();
     new RandomBotLevelPlayerScript();
+    new RandomBotLevelGroupScript();
+    new RandomBotLevelCommandScript();
 }

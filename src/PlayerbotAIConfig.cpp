@@ -816,6 +816,16 @@ void PlayerbotAIConfig::LoadRandomBotLevelConfig()
 {
     // ---- Level brackets ----
     levelBracketsEnabled = sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.Enabled", false);
+    levelBracketsAutoGenerateFromLevelCaps =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.AutoGenerateFromLevelCaps", false);
+    levelBracketsCleanupGearOnLevelChange =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.CleanupGearOnLevelChange", true);
+    levelBracketsOneTimeCleanupGeneration =
+        sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.OneTimeCleanup.Generation", 0);
+    levelBracketsOneTimeCleanupProcessLimit =
+        sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.OneTimeCleanup.ProcessLimit", 1);
+    levelBracketsOneTimeCleanupRemoveRecoveryMail =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.OneTimeCleanup.RemoveRecoveryMail", true);
     levelBracketsIgnoreGuildWithRealPlayers =
         sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.IgnoreGuildBotsWithRealPlayers", true);
     levelBracketsIgnoreArenaTeamBots =
@@ -838,33 +848,75 @@ void PlayerbotAIConfig::LoadRandomBotLevelConfig()
 
     levelBracketsNumRanges =
         static_cast<uint8>(sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.NumRanges", 9));
-    levelBracketsAlliance.resize(levelBracketsNumRanges);
-    levelBracketsHorde.resize(levelBracketsNumRanges);
 
-    for (uint8 i = 0; i < levelBracketsNumRanges; ++i)
+    if (levelBracketsAutoGenerateFromLevelCaps)
     {
-        std::string idx = std::to_string(i + 1);
-        uint32 defaultLower = (i == 0 ? 1 : i * 10);
-        uint32 defaultUpper = (i < levelBracketsNumRanges - 1 ? i * 10 + 9 : randomBotMaxLevel);
-        levelBracketsAlliance[i].lower = static_cast<uint8>(
-            sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.Alliance.Range" + idx + ".Lower", defaultLower));
-        levelBracketsAlliance[i].upper = static_cast<uint8>(
-            sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.Alliance.Range" + idx + ".Upper", defaultUpper));
-        levelBracketsAlliance[i].pct = static_cast<uint8>(
-            sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.Alliance.Range" + idx + ".Pct", 11));
+        std::vector<LevelBracketConfig> generated;
+        uint16 lower = randomBotMinLevel;
+        while (lower <= randomBotMaxLevel)
+        {
+            uint16 upper = lower == 1 ? 9 : lower + 9;
+            upper = std::min<uint16>(upper, randomBotMaxLevel);
+            if (upper < randomBotMaxLevel && randomBotMaxLevel - upper < 10)
+                upper = randomBotMaxLevel;
+
+            generated.push_back(
+                { static_cast<uint8>(lower), static_cast<uint8>(upper), 0 });
+            lower = upper + 1;
+        }
+
+        if (!generated.empty())
+        {
+            uint8 const basePercent = 100 / generated.size();
+            uint8 remainder = 100 % generated.size();
+            for (LevelBracketConfig& range : generated)
+            {
+                range.pct = basePercent;
+                if (remainder > 0)
+                {
+                    ++range.pct;
+                    --remainder;
+                }
+            }
+
+            levelBracketsNumRanges = static_cast<uint8>(generated.size());
+            levelBracketsAlliance = generated;
+            levelBracketsHorde = generated;
+            LOG_INFO("playerbots", "[RandomBotLevelMgr] Generated {} balanced ranges for levels {}-{}.",
+                levelBracketsNumRanges, randomBotMinLevel, randomBotMaxLevel);
+        }
     }
 
-    for (uint8 i = 0; i < levelBracketsNumRanges; ++i)
+    if (!levelBracketsAutoGenerateFromLevelCaps)
     {
-        std::string idx = std::to_string(i + 1);
-        uint32 defaultLower = (i == 0 ? 1 : i * 10);
-        uint32 defaultUpper = (i < levelBracketsNumRanges - 1 ? i * 10 + 9 : randomBotMaxLevel);
-        levelBracketsHorde[i].lower = static_cast<uint8>(
-            sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.Horde.Range" + idx + ".Lower", defaultLower));
-        levelBracketsHorde[i].upper = static_cast<uint8>(
-            sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.Horde.Range" + idx + ".Upper", defaultUpper));
-        levelBracketsHorde[i].pct = static_cast<uint8>(
-            sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.Horde.Range" + idx + ".Pct", 11));
+        levelBracketsAlliance.resize(levelBracketsNumRanges);
+        levelBracketsHorde.resize(levelBracketsNumRanges);
+
+        for (uint8 i = 0; i < levelBracketsNumRanges; ++i)
+        {
+            std::string idx = std::to_string(i + 1);
+            uint32 defaultLower = (i == 0 ? 1 : i * 10);
+            uint32 defaultUpper = (i < levelBracketsNumRanges - 1 ? i * 10 + 9 : randomBotMaxLevel);
+            levelBracketsAlliance[i].lower = static_cast<uint8>(sConfigMgr->GetOption<uint32>(
+                "AiPlayerbot.LevelBrackets.Alliance.Range" + idx + ".Lower", defaultLower));
+            levelBracketsAlliance[i].upper = static_cast<uint8>(sConfigMgr->GetOption<uint32>(
+                "AiPlayerbot.LevelBrackets.Alliance.Range" + idx + ".Upper", defaultUpper));
+            levelBracketsAlliance[i].pct = static_cast<uint8>(
+                sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.Alliance.Range" + idx + ".Pct", 11));
+        }
+
+        for (uint8 i = 0; i < levelBracketsNumRanges; ++i)
+        {
+            std::string idx = std::to_string(i + 1);
+            uint32 defaultLower = (i == 0 ? 1 : i * 10);
+            uint32 defaultUpper = (i < levelBracketsNumRanges - 1 ? i * 10 + 9 : randomBotMaxLevel);
+            levelBracketsHorde[i].lower = static_cast<uint8>(sConfigMgr->GetOption<uint32>(
+                "AiPlayerbot.LevelBrackets.Horde.Range" + idx + ".Lower", defaultLower));
+            levelBracketsHorde[i].upper = static_cast<uint8>(sConfigMgr->GetOption<uint32>(
+                "AiPlayerbot.LevelBrackets.Horde.Range" + idx + ".Upper", defaultUpper));
+            levelBracketsHorde[i].pct = static_cast<uint8>(
+                sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.Horde.Range" + idx + ".Pct", 11));
+        }
     }
 
     // A mismatch forcibly disables SyncFactions and logs an error; it never brings the server down.
