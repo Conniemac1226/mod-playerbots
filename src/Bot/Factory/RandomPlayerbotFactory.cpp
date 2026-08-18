@@ -5,18 +5,16 @@
  */
 
 #include "RandomPlayerbotFactory.h"
-
 #include "AccountMgr.h"
 #include "ArenaTeamMgr.h"
 #include "DatabaseEnv.h"
+#include "Log.h"
 #include "PlayerbotAI.h"
 #include "RaceMgr.h"
 #include "ScriptMgr.h"
-#include "SpellMgr.h"
 #include "SharedDefines.h"
 #include "SocialMgr.h"
 #include "Timer.h"
-#include "Log.h"
 
 constexpr RandomPlayerbotFactory::NameRaceAndGender RandomPlayerbotFactory::CombineRaceAndGender(uint8 race,
                                                                                                 uint8 gender)
@@ -166,8 +164,7 @@ Player* RandomPlayerbotFactory::CreateRandomBot(WorldSession* session, uint8 cls
 
     if (cls == CLASS_DEATH_KNIGHT)
     {
-        if (sSpellMgr->GetSpellInfo(50977))
-            player->learnSpell(50977, false);
+        player->learnSpell(50977, false);
     }
 
     LOG_DEBUG("playerbots", "Random bot created - name: \"{}\", race: {}, class: {}",
@@ -715,11 +712,6 @@ void RandomPlayerbotFactory::CreateRandomBots()
             if ((1 << (cls - 1)) & sWorld->getIntConfig(CONFIG_CHARACTER_CREATING_DISABLED_CLASSMASK))
                 continue;
 
-            // Keep the random-bot roster aligned with login eligibility. Without this,
-            // disabled Death Knights are still created and consume character slots.
-            if (cls == CLASS_DEATH_KNIGHT && sPlayerbotAIConfig.disableDeathKnightLogin)
-                continue;
-
             Player* playerBot = factory.CreateRandomBot(session, cls, nameCache);
             if (!playerBot)
             {
@@ -808,49 +800,39 @@ void RandomPlayerbotFactory::CreateRandomArenaTeams(ArenaType type, uint32 count
     }
 
     uint32 arenaTeamNumber = 0;
-    if (QueryResult result = CharacterDatabase.Query(
-            "SELECT at.arenaTeamId FROM arena_team at "
-            "INNER JOIN playerbots_arena_team_names n ON n.name = at.name WHERE at.type = {}",
-            uint8(type)))
-    {
-        do
-        {
-            Field* fields = result->Fetch();
-            sPlayerbotAIConfig.randomBotArenaTeams.push_back(fields[0].Get<uint32>());
-            ++arenaTeamNumber;
-        } while (result->NextRow());
-    }
-
     GuidVector availableCaptains;
     for (std::vector<uint32>::iterator i = randomBots.begin(); i != randomBots.end(); ++i)
     {
         ObjectGuid captain = ObjectGuid::Create<HighGuid::Player>(*i);
         ArenaTeam* arenateam = sArenaTeamMgr->GetArenaTeamByCaptain(captain, type);
-        if (!arenateam)
+        if (arenateam)
+        {
+            ++arenaTeamNumber;
+            sPlayerbotAIConfig.randomBotArenaTeams.push_back(arenateam->GetId());
+        }
+        else
         {
             Player* player = ObjectAccessor::FindConnectedPlayer(captain);
 
-            if (player && player->GetLevel() >= 70)
+            if (!arenateam && player && player->GetLevel() >= 70)
                 availableCaptains.push_back(captain);
         }
     }
 
-    while (arenaTeamNumber < count)
+    for (; arenaTeamNumber < count; ++arenaTeamNumber)
     {
         std::string const arenaTeamName = CreateRandomArenaTeamName();
         if (arenaTeamName.empty())
-            break;
+            continue;
 
         if (availableCaptains.empty())
         {
             LOG_ERROR("playerbots", "No captains for random arena teams available");
-            break;
+            continue;
         }
 
         uint32 index = urand(0, availableCaptains.size() - 1);
         ObjectGuid captain = availableCaptains[index];
-        availableCaptains.erase(availableCaptains.begin() + index);
-
         Player* player = ObjectAccessor::FindConnectedPlayer(captain);
         if (!player)
         {
@@ -876,10 +858,20 @@ void RandomPlayerbotFactory::CreateRandomArenaTeams(ArenaType type, uint32 count
         // Field* fields = results->Fetch();
         // uint8 slot = fields[0].Get<uint8>();
 
+        uint8 arenaSlot = ArenaTeam::GetSlotByType(type);
+
+        if (player->GetArenaTeamId(arenaSlot) ||
+            sCharacterCache->GetCharacterArenaTeamIdByGuid(player->GetGUID(), arenaSlot) != 0)
+        {
+            continue;
+        }
+
         ArenaTeam* arenateam = new ArenaTeam();
+
         if (!arenateam->Create(player->GetGUID(), type, arenaTeamName, 0, 0, 0, 0, 0))
         {
             LOG_ERROR("playerbots", "Error creating arena team {}", arenaTeamName.c_str());
+
             delete arenateam;
             continue;
         }
@@ -908,7 +900,6 @@ void RandomPlayerbotFactory::CreateRandomArenaTeams(ArenaType type, uint32 count
 
         sArenaTeamMgr->AddArenaTeam(arenateam);
         sPlayerbotAIConfig.randomBotArenaTeams.push_back(arenateam->GetId());
-        ++arenaTeamNumber;
     }
 
     LOG_DEBUG("playerbots", "{} random bot {}vs{} arena teams available", arenaTeamNumber, type, type);

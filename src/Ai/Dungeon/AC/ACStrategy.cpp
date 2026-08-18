@@ -4,15 +4,12 @@
  * or (at your option) any later version.
  */
 
-#include "ACTriggers.h"
-#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "ACStrategy.h"
 #include "ACMultipliers.h"
+#include "ACTriggers.h"
 
 void TbcDungeonAuchenaiCryptsStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
-    DungeonAutoPull::AddDefaultPullTrigger(triggers);
-
     // Shirrak The Dead Watcher
     triggers.push_back(new TriggerNode("shirrak tank position boss", {
         NextAction("shirrak tank position boss", ACTION_RAID + 1) }));

@@ -7,35 +7,33 @@
 #ifndef PLAYERBOTS_RAIDSTRATEGYCONTEXT_H
 #define PLAYERBOTS_RAIDSTRATEGYCONTEXT_H
 
-#include "Strategy.h"
 #include "Aq20Strategy.h"
-#include "MCStrategy.h"
+#include "BTStrategy.h"
 #include "BWLStrategy.h"
-#include "KaraStrategy.h"
+#include "EoEStrategy.h"
 #include "GruulStrategy.h"
+#include "HyjalStrategy.h"
+#include "ICCStrategy.h"
+#include "KaraStrategy.h"
+#include "MCStrategy.h"
 #include "MagStrategy.h"
 #include "NaxxStrategy.h"
-#include "SSCStrategy.h"
-#include "TKStrategy.h"
-#include "HyjalStrategy.h"
-#include "BTStrategy.h"
-#include "ZAStrategy.h"
 #include "OSStrategy.h"
-#include "EoEStrategy.h"
-#include "VoAStrategy.h"
-#include "UldStrategy.h"
 #include "OnyStrategy.h"
-#include "ICCStrategy.h"
-#include "RSStrategy.h"
 #include "OutlandWorldBossStrategy.h"
-#include "../../strategy/raids/blacktemple/BlackTempleStrategy.h"
+#include "RSStrategy.h"
+#include "SSCStrategy.h"
+#include "Strategy.h"
+#include "TKStrategy.h"
+#include "UldStrategy.h"
+#include "VoAStrategy.h"
+#include "ZAStrategy.h"
 
 class RaidStrategyContext : public NamedObjectContext<Strategy>
 {
 public:
     RaidStrategyContext() : NamedObjectContext<Strategy>(false, true)
     {
-        // Official WotLK/Refactored
         creators["aq20"] = &RaidStrategyContext::aq20;
         creators["moltencore"] = &RaidStrategyContext::moltencore;
         creators["bwl"] = &RaidStrategyContext::bwl;
@@ -46,6 +44,7 @@ public:
         creators["ssc"] = &RaidStrategyContext::ssc;
         creators["tempestkeep"] = &RaidStrategyContext::tempestkeep;
         creators["hyjal"] = &RaidStrategyContext::hyjal;
+        creators["blacktemple"] = &RaidStrategyContext::blacktemple;
         creators["zulaman"] = &RaidStrategyContext::zulaman;
         creators["wotlk-os"] = &RaidStrategyContext::wotlk_os;
         creators["wotlk-eoe"] = &RaidStrategyContext::wotlk_eoe;
@@ -54,20 +53,8 @@ public:
         creators["onyxia"] = &RaidStrategyContext::onyxia;
         creators["icc"] = &RaidStrategyContext::icc;
         creators["rs"] = &RaidStrategyContext::rs;
-
-        // Custom / Unique to this branch
         creators["doomwalker"] = &RaidStrategyContext::doomwalker;
         creators["doom lord kazzak"] = &RaidStrategyContext::doom_lord_kazzak;
-        creators["blacktemple"] = &RaidStrategyContext::blacktemple;
-        creators["najentus"] = &RaidStrategyContext::najentus;
-        creators["supremus"] = &RaidStrategyContext::supremus;
-        creators["shade of akama"] = &RaidStrategyContext::shade_of_akama;
-        creators["teron gorefiend"] = &RaidStrategyContext::teron_gorefiend;
-        creators["gurtogg bloodboil"] = &RaidStrategyContext::gurtogg_bloodboil;
-        creators["reliquary of souls"] = &RaidStrategyContext::reliquary_of_souls;
-        creators["mother shahraz"] = &RaidStrategyContext::mother_shahraz;
-        creators["illidari council"] = &RaidStrategyContext::illidari_council;
-        creators["illidan stormrage"] = &RaidStrategyContext::illidan_stormrage;
     }
 
 private:
@@ -81,6 +68,7 @@ private:
     static Strategy* ssc(PlayerbotAI* botAI) { return new RaidSSCStrategy(botAI); }
     static Strategy* tempestkeep(PlayerbotAI* botAI) { return new RaidTempestKeepStrategy(botAI); }
     static Strategy* hyjal(PlayerbotAI* botAI) { return new RaidHyjalSummitStrategy(botAI); }
+    static Strategy* blacktemple(PlayerbotAI* botAI) { return new RaidBlackTempleStrategy(botAI); }
     static Strategy* zulaman(PlayerbotAI* botAI) { return new RaidZulAmanStrategy(botAI); }
     static Strategy* wotlk_os(PlayerbotAI* botAI) { return new RaidOsStrategy(botAI); }
     static Strategy* wotlk_eoe(PlayerbotAI* botAI) { return new RaidEoEStrategy(botAI); }
@@ -91,18 +79,6 @@ private:
     static Strategy* rs(PlayerbotAI* botAI) { return new RaidRsStrategy(botAI); }
     static Strategy* doomwalker(PlayerbotAI* botAI) { return new RaidDoomwalkerStrategy(botAI); }
     static Strategy* doom_lord_kazzak(PlayerbotAI* botAI) { return new RaidDoomLordKazzakStrategy(botAI); }
-
-    // Custom
-    static Strategy* blacktemple(PlayerbotAI* botAI) { return new RaidBtStrategy(botAI); }
-    static Strategy* najentus(PlayerbotAI* botAI) { return new RaidBtNajentusStrategy(botAI); }
-    static Strategy* supremus(PlayerbotAI* botAI) { return new RaidBtSupremusStrategy(botAI); }
-    static Strategy* shade_of_akama(PlayerbotAI* botAI) { return new RaidBtShadeOfAkamaStrategy(botAI); }
-    static Strategy* teron_gorefiend(PlayerbotAI* botAI) { return new RaidBtTeronGorefiendStrategy(botAI); }
-    static Strategy* gurtogg_bloodboil(PlayerbotAI* botAI) { return new RaidBtGurtoggBloodboilStrategy(botAI); }
-    static Strategy* reliquary_of_souls(PlayerbotAI* botAI) { return new RaidBtReliquaryOfSoulsStrategy(botAI); }
-    static Strategy* mother_shahraz(PlayerbotAI* botAI) { return new RaidBtMotherShahrazStrategy(botAI); }
-    static Strategy* illidari_council(PlayerbotAI* botAI) { return new RaidBtIllidariCouncilStrategy(botAI); }
-    static Strategy* illidan_stormrage(PlayerbotAI* botAI) { return new RaidBtIllidanStormrageStrategy(botAI); }
 };
 
 #endif

@@ -745,10 +745,8 @@ AiPlayerbot.RandomBotHordeRatio = 50
 # Disable logging in of death knight bots
 AiPlayerbot.DisableDeathKnightLogin = 0
 
-# Automatically derive Death Knight bot eligibility from
-# IndividualProgression.ProgressionLimit. With a non-zero progression limit,
-# stages 1-12 disable Death Knights and stage 13+ enables them. This setting
-# overrides DisableDeathKnightLogin while the progression limit is non-zero.
+# Automatically derive Death Knight bot eligibility from IndividualProgression.ProgressionLimit.
+# With a non-zero progression limit, stages 1-12 disable Death Knights and stage 13+ enables them.
 # Default: 0 (disabled)
 AiPlayerbot.AutoDisableDeathKnightBeforeWotLK = 0
 
@@ -842,21 +840,17 @@ AiPlayerbot.RandomBotXPRate = 1.0
 # Default: 0 (disabled)
 AiPlayerbot.LevelBrackets.Enabled = 0
 
-# Automatically generate evenly weighted decade brackets from RandomBotMinLevel and
-# RandomBotMaxLevel. Expansion caps are merged into the preceding bracket (for example 50-60).
-# When enabled, NumRanges and the per-faction RangeX settings are ignored.
+# Automatically generate evenly weighted decade brackets from RandomBotMinLevel and RandomBotMaxLevel.
+# Expansion caps are merged into the preceding bracket. When enabled, explicit ranges are ignored.
 # Default: 0 (disabled)
 AiPlayerbot.LevelBrackets.AutoGenerateFromLevelCaps = 0
 
-# Delete old equipped and carried items before rebuilding a bot at its newly assigned bracket
-# level. This prevents down-leveled equipment from being retained or moved into bags.
+# Delete old equipped and carried items before rebuilding a bot at a newly assigned bracket level.
 # Default: 1 (enabled)
 AiPlayerbot.LevelBrackets.CleanupGearOnLevelChange = 1
 
-# One-time rebuild generation for existing random bots. Increase this number to run another
-# gradual same-level spell/gear rebuild across the population. Progress is remembered per bot.
-# Requires EnablePlayerSettings = 1 in worldserver.conf so completion survives restarts.
-# 0 disables the sweep.
+# One-time rebuild generation for existing random bots. 0 disables the sweep.
+# Requires EnablePlayerSettings = 1 so completion survives restarts.
 # Default: 0 (disabled)
 AiPlayerbot.LevelBrackets.OneTimeCleanup.Generation = 0
 
@@ -1188,15 +1182,14 @@ AiPlayerbot.RandomGearQualityLimit = 3
 AiPlayerbot.RandomGearScoreLimit = 0
 
 # Prefer armor of the class's ideal type: apply 3x score multiplier to class-appropriate armor.
-# The preferred type follows proficiency level: Warriors/Paladins prefer mail before 40 and plate afterward;
-# Hunters/Shamans prefer leather before 40 and mail afterward.
+# When enabled, Warriors strongly prefer plate, Shamans prefer mail, etc.
 # A truly superior item can still win (no hard filtering), but same-quality
 # armor of the preferred type will score 3x higher and be equipped instead.
 #
 # ARMOR TYPE PREFERENCES:
-#   Plate:   level 40+ Warriors/Paladins, Death Knights
-#   Mail:    low-level Warriors/Paladins, level 40+ Hunters/Shamans
-#   Leather: low-level Hunters/Shamans, Rogues, Druids
+#   Plate:   Warriors, Paladins, Death Knights
+#   Mail:    Hunters, Shamans
+#   Leather: Rogues, Druids
 #   Cloth:   Priests, Mages, Warlocks
 #
 # Default: 0 (disabled)
@@ -1631,8 +1624,8 @@ AiPlayerbot.RandomBotJoinBG = 1
 # Enable auto-joining of battlegrounds - have bots start battlegrounds and arenas on their own
 AiPlayerbot.RandomBotAutoJoinBG = 0
 
-# Preload saved random-bot arena team members during startup before the general random bot population.
-# This keeps rated arena teams ready as soon as queues are opened.
+# Preload saved random-bot arena team members during startup before the general random-bot population.
+# Default: 1 (enabled)
 AiPlayerbot.PreloadArenaTeamBots = 1
 
 # Required Configuration for RandomBotAutoJoinBG
@@ -1693,10 +1686,10 @@ AiPlayerbot.RandomBotAutoJoinBGRatedArena5v5Count = 0
 # You may need to first delete all arena teams, then reinitialize bots.
 # Warning: Reinitializing bots completely resets them (command in game: .playerbots rndbot init)
 # Bots only join one arena team to avoid queueing issues. Take that into account when increasing count.
-# Default: 2v2: 20 (40 Bots), 3v3: 20 (60 bots), 5v5: 15 (75 bots)
-AiPlayerbot.RandomBotArenaTeam2v2Count = 20
-AiPlayerbot.RandomBotArenaTeam3v3Count = 20
-AiPlayerbot.RandomBotArenaTeam5v5Count = 15
+# Default: 2v2: 10 (20 Bots), 3v3: 10 (30 bots), 5v5: 5 (25 bots)
+AiPlayerbot.RandomBotArenaTeam2v2Count = 10
+AiPlayerbot.RandomBotArenaTeam3v3Count = 10
+AiPlayerbot.RandomBotArenaTeam5v5Count = 5
 
 # Arena rating is randomized on team creation.
 # Default: Max: 2000, Min: 1000

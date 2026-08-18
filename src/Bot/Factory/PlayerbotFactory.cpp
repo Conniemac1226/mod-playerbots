@@ -4,12 +4,9 @@
  */
 
 #include "PlayerbotFactory.h"
-
-#include <array>
-#include <utility>
-
 #include "AccountMgr.h"
 #include "AiFactory.h"
+#include "AiObjectContext.h"
 #include "ArenaTeam.h"
 #include "ArenaTeamMgr.h"
 #include "DBCStores.h"
@@ -17,6 +14,7 @@
 #include "GuildMgr.h"
 #include "InventoryAction.h"
 #include "Item.h"
+#include "ItemPackets.h"
 #include "ItemTemplate.h"
 #include "ItemVisitors.h"
 #include "Log.h"
@@ -27,8 +25,8 @@
 #include "Player.h"
 #include "PlayerbotAI.h"
 #include "PlayerbotAIConfig.h"
-#include "PlayerbotRepository.h"
 #include "PlayerbotGuildMgr.h"
+#include "PlayerbotRepository.h"
 #include "Playerbots.h"
 #include "QuestDef.h"
 #include "RandomItemMgr.h"
@@ -37,8 +35,8 @@
 #include "SharedDefines.h"
 #include "StatsWeightCalculator.h"
 #include "World.h"
-#include "AiObjectContext.h"
-#include "ItemPackets.h"
+#include <array>
+#include <utility>
 
 const uint64 diveMask = (1LL << 7) | (1LL << 44) | (1LL << 37) | (1LL << 38) | (1LL << 26) | (1LL << 30) | (1LL << 27) |
                         (1LL << 33) | (1LL << 24) | (1LL << 34);
@@ -63,58 +61,6 @@ std::vector<uint32> PlayerbotFactory::ccBreakTrinketCache;
 
 namespace
 {
-bool IsRndBotAccount(Player* bot, std::string& accountNameOut)
-{
-    if (!bot || !bot->GetSession())
-        return false;
-
-    uint32 accountId = bot->GetSession()->GetAccountId();
-    std::string accountName;
-    if (!AccountMgr::GetName(accountId, accountName))
-        return false;
-
-    if (accountName.rfind("RNDBOT", 0) == 0)
-    {
-        accountNameOut = accountName;
-        return true;
-    }
-
-    return false;
-}
-
-void LearnSpellIfAvailable(Player* bot, uint32 spellId, bool temporary = false, bool learnFromSkill = false, char const* sourcePath = "unknown")
-{
-    SpellInfo const* spellInfo = (spellId ? sSpellMgr->GetSpellInfo(spellId) : nullptr);
-    std::string rndbotAccount;
-    bool isRndBot = IsRndBotAccount(bot, rndbotAccount);
-
-    if (!spellId || !spellInfo)
-    {
-        if (isRndBot)
-        {
-            LOG_ERROR("playerbots", "[RNDBOT][SpellGuard] Blocked learnSpell for missing SpellStore id {} bot={} guid={} account={} source={}",
-                spellId, bot ? bot->GetName() : "<null>", bot ? bot->GetGUID().ToString() : "<null>", rndbotAccount, sourcePath);
-        }
-        return;
-    }
-
-    if (isRndBot)
-    {
-        LOG_DEBUG("playerbots", "[RNDBOT][SpellGuard] learnSpell id {} bot={} guid={} account={} source={}",
-            spellId, bot->GetName(), bot->GetGUID().ToString(), rndbotAccount, sourcePath);
-    }
-
-    bot->learnSpell(spellId, temporary, learnFromSkill);
-}
-
-void CastSpellIfAvailable(Player* bot, uint32 spellId)
-{
-    if (!spellId || !sSpellMgr->GetSpellInfo(spellId))
-        return;
-
-    bot->CastSpell(bot, spellId, true);
-}
-
 constexpr uint32 SPELL_DRUID_THICK_HIDE = 16931;
 constexpr uint32 SPELL_OWLKIN_FRENZY = 48393;
 constexpr uint32 SPELL_PRIMAL_TENACITY = 33957;
@@ -162,6 +108,7 @@ constexpr uint32 SPELL_NEMESIS = 63123;
 constexpr uint32 SPELL_INTENSITY = 18136;
 constexpr uint32 SPELL_NETHER_PROTECTION = 30302;
 }
+
 bool PlayerbotFactory::IsPrimaryTradeSkill(uint16 skillId)
 {
     SkillLineEntry const* skillLine = sSkillLineStore.LookupEntry(skillId);
@@ -416,7 +363,7 @@ bool PlayerbotFactory::LearnProfessionSpecialization(Player* bot,
     if (bot->HasSpell(knownSpellId) || !sSpellMgr->GetSpellInfo(learnSpellId))
         return false;
 
-    CastSpellIfAvailable(bot, learnSpellId);
+    bot->CastSpell(bot, learnSpellId, true);
     return bot->HasSpell(knownSpellId);
 }
 
@@ -606,13 +553,12 @@ uint8 PlayerbotFactory::GetPreferredArmorType(uint8 cls)
     {
         case CLASS_WARRIOR:
         case CLASS_PALADIN:
-            return bot->GetLevel() >= 40 ? ITEM_SUBCLASS_ARMOR_PLATE : ITEM_SUBCLASS_ARMOR_MAIL;
         case CLASS_DEATH_KNIGHT:
             return ITEM_SUBCLASS_ARMOR_PLATE;
 
         case CLASS_HUNTER:
         case CLASS_SHAMAN:
-            return bot->GetLevel() >= 40 ? ITEM_SUBCLASS_ARMOR_MAIL : ITEM_SUBCLASS_ARMOR_LEATHER;
+            return ITEM_SUBCLASS_ARMOR_MAIL;
 
         case CLASS_ROGUE:
         case CLASS_DRUID:
@@ -686,6 +632,7 @@ void PlayerbotFactory::Randomize(bool incremental, bool resetItems, bool clearIt
         ClearSkills();
         ClearSpells();
         ResetQuests();
+
         if (resetItems || !sPlayerbotAIConfig.equipAndSpecPersistence ||
             level < uint32(sPlayerbotAIConfig.equipAndSpecPersistenceLevel) ||
             (clearItemsOnLevelDown && level < oldLevel))
@@ -2750,7 +2697,7 @@ void PlayerbotFactory::EnchantItem(Item* item)
             uint8 sp = 0;
             uint8 ap = 0;
             uint8 tank = 0;
-            for (uint8 i = 0; i < MAX_SPELL_ITEM_ENCHANTMENT_EFFECTS; ++i)
+            for (uint8 i = ITEM_MOD_MANA; i < MAX_ITEM_MOD; ++i)
             {
                 if (enchant->type[i] != ITEM_ENCHANTMENT_TYPE_STAT)
                     continue;
@@ -2899,7 +2846,7 @@ void PlayerbotFactory::InitTradeSkills()
             !(keepExistingProfessionPair && bot->HasSkill(skillId)))
             continue;
 
-        LearnSpellIfAvailable(bot, spellId, false, false, "PlayerbotFactory::InitTradeSkills");
+        bot->learnSpell(spellId, false);
     }
 
     InitTradeSpecializations();
@@ -3098,17 +3045,16 @@ void PlayerbotFactory::InitSkills()
 
     bot->SetSkill(SKILL_RIDING, 0, 0, 0);
     if (bot->GetLevel() >= sPlayerbotAIConfig.useGroundMountAtMinLevel)
-        LearnSpellIfAvailable(bot, 33388);
+        bot->learnSpell(33388);
     if (bot->GetLevel() >= sPlayerbotAIConfig.useFastGroundMountAtMinLevel)
-        LearnSpellIfAvailable(bot, 33391);
+        bot->learnSpell(33391);
     if (bot->GetLevel() >= sPlayerbotAIConfig.useFlyMountAtMinLevel)
-        LearnSpellIfAvailable(bot, 34090);
+        bot->learnSpell(34090);
     if (bot->GetLevel() >= sPlayerbotAIConfig.useFastFlyMountAtMinLevel)
-        LearnSpellIfAvailable(bot, 34091);
+        bot->learnSpell(34091);
 
     uint32 skillLevel = bot->GetLevel() < 40 ? 0 : 1;
     uint32 dualWieldLevel = bot->GetLevel() < 20 ? 0 : 1;
-    uint32 rogueDualWieldLevel = bot->GetLevel() < 10 ? 0 : 1;
     SetRandomSkill(SKILL_DEFENSE);
     SetRandomSkill(SKILL_UNARMED);
     switch (bot->getClass())
@@ -3206,8 +3152,8 @@ void PlayerbotFactory::InitSkills()
             SetRandomSkill(SKILL_FIST_WEAPONS);
             SetRandomSkill(SKILL_THROWN);
             SetRandomSkill(SKILL_LOCKPICKING);
-            bot->SetSkill(SKILL_DUAL_WIELD, 0, rogueDualWieldLevel, rogueDualWieldLevel);
-            bot->SetCanDualWield(rogueDualWieldLevel);
+            bot->SetSkill(SKILL_DUAL_WIELD, 0, 1, 1);
+            bot->SetCanDualWield(true);
             break;
         case CLASS_DEATH_KNIGHT:
             SetRandomSkill(SKILL_SWORDS);
@@ -3304,7 +3250,7 @@ void PlayerbotFactory::InitAvailableSpells()
             if (trainerSpell->IsCastable())
                 bot->CastSpell(bot, trainerSpell->SpellId, true);
             else
-                LearnSpellIfAvailable(bot, trainerSpell->SpellId, false);
+                bot->learnSpell(trainerSpell->SpellId, false);
         }
     }
 }
@@ -3315,91 +3261,91 @@ void PlayerbotFactory::InitClassSpells()
     switch (bot->getClass())
     {
         case CLASS_WARRIOR:
-            LearnSpellIfAvailable(bot, 78, true);
-            LearnSpellIfAvailable(bot, 2457, true);
+            bot->learnSpell(78, true);
+            bot->learnSpell(2457, true);
             if (level >= 10)
             {
-                LearnSpellIfAvailable(bot, 71, false);    // Defensive Stance
-                LearnSpellIfAvailable(bot, 355, false);   // Taunt
-                LearnSpellIfAvailable(bot, 7386, false);  // Sunder Armor
+                bot->learnSpell(71, false);    // Defensive Stance
+                bot->learnSpell(355, false);   // Taunt
+                bot->learnSpell(7386, false);  // Sunder Armor
             }
             if (level >= 30)
-                LearnSpellIfAvailable(bot, 2458, false);  // Berserker Stance
+                bot->learnSpell(2458, false);  // Berserker Stance
             break;
         case CLASS_PALADIN:
-            LearnSpellIfAvailable(bot, 21084, true);
-            LearnSpellIfAvailable(bot, 635, true);
+            bot->learnSpell(21084, true);
+            bot->learnSpell(635, true);
             if (level >= 12)
-                LearnSpellIfAvailable(bot, 7328, false);  // Redemption
+                bot->learnSpell(7328, false);  // Redemption
             if (level >= 20)
-                LearnSpellIfAvailable(bot, 5502, false); // Sense Undead
+                bot->learnSpell(5502, false); // Sense Undead
             break;
         case CLASS_ROGUE:
-            LearnSpellIfAvailable(bot, 1752, true);
-            LearnSpellIfAvailable(bot, 2098, true);
+            bot->learnSpell(1752, true);
+            bot->learnSpell(2098, true);
             break;
         case CLASS_DEATH_KNIGHT:
-            LearnSpellIfAvailable(bot, 45477, true);
-            LearnSpellIfAvailable(bot, 47541, true);
-            LearnSpellIfAvailable(bot, 45462, true);
-            LearnSpellIfAvailable(bot, 45902, true);
+            bot->learnSpell(45477, true);
+            bot->learnSpell(47541, true);
+            bot->learnSpell(45462, true);
+            bot->learnSpell(45902, true);
             // to leave DK starting area
-            LearnSpellIfAvailable(bot, 53428, false);
-            LearnSpellIfAvailable(bot, 50977, false);
-            LearnSpellIfAvailable(bot, 49142, false);
-            LearnSpellIfAvailable(bot, 48778, false);
+            bot->learnSpell(53428, false);
+            bot->learnSpell(50977, false);
+            bot->learnSpell(49142, false);
+            bot->learnSpell(48778, false);
             break;
         case CLASS_HUNTER:
-            LearnSpellIfAvailable(bot, 2973, true);
-            LearnSpellIfAvailable(bot, 75, true);
+            bot->learnSpell(2973, true);
+            bot->learnSpell(75, true);
             if (level >= 10)
             {
-                LearnSpellIfAvailable(bot, 883, false);   // call pet
-                LearnSpellIfAvailable(bot, 1515, false);  // tame pet
-                LearnSpellIfAvailable(bot, 6991, false);  // feed pet
-                LearnSpellIfAvailable(bot, 982, false);   // revive pet
-                LearnSpellIfAvailable(bot, 2641, false);  // dismiss pet
+                bot->learnSpell(883, false);   // call pet
+                bot->learnSpell(1515, false);  // tame pet
+                bot->learnSpell(6991, false);  // feed pet
+                bot->learnSpell(982, false);   // revive pet
+                bot->learnSpell(2641, false);  // dismiss pet
             }
             break;
         case CLASS_PRIEST:
-            LearnSpellIfAvailable(bot, 585, true);
-            LearnSpellIfAvailable(bot, 2050, true);
+            bot->learnSpell(585, true);
+            bot->learnSpell(2050, true);
             break;
         case CLASS_MAGE:
-            LearnSpellIfAvailable(bot, 133, true);
-            LearnSpellIfAvailable(bot, 168, true);
+            bot->learnSpell(133, true);
+            bot->learnSpell(168, true);
             break;
         case CLASS_WARLOCK:
-            LearnSpellIfAvailable(bot, 687, true);
-            LearnSpellIfAvailable(bot, 686, true);
-            LearnSpellIfAvailable(bot, 688, false);  // summon imp
+            bot->learnSpell(687, true);
+            bot->learnSpell(686, true);
+            bot->learnSpell(688, false);  // summon imp
             if (level >= 10)
-                LearnSpellIfAvailable(bot, 697, false);  // summon voidwalker
+                bot->learnSpell(697, false);  // summon voidwalker
             if (level >= 20)
-                LearnSpellIfAvailable(bot, 712, false);  // summon succubus
+                bot->learnSpell(712, false);  // summon succubus
             if (level >= 30)
-                LearnSpellIfAvailable(bot, 691, false);  // summon felhunter
+                bot->learnSpell(691, false);  // summon felhunter
             break;
         case CLASS_DRUID:
-            LearnSpellIfAvailable(bot, 5176, true);
-            LearnSpellIfAvailable(bot, 5185, true);
+            bot->learnSpell(5176, true);
+            bot->learnSpell(5185, true);
             if (level >= 10)
             {
-                LearnSpellIfAvailable(bot, 5487, false);  // bear form
-                LearnSpellIfAvailable(bot, 6795, false);  // Growl
-                LearnSpellIfAvailable(bot, 6807, false);  // Maul
+                bot->learnSpell(5487, false);  // bear form
+                bot->learnSpell(6795, false);  // Growl
+                bot->learnSpell(6807, false);  // Maul
             }
             break;
         case CLASS_SHAMAN:
-            LearnSpellIfAvailable(bot, 403, true);
-            LearnSpellIfAvailable(bot, 331, true);
-            // LearnSpellIfAvailable(bot, 66747, true); // Totem of the Earthen Ring
+            bot->learnSpell(403, true);
+            bot->learnSpell(331, true);
+            // bot->learnSpell(66747, true); // Totem of the Earthen Ring
             if (level >= 4)
-                LearnSpellIfAvailable(bot, 8071, false);  // stoneskin totem
+                bot->learnSpell(8071, false);  // stoneskin totem
             if (level >= 10)
-                LearnSpellIfAvailable(bot, 3599, false);  // searing totem
+                bot->learnSpell(3599, false);  // searing totem
             if (level >= 20)
-                LearnSpellIfAvailable(bot, 5394, false);  // healing stream totem
+                bot->learnSpell(5394, false);  // healing stream totem
             break;
         default:
             break;
@@ -3412,12 +3358,12 @@ void PlayerbotFactory::InitSpecialSpells()
          i != sPlayerbotAIConfig.randomBotSpellIds.end(); ++i)
     {
         uint32 spellId = *i;
-        LearnSpellIfAvailable(bot, spellId);
+        bot->learnSpell(spellId);
     }
     // to leave DK starting area
     if (bot->getClass() == CLASS_DEATH_KNIGHT)
     {
-        LearnSpellIfAvailable(bot, 50977, false);
+        bot->learnSpell(50977, false);
     }
 }
 
@@ -3872,7 +3818,7 @@ void PlayerbotFactory::InitMounts()
         uint32 spell = mounts[bot->getRace()][type][index];
         if (spell)
         {
-            LearnSpellIfAvailable(bot, spell);
+            bot->learnSpell(spell);
             LOG_DEBUG("playerbots", "Bot {} ({}) learned {} mount {}", bot->GetGUID().ToString().c_str(),
                       bot->GetLevel(), type == 0 ? "slow" : (type == 1 ? "fast" : "flying"), spell);
         }
@@ -4821,7 +4767,6 @@ void PlayerbotFactory::InitImmersive()
 
 void PlayerbotFactory::InitArenaTeam()
 {
-
     if (!sPlayerbotAIConfig.IsInRandomAccountList(bot->GetSession()->GetAccountId()))
         return;
 
@@ -4842,13 +4787,9 @@ void PlayerbotFactory::InitArenaTeam()
                     Player* bot = ObjectAccessor::FindPlayer(arenateam->GetCaptain());
                     PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
                     if (!botAI || IsSelfBot(bot))
-                    {
                         continue;
-                    }
                     else
-                    {
                         arenateam->Disband(nullptr);
-                    }
                 }
             }
 
@@ -4863,83 +4804,94 @@ void PlayerbotFactory::InitArenaTeam()
     std::vector<uint32> arenateams;
     for (std::vector<uint32>::iterator i = sPlayerbotAIConfig.randomBotArenaTeams.begin();
          i != sPlayerbotAIConfig.randomBotArenaTeams.end(); ++i)
-        arenateams.push_back(*i);
+         {
+             arenateams.push_back(*i);
+         }
 
-    if (arenateams.empty())
-    {
-        LOG_ERROR("playerbots", "No random arena team available");
-        return;
-    }
+         if (arenateams.empty())
+         {
+             LOG_ERROR("playerbots", "No random arena team available");
+             return;
+         }
 
-    while (!arenateams.empty())
-    {
-        int index = urand(0, arenateams.size() - 1);
-        uint32 arenateamID = arenateams[index];
-        ArenaTeam* arenateam = sArenaTeamMgr->GetArenaTeamById(arenateamID);
-        if (!arenateam)
-        {
-            LOG_ERROR("playerbots", "Invalid arena team {}", arenateamID);
-            arenateams.erase(arenateams.begin() + index);
-            continue;
-        }
+         while (!arenateams.empty())
+         {
+             int index = urand(0, arenateams.size() - 1);
+             uint32 arenateamID = arenateams[index];
+             ArenaTeam* arenateam = sArenaTeamMgr->GetArenaTeamById(arenateamID);
+             if (!arenateam)
+             {
+                 LOG_ERROR("playerbots", "Invalid arena team {}", arenateamID);
+                 arenateams.erase(arenateams.begin() + index);
+                 continue;
+             }
 
-        if (arenateam->GetMembersSize() < ((uint32)arenateam->GetType()) && bot->GetLevel() >= 70)
-        {
-            ObjectGuid capt = arenateam->GetCaptain();
-            Player* botcaptain = ObjectAccessor::FindPlayer(capt);
+             if (arenateam->GetMembersSize() < ((uint32)arenateam->GetType()) && bot->GetLevel() >= 70)
+             {
+                 ObjectGuid capt = arenateam->GetCaptain();
+                 Player* botcaptain = ObjectAccessor::FindPlayer(capt);
 
-            // To avoid bots removing each other from groups when queueing, force them to only be in one team
-            for (uint32 arena_slot = 0; arena_slot < MAX_ARENA_SLOT; ++arena_slot)
-            {
-                uint32 arenaTeamId = bot->GetArenaTeamId(arena_slot);
-                if (!arenaTeamId)
-                    continue;
+                 // To avoid bots removing each other from groups when queueing, force them to only be in one team
+                 for (uint32 arena_slot = 0; arena_slot < MAX_ARENA_SLOT; ++arena_slot)
+                 {
+                     uint32 arenaTeamId = bot->GetArenaTeamId(arena_slot);
+                     if (!arenaTeamId)
+                         continue;
 
-                ArenaTeam* team = sArenaTeamMgr->GetArenaTeamById(arenaTeamId);
-                if (team)
-                {
-                    if (sCharacterCache->GetCharacterArenaTeamIdByGuid(bot->GetGUID(), team->GetSlot()) != 0)
-                    {
-                        return;
-                    }
-                    return;
-                }
-            }
+                     ArenaTeam* team = sArenaTeamMgr->GetArenaTeamById(arenaTeamId);
+                     if (team)
+                     {
+                         if (sCharacterCache->GetCharacterArenaTeamIdByGuid(bot->GetGUID(), team->GetSlot()) != 0)
+                         {
+                             return;
+                         }
+                         return;
+                     }
+                 }
 
-            if (botcaptain && botcaptain->GetTeamId() == bot->GetTeamId())  // need?
-            {
-                // Add bot to arena team
-                arenateam->AddMember(bot->GetGUID());
+                 if (botcaptain && botcaptain->GetTeamId() == bot->GetTeamId())  // need?
+                 {
+                     // Skip if already a member
+                     for (ArenaTeamMember const& member : arenateam->GetMembers())
+                     {
+                         if (member.Guid == bot->GetGUID())
+                         {
+                             return;
+                         }
+                     }
 
-                // Only synchronize ratings once the team is full (avoid redundant work)
-                // The captain was added with incorrect ratings when the team was created,
-                // so we fix everyone's ratings once the roster is complete
-                if (arenateam->GetMembersSize() >= (uint32)arenateam->GetType())
-                {
-                    uint32 teamRating = arenateam->GetRating();
+                     // Add bot to arena team
+                     arenateam->AddMember(bot->GetGUID());
 
-                    // Use SetRatingForAll to align all members with team rating
-                    arenateam->SetRatingForAll(teamRating);
+                     // Only synchronize ratings once the team is full (avoid redundant work)
+                     // The captain was added with incorrect ratings when the team was created,
+                     // so we fix everyone's ratings once the roster is complete
+                     if (arenateam->GetMembersSize() >= (uint32)arenateam->GetType())
+                     {
+                         uint32 teamRating = arenateam->GetRating();
 
-                    // For bot-only teams, keep MMR synchronized with team rating
-                    // This ensures matchmaking reflects the artificial team strength (1000-2000 range)
-                    // instead of being influenced by the global CONFIG_ARENA_START_MATCHMAKER_RATING
-                    for (auto& member : arenateam->GetMembers())
-                    {
-                        // Set MMR to match personal rating (which already matches team rating)
-                        member.MatchMakerRating = member.PersonalRating;
-                        member.MaxMMR = std::max(member.MaxMMR, member.PersonalRating);
-                    }
-                    // Force save all member data to database
-                    arenateam->SaveToDB(true);
-                }
-            }
-        }
+                         // Use SetRatingForAll to align all members with team rating
+                         arenateam->SetRatingForAll(teamRating);
 
-        arenateams.erase(arenateams.begin() + index);
-    }
+                         // For bot-only teams, keep MMR synchronized with team rating
+                         // This ensures matchmaking reflects the artificial team strength (1000-2000 range)
+                         // instead of being influenced by the global CONFIG_ARENA_START_MATCHMAKER_RATING
+                         for (auto& member : arenateam->GetMembers())
+                         {
+                             // Set MMR to match personal rating (which already matches team rating)
+                             member.MatchMakerRating = member.PersonalRating;
+                             member.MaxMMR = std::max(member.MaxMMR, member.PersonalRating);
+                         }
+                         // Force save all member data to database
+                         arenateam->SaveToDB(true);
+                     }
+                 }
+             }
 
-    // bot->SaveToDB(false, false);
+             arenateams.erase(arenateams.begin() + index);
+         }
+
+         // bot->SaveToDB(false, false);
 }
 
 void PlayerbotFactory::ApplyEnchantTemplate()

@@ -5,50 +5,45 @@
  */
 
 #include "AiObjectContext.h"
-#include "TriggerContext.h"
-#include "ChatTriggerContext.h"
-#include "WorldPacketTriggerContext.h"
 #include "Aq20TriggerContext.h"
-#include "MCTriggerContext.h"
+#include "BTTriggerContext.h"
 #include "BWLTriggerContext.h"
-#include "KaraTriggerContext.h"
+#include "ChatTriggerContext.h"
+#include "EoETriggerContext.h"
 #include "GruulTriggerContext.h"
+#include "HyjalTriggerContext.h"
+#include "ICCTriggerContext.h"
+#include "KaraTriggerContext.h"
+#include "MCTriggerContext.h"
 #include "MagTriggerContext.h"
 #include "NaxxTriggerContext.h"
+#include "OSTriggerContext.h"
+#include "OnyTriggerContext.h"
+#include "OutlandWorldBossTriggerContext.h"
+#include "RSTriggerContext.h"
 #include "SSCTriggerContext.h"
 #include "TKTriggerContext.h"
-#include "HyjalTriggerContext.h"
-#include "BTTriggerContext.h"
-#include "ZATriggerContext.h"
-#include "OSTriggerContext.h"
-#include "EoETriggerContext.h"
-#include "VoATriggerContext.h"
-#include "UldTriggerContext.h"
-#include "OnyTriggerContext.h"
-#include "ICCTriggerContext.h"
-#include "RSTriggerContext.h"
-#include "OutlandWorldBossTriggerContext.h"
+#include "TbcDungeonTriggerContext.h"
 #include "Ai/Dungeon/DungeonAutoPullTriggerContext.h"
-#include "Ai/Dungeon/TbcDungeonTriggerContext.h"
-#include "Ai/Dungeon/WotlkDungeonTriggerContext.h"
-#include "MechTriggerContext.h"
-#include "SethTriggerContext.h"
-#include "../../../strategy/raids/blacktemple/BlackTempleTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/steamvault/SteamvaultTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/bloodfurnace/BloodFurnaceTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/slavepens/SlavePensTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/underbog/UnderbogTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/manatombs/ManaTombsTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
+#include "TriggerContext.h"
+#include "UldTriggerContext.h"
+#include "VoATriggerContext.h"
+#include "WorldPacketTriggerContext.h"
+#include "WotlkDungeonTriggerContext.h"
+#include "ZATriggerContext.h"
 #include "../../../strategy/dungeons/tbc/arcatraz/ArcatrazTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/bloodfurnace/BloodFurnaceTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/botanica/BotanicaTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/mechanar/MechanarTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/manatombs/ManaTombsTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/slavepens/SlavePensTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/steamvault/SteamvaultTriggerContext.h"
+#include "../../../strategy/dungeons/tbc/underbog/UnderbogTriggerContext.h"
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
 {
@@ -74,13 +69,11 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidOnyxiaTriggerContext());
     triggerContexts.Add(new RaidIccTriggerContext());
     triggerContexts.Add(new RaidRsTriggerContext());
-    triggerContexts.Add(new RaidOutlandWorldBossTriggerContext());
-    triggerContexts.Add(new DungeonAutoPullTriggerContext());
     triggerContexts.Add(new TbcDungeonAuchenaiCryptsTriggerContext());
     triggerContexts.Add(new TbcDungeonSethekkHallsTriggerContext());
     triggerContexts.Add(new TbcDungeonMechanarTriggerContext());
-    triggerContexts.Add(new TbcDungeonSHTriggerContext());
-    triggerContexts.Add(new MechanarTriggerContext());
+    triggerContexts.Add(new RaidOutlandWorldBossTriggerContext());
+    triggerContexts.Add(new DungeonAutoPullTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());
@@ -97,8 +90,6 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new WotlkDungeonPoSTriggerContext());
     triggerContexts.Add(new WotlkDungeonToCTriggerContext());
 
-    // Custom / Unique
-    triggerContexts.Add(new RaidBtTriggerContext());
     triggerContexts.Add(new EscapeFromDurnholdeTriggerContext());
     triggerContexts.Add(new BlackMorassTriggerContext());
     triggerContexts.Add(new MagistersTerraceTriggerContext());

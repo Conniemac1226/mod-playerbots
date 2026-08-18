@@ -4,51 +4,46 @@
  * or (at your option) any later version.
  */
 
-#include "AiObjectContext.h"
 #include "ActionContext.h"
-#include "ChatActionContext.h"
-#include "WorldPacketActionContext.h"
+#include "AiObjectContext.h"
 #include "Aq20ActionContext.h"
-#include "MCActionContext.h"
+#include "BTActionContext.h"
 #include "BWLActionContext.h"
-#include "KaraActionContext.h"
+#include "ChatActionContext.h"
+#include "EoEActionContext.h"
 #include "GruulActionContext.h"
-#include "NaxxActionContext.h"
+#include "HyjalActionContext.h"
+#include "ICCActionContext.h"
+#include "KaraActionContext.h"
+#include "MCActionContext.h"
 #include "MagActionContext.h"
+#include "NaxxActionContext.h"
+#include "OSActionContext.h"
+#include "OnyActionContext.h"
+#include "OutlandWorldBossActionContext.h"
+#include "RSActionContext.h"
 #include "SSCActionContext.h"
 #include "TKActionContext.h"
-#include "HyjalActionContext.h"
-#include "BTActionContext.h"
-#include "ZAActionContext.h"
-#include "OSActionContext.h"
-#include "EoEActionContext.h"
-#include "VoAActionContext.h"
-#include "UldActionContext.h"
-#include "OnyActionContext.h"
-#include "ICCActionContext.h"
-#include "RSActionContext.h"
-#include "OutlandWorldBossActionContext.h"
+#include "TbcDungeonActionContext.h"
 #include "Ai/Dungeon/DungeonAutoPullActionContext.h"
-#include "Ai/Dungeon/TbcDungeonActionContext.h"
-#include "Ai/Dungeon/WotlkDungeonActionContext.h"
-#include "MechActionContext.h"
-#include "SethActionContext.h"
-#include "../../../strategy/raids/blacktemple/BlackTempleActionContext.h"
-#include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassActionContext.h"
-#include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeActionContext.h"
-#include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceActionContext.h"
-#include "../../../strategy/dungeons/tbc/steamvault/SteamvaultActionContext.h"
-#include "../../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsActionContext.h"
-#include "../../../strategy/dungeons/tbc/bloodfurnace/BloodFurnaceActionContext.h"
-#include "../../../strategy/dungeons/tbc/slavepens/SlavePensActionContext.h"
-#include "../../../strategy/dungeons/tbc/underbog/UnderbogActionContext.h"
-#include "../../../strategy/dungeons/tbc/manatombs/ManaTombsActionContext.h"
-#include "../../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsActionContext.h"
-#include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthActionContext.h"
+#include "UldActionContext.h"
+#include "VoAActionContext.h"
+#include "WorldPacketActionContext.h"
+#include "WotlkDungeonActionContext.h"
+#include "ZAActionContext.h"
 #include "../../../strategy/dungeons/tbc/arcatraz/ArcatrazActionContext.h"
+#include "../../../strategy/dungeons/tbc/blackmorass/BlackMorassActionContext.h"
+#include "../../../strategy/dungeons/tbc/bloodfurnace/BloodFurnaceActionContext.h"
 #include "../../../strategy/dungeons/tbc/botanica/BotanicaActionContext.h"
-#include "../../../strategy/dungeons/tbc/sethekkhalls/SethekkHallsActionContext.h"
-#include "../../../strategy/dungeons/tbc/mechanar/MechanarActionContext.h"
+#include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeActionContext.h"
+#include "../../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsActionContext.h"
+#include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceActionContext.h"
+#include "../../../strategy/dungeons/tbc/manatombs/ManaTombsActionContext.h"
+#include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthActionContext.h"
+#include "../../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsActionContext.h"
+#include "../../../strategy/dungeons/tbc/slavepens/SlavePensActionContext.h"
+#include "../../../strategy/dungeons/tbc/steamvault/SteamvaultActionContext.h"
+#include "../../../strategy/dungeons/tbc/underbog/UnderbogActionContext.h"
 
 void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Action>& actionContexts)
 {
@@ -74,13 +69,11 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidOnyxiaActionContext());
     actionContexts.Add(new RaidIccActionContext());
     actionContexts.Add(new RaidRsActionContext());
-    actionContexts.Add(new RaidOutlandWorldBossActionContext());
-    actionContexts.Add(new DungeonAutoPullActionContext());
     actionContexts.Add(new TbcDungeonAuchenaiCryptsActionContext());
     actionContexts.Add(new TbcDungeonSethekkHallsActionContext());
     actionContexts.Add(new TbcDungeonMechanarActionContext());
-    actionContexts.Add(new TbcDungeonSHActionContext());
-    actionContexts.Add(new MechanarActionContext());
+    actionContexts.Add(new RaidOutlandWorldBossActionContext());
+    actionContexts.Add(new DungeonAutoPullActionContext());
     actionContexts.Add(new WotlkDungeonUKActionContext());
     actionContexts.Add(new WotlkDungeonNexActionContext());
     actionContexts.Add(new WotlkDungeonANActionContext());
@@ -97,8 +90,6 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new WotlkDungeonPoSActionContext());
     actionContexts.Add(new WotlkDungeonToCActionContext());
 
-    // Custom / Unique
-    actionContexts.Add(new RaidBtActionContext());
     actionContexts.Add(new EscapeFromDurnholdeActionContext());
     actionContexts.Add(new BlackMorassActionContext());
     actionContexts.Add(new MagistersTerraceActionContext());

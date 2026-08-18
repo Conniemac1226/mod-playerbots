@@ -4,12 +4,6 @@
  */
 
 #include "PlayerbotAI.h"
-
-#include <cmath>
-#include <mutex>
-#include <sstream>
-#include <string>
-
 #include "AiFactory.h"
 #include "BudgetValues.h"
 #include "ChannelMgr.h"
@@ -38,10 +32,10 @@
 #include "ObjectMgr.h"
 #include "PerfMonitor.h"
 #include "Player.h"
-#include "PlayerbotTextMgr.h"
 #include "PlayerbotAIConfig.h"
-#include "PlayerbotMgr.h"
 #include "PlayerbotGuildMgr.h"
+#include "PlayerbotMgr.h"
+#include "PlayerbotTextMgr.h"
 #include "Playerbots.h"
 #include "PositionValue.h"
 #include "RBAC.h"
@@ -57,13 +51,13 @@
 #include "Unit.h"
 #include "UpdateTime.h"
 #include "Vehicle.h"
+#include <cmath>
+#include <mutex>
+#include <sstream>
+#include <string>
 
 constexpr uint32 SPELL_TITAN_GRIP = 49152;
 constexpr uint32 SPELL_DK_FROST_PRESENCE = 48263;
-
-namespace
-{
-}
 
 std::vector<std::string> PlayerbotAI::dispel_whitelist = {
     "mutating injection",
@@ -550,57 +544,10 @@ void PlayerbotAI::UpdateAIInternal([[maybe_unused]] uint32 elapsed, bool minimal
     masterIncomingPacketHandlers.Handle(helper);
     masterOutgoingPacketHandlers.Handle(helper);
 
-    ApplyWorldBossStrategies();
     DoNextAction(minimal);
 
     if (pmo)
         pmo->finish();
-}
-
-void PlayerbotAI::ApplyWorldBossStrategies()
-{
-    Engine* combatEngine = engines[BOT_STATE_COMBAT];
-    if (!combatEngine)
-        return;
-
-    bool const hasWorldBossStrategy = combatEngine->HasStrategy("doomwalker") ||
-                                      combatEngine->HasStrategy("doom lord kazzak");
-    if (!bot->IsInCombat() && !hasWorldBossStrategy)
-        return;
-
-    struct BossStrategyEntry
-    {
-        char const* strategyName;
-        char const* bossName;
-    };
-
-    static constexpr BossStrategyEntry entries[] = {
-        { "doomwalker", "doomwalker" },
-        { "doom lord kazzak", "doom lord kazzak" },
-    };
-
-    bool changed = false;
-
-    for (BossStrategyEntry const& entry : entries)
-    {
-        Unit* boss = aiObjectContext->GetValue<Unit*>("find target", entry.bossName)->Get();
-        bool const active = boss && boss->IsAlive() && boss->IsInCombat() && !boss->IsFriendlyTo(bot);
-        bool const hasStrategy = combatEngine->HasStrategy(entry.strategyName);
-
-        if (active && !hasStrategy)
-        {
-            combatEngine->addStrategy(entry.strategyName, false);
-            changed = true;
-        }
-        else if (!active && hasStrategy)
-        {
-            combatEngine->removeStrategy(entry.strategyName, false);
-            changed = true;
-        }
-    }
-
-    if (changed)
-        combatEngine->Init();
 }
 
 void PlayerbotAI::HandleCommands()
@@ -821,7 +768,7 @@ void PlayerbotAI::HandleTeleportAck()
     if (!bot || !bot->GetSession())
         return;
 
-    // only for bots
+    // Skip acknowledgment for selfbots. The player's client handles that.
     if (IsSelfBot(bot))
         return;
 
@@ -832,7 +779,6 @@ void PlayerbotAI::HandleTeleportAck()
      */
     if (bot->IsBeingTeleportedFar())
     {
-        bool const wasInTaxiFlight = bot->IsInFlight();
         bot->GetSession()->HandleMoveWorldportAck();
 
         // after worldport ACK the player should be in a valid map
@@ -844,20 +790,10 @@ void PlayerbotAI::HandleTeleportAck()
 
         // apply instance-related strategies after map attach
         if (sPlayerbotAIConfig.applyInstanceStrategies)
-        {
             ApplyInstanceStrategies(bot->GetMapId(), true);
-        }
 
         if (sPlayerbotAIConfig.restrictHealerDPS)
             EvaluateHealerDpsStrategy();
-
-        // HandleMoveWorldportAck reinitializes a preserved taxi movement generator on the new map.
-        // Do not reset or clear it while the bot continues the next portion of a cross-map flight.
-        if (wasInTaxiFlight && bot->IsInFlight())
-        {
-            SetNextCheckDelay(urand(2000, 5000));
-            return;
-        }
 
         // reset AI state after teleport
         Reset(true);
@@ -1684,13 +1620,11 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
 {
     static const std::vector<std::string> allInstanceStrategies =
     {
-        "aq20", "blacktemple", "bwl", "classic-dungeon", "gruulslair", "hyjal", "icc", "karazhan",
-        "magtheridon", "moltencore", "naxx", "onyxia", "rs", "ssc", "serpentshrine", "tbc-ac",
+        "aq20", "blacktemple", "bwl", "gruulslair", "hyjal", "icc", "karazhan", "magtheridon",
+        "moltencore", "naxx", "onyxia", "rs", "ssc", "tbc-ac", "tbc-mech", "tbc-seth",
         "tempestkeep", "ulduar", "voa", "wotlk-an", "wotlk-cos", "wotlk-dtk", "wotlk-eoe",
-        "wotlk-fos", "wotlk-gd", "wotlk-hol", "wotlk-hos", "wotlk-nex", "wotlk-occ",
-        "wotlk-ok", "wotlk-os", "wotlk-pos", "wotlk-toc", "wotlk-uk", "wotlk-up", "wotlk-vh",
-        "zulaman", "tbc-bf", "tbc-hr", "tbc-shh", "tbc-sv", "tbc-ub", "tbc-sp", "tbc-arc",
-        "tbc-bot", "tbc-mech", "tbc-sl", "tbc-seth", "tbc-mato", "tbc-mt", "tbc-efd", "tbc-bm"
+        "wotlk-fos", "wotlk-gd", "wotlk-hol", "wotlk-hos", "wotlk-nex", "wotlk-occ", "wotlk-ok",
+        "wotlk-os", "wotlk-pos", "wotlk-toc", "wotlk-uk", "wotlk-up", "wotlk-vh", "zulaman"
     };
 
     for (const std::string& strat : allInstanceStrategies)
@@ -1702,27 +1636,6 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
     std::string strategyName;
     switch (mapId)
     {
-        case 33:
-        case 34:
-        case 36:
-        case 43:
-        case 47:
-        case 48:
-        case 70:
-        case 90:
-        case 109:
-        case 129:
-        case 189:
-        case 209:
-        case 229:
-        case 230:
-        case 289:
-        case 329:
-        case 349:
-        case 389:
-        case 429:
-            strategyName = "classic-dungeon";
-            break;
         case 249:
             strategyName = "onyxia";  // Onyxia's Lair
             break;
@@ -1741,51 +1654,6 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
         case 533:
             strategyName = "naxx";  // Naxxramas
             break;
-        case 542:
-            strategyName = "tbc-bf";  // The Blood Furnace
-            break;
-        case 543:
-            strategyName = "tbc-hr";  // Hellfire Ramparts
-            break;
-        case 540:
-            strategyName = "tbc-shh";  // The Shattered Halls
-            break;
-        case 545:
-            strategyName = "tbc-sv";  // The Steamvault
-            break;
-        case 546:
-            strategyName = "tbc-ub";  // The Underbog
-            break;
-        case 547:
-            strategyName = "tbc-sp";  // The Slave Pens
-            break;
-        case 552:
-            strategyName = "tbc-arc";  // The Arcatraz
-            break;
-        case 553:
-            strategyName = "tbc-bot";  // The Botanica
-            break;
-        case 554:
-            strategyName = "tbc-mech";  // The Mechanar
-            break;
-        case 555:
-            strategyName = "tbc-sl";  // Shadow Labyrinth
-            break;
-        case 556:
-            strategyName = "tbc-seth";  // Sethekk Halls
-            break;
-        case 557:
-            strategyName = "tbc-mato";  // Mana-Tombs
-            break;
-        case 585:
-            strategyName = "tbc-mt";  // Magisters' Terrace
-            break;
-        case 558:
-            strategyName = "tbc-ac";  // Auchenai Crypts
-            break;
-        case 560:
-            strategyName = "tbc-efd";  // Escape from Durnholde
-            break;
         case 534:
             strategyName = "hyjal";  // The Battle for Mount Hyjal (Hyjal Summit)
             break;
@@ -1793,10 +1661,19 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
             strategyName = "magtheridon";  // Magtheridon's Lair
             break;
         case 548:
-            strategyName = "serpentshrine";  // Serpentshrine Cavern
+            strategyName = "ssc";  // Serpentshrine Cavern
             break;
         case 550:
             strategyName = "tempestkeep";  // Tempest Keep: The Eye
+            break;
+        case 556:
+            strategyName = "tbc-seth";  // Auchindoun: Sethekk Halls
+            break;
+        case 554:
+            strategyName = "tbc-mech";  // Tempest Keep: The Mechanar
+            break;
+        case 558:
+            strategyName = "tbc-ac";  // Auchindoun: Auchenai Crypts
             break;
         case 564:
             strategyName = "blacktemple";  // Black Temple
@@ -1848,9 +1725,6 @@ void PlayerbotAI::ApplyInstanceStrategies(uint32 mapId, bool tellMaster)
             break;
         case 616:
             strategyName = "wotlk-eoe";  // Eye Of Eternity
-            break;
-        case 269:
-            strategyName = "tbc-bm";  // Black Morass
             break;
         case 619:
             strategyName = "wotlk-ok";  // Ahn'kahet: The Old Kingdom
@@ -3032,7 +2906,7 @@ bool PlayerbotAI::SayToParty(const std::string& msg)
 
 bool PlayerbotAI::SayToRaid(const std::string& msg)
 {
-    if (!bot->GetGroup() || bot->GetGroup()->isRaidGroup())
+    if (!bot->GetGroup() || !bot->GetGroup()->isRaidGroup())
         return false;
 
     WorldPacket data;
@@ -3391,20 +3265,16 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
     if (!spellid)
     {
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        {
-            LOG_DEBUG("playerbots", "Can cast spell failed. No spellid. - spellid: {}, bot name: {}", spellid,
-                      bot->GetName());
-        }
+            LOG_DEBUG("playerbots", "Can cast spell failed. No spellid. - spellid: {}, bot name: {}", spellid, bot->GetName());
+
         return false;
     }
 
     if (bot->HasUnitState(UNIT_STATE_LOST_CONTROL))
     {
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        {
-            LOG_DEBUG("playerbots", "Can cast spell failed. Unit state lost control. - spellid: {}, bot name: {}",
-                      spellid, bot->GetName());
-        }
+            LOG_DEBUG("playerbots", "Can cast spell failed. Unit state lost control. - spellid: {}, bot name: {}", spellid, bot->GetName());
+
         return false;
     }
 
@@ -3421,34 +3291,27 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
     if (checkHasSpell && !bot->HasSpell(spellid))
     {
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        {
-            LOG_DEBUG("playerbots",
-                      "Can cast spell failed. Bot not has spell. - target name: {}, spellid: {}, bot name: {}",
-                      target->GetName(), spellid, bot->GetName());
-        }
+            LOG_DEBUG("playerbots", "Can cast spell failed. Bot not has spell. - target name: {}, spellid: {}, bot name: {}",
+                target->GetName(), spellid, bot->GetName());
+
         return false;
     }
 
     if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL) != nullptr)
     {
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        {
-            LOG_DEBUG(
-                "playerbots",
-                "CanCastSpell() target name: {}, spellid: {}, bot name: {}, failed because has current channeled spell",
+            LOG_DEBUG("playerbots", "CanCastSpell() target name: {}, spellid: {}, bot name: {}, failed because has current channeled spell",
                 target->GetName(), spellid, bot->GetName());
-        }
+
         return false;
     }
 
     if (bot->HasSpellCooldown(spellid))
     {
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        {
-            LOG_DEBUG("playerbots",
-                      "Can cast spell failed. Spell not has cooldown. - target name: {}, spellid: {}, bot name: {}",
-                      target->GetName(), spellid, bot->GetName());
-        }
+            LOG_DEBUG("playerbots", "Can cast spell failed. Spell not has cooldown. - target name: {}, spellid: {}, bot name: {}",
+                target->GetName(), spellid, bot->GetName());
+
         return false;
     }
 
@@ -3456,22 +3319,18 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
     if (!spellInfo)
     {
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        {
             LOG_DEBUG("playerbots", "Can cast spell failed. No spellInfo. - target name: {}, spellid: {}, bot name: {}",
-                      target->GetName(), spellid, bot->GetName());
-        }
+                target->GetName(), spellid, bot->GetName());
+
         return false;
     }
 
     if ((bot->GetShapeshiftForm() == FORM_FLIGHT || bot->GetShapeshiftForm() == FORM_FLIGHT_EPIC) && !bot->IsInCombat())
     {
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        {
-            LOG_DEBUG(
-                "playerbots",
-                "Can cast spell failed. In flight form (not in combat). - target name: {}, spellid: {}, bot name: {}",
+            LOG_DEBUG("playerbots", "Can cast spell failed. In flight form (not in combat). - target name: {}, spellid: {}, bot name: {}",
                 target->GetName(), spellid, bot->GetName());
-        }
+
         return false;
     }
 
@@ -3480,10 +3339,9 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
     if ((CastingTime || spellInfo->IsAutoRepeatRangedSpell()) && bot->isMoving())
     {
         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        {
             LOG_DEBUG("playerbots", "Casting time and bot is moving - target name: {}, spellid: {}, bot name: {}",
-                      target->GetName(), spellid, bot->GetName());
-        }
+                target->GetName(), spellid, bot->GetName());
+
         return false;
     }
 
@@ -3495,10 +3353,9 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
             if (spellid != 44572)  // Deep Freeze
             {
                 if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-                {
                     LOG_DEBUG("playerbots", "target is immuned to spell - target name: {}, spellid: {}, bot name: {}",
-                              target->GetName(), spellid, bot->GetName());
-                }
+                        target->GetName(), spellid, bot->GetName());
+
                 return false;
             }
             // Otherwise, allow Deep Freeze even if immune
@@ -3507,10 +3364,9 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
         if (bot != target && ServerFacade::instance().GetDistance2d(bot, target) > sPlayerbotAIConfig.sightDistance)
         {
             if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-            {
                 LOG_DEBUG("playerbots", "target is out of sight distance - target name: {}, spellid: {}, bot name: {}",
-                          target->GetName(), spellid, bot->GetName());
-            }
+                    target->GetName(), spellid, bot->GetName());
+
             return false;
         }
     }
@@ -3535,10 +3391,8 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
     // if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
     // {
     //     if (result != SPELL_FAILED_NOT_READY && result != SPELL_CAST_OK)
-    //     {
     //         LOG_DEBUG("playerbots", "CanCastSpell - target name: {}, spellid: {}, bot name: {}, result: {}",
     //             target->GetName(), spellid, bot->GetName(), result);
-    //     }
     // }
 
     if (oldSel)
@@ -3557,11 +3411,9 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, bool checkHasSpell,
             return true;
         default:
             if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-            {
-                LOG_DEBUG("playerbots",
-                          "CanCastSpell Check Failed. - target name: {}, spellid: {}, bot name: {}, result: {}",
-                          target->GetName(), spellid, bot->GetName(), result);
-            }
+                LOG_DEBUG("playerbots", "CanCastSpell Check Failed. - target name: {}, spellid: {}, bot name: {}, result: {}",
+                    target->GetName(), spellid, bot->GetName(), result);
+
             return false;
     }
 }
@@ -3748,10 +3600,9 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
     if (bot->IsFlying() || bot->HasUnitState(UNIT_STATE_IN_FLIGHT))
     {
         // if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        // {
         //     LOG_DEBUG("playerbots", "Spell cast is flying - target name: {}, spellid: {}, bot name: {}}",
         //         target->GetName(), spellId, bot->GetName());
-        // }
+
         return false;
     }
 
@@ -3794,10 +3645,9 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
             bot->GetTradeData()->SetSpell(spellId);
             delete spell;
             // if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-            // {
             //     LOG_DEBUG("playerbots", "Spell cast no item - target name: {}, spellid: {}, bot name: {}",
             //         target->GetName(), spellId, bot->GetName());
-            // }
+
             return true;
         }
     }
@@ -3864,10 +3714,9 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
     // spell->m_targets.SetUnitTarget(target);
     // SpellCastResult spellSuccess = spell->CheckCast(true);
     // if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-    // {
     //     LOG_DEBUG("playerbots", "Spell cast result - target name: {}, spellid: {}, bot name: {}, result: {}",
     //         target->GetName(), spellId, bot->GetName(), spellSuccess);
-    // }
+
     // if (spellSuccess != SPELL_CAST_OK)
     //     return false;
 
@@ -3876,10 +3725,9 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
     if (result != SPELL_CAST_OK)
     {
         // if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-        // {
         //     LOG_DEBUG("playerbots", "Spell cast failed. - target name: {}, spellid: {}, bot name: {}, result: {}",
         //         target->GetName(), spellId, bot->GetName(), result);
-        // }
+
         if (HasStrategy("debug spell", BOT_STATE_NON_COMBAT))
         {
             std::ostringstream out;
@@ -3944,10 +3792,9 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget)
     //         spell->cancel();
     //         delete spell;
     //         if (!sPlayerbotAIConfig.logInGroupOnly || (bot->GetGroup() && HasGameClientMaster()))
-    //         {
     //             LOG_DEBUG("playerbots", "Spell cast loot - target name: {}, spellid: {}, bot name: {}",
     //                 target->GetName(), spellId, bot->GetName());
-    //         }
+
     //         return false;
     //     }
     // }
@@ -5718,7 +5565,7 @@ Item* PlayerbotAI::FindStoneFor(Item* weapon) const
         SOLID_SHARPENING_STONE,      HEAVY_SHARPENING_STONE, COARSE_SHARPENING_STONE,    ROUGH_SHARPENING_STONE};
 
     static const std::vector<uint32_t> uPrioritizedWeightStoneIds = {
-        ADAMANTITE_WEIGHTSTONE, FEL_WEIGHTSTONE,    DENSE_WEIGHTSTONE, SOLID_WEIGHTSTONE,
+        ADAMANTITE_WEIGHTSTONE, FEL_WEIGHTSTONE,    ELEMENTAL_SHARPENING_STONE, DENSE_WEIGHTSTONE, SOLID_WEIGHTSTONE,
         HEAVY_WEIGHTSTONE,      COARSE_WEIGHTSTONE, ROUGH_WEIGHTSTONE};
 
     Item* stone = nullptr;

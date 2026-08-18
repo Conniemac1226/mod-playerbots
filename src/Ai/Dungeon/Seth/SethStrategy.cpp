@@ -5,45 +5,25 @@
  */
 
 #include "SethStrategy.h"
-#include "Ai/Dungeon/DungeonAutoPull.h"
 #include "SethMultipliers.h"
 #include "SethTriggers.h"
-#include "strategy/dungeons/tbc/sethekkhalls/SethekkHallsMultipliers.h"
 
 void TbcDungeonSethekkHallsStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
-    DungeonAutoPull::AddDefaultPullTrigger(triggers);
-
     triggers.push_back(new TriggerNode("time-lost controller drops charming totem", {
-        NextAction("time-lost controller mark charming totem with skull", ACTION_RAID),
-        NextAction("continue fight with charmed ally", ACTION_MOVE + 1) }));
-
-    triggers.push_back(new TriggerNode("time lost controller casting totem", {
-        NextAction("interrupt controller", ACTION_INTERRUPT + 1) }));
+        NextAction("time-lost controller mark charming totem with skull", ACTION_RAID) }));
 
     triggers.push_back(new TriggerNode("sethekk prophet casts fear", {
         NextAction("sethekk prophet set tremor totem", ACTION_RAID) }));
 
-    triggers.push_back(new TriggerNode("sethekk anti fear needed", {
-        NextAction("sethekk fear ward tank", ACTION_HIGH + 4) }));
-
-    triggers.push_back(new TriggerNode("sethekk spirit nearby", {
-        NextAction("flee sethekk spirit", ACTION_EMERGENCY + 3) }));
-
     triggers.push_back(new TriggerNode("darkweaver syth boss summons elementals", {
         NextAction("darkweaver syth mark elementals with skull", ACTION_RAID) }));
-
-    triggers.push_back(new TriggerNode("syth no elementals", {
-        NextAction("stack for syth", ACTION_MOVE + 2) }));
 
     triggers.push_back(new TriggerNode("anzu encounter has two phases", {
         NextAction("anzu alternate marks on boss", ACTION_RAID) }));
 
     triggers.push_back(new TriggerNode("anzu bird spirits provide buffs", {
         NextAction("anzu cast heal over time spell on bird spirit", ACTION_HIGH) }));
-
-    triggers.push_back(new TriggerNode("brood of anzu nearby", {
-        NextAction("attack brood of anzu", ACTION_NORMAL + 5) }));
 
     triggers.push_back(new TriggerNode("talon king ikiss boss engaged by tank", {
         NextAction("talon king ikiss tank move boss to pillar position", ACTION_RAID) }));
@@ -64,5 +44,4 @@ void TbcDungeonSethekkHallsStrategy::InitMultipliers(std::vector<Multiplier*>& m
     multipliers.push_back(new AnzuControlSpellCastingWithSpellBombMultiplier(botAI));
     multipliers.push_back(new TalonKingIkissDelayBloodlustAndHeroismMultiplier(botAI));
     multipliers.push_back(new TalonKingIkissControlMovementMultiplier(botAI));
-    multipliers.push_back(new BroodOfAnzuMultiplier(botAI));
 }
