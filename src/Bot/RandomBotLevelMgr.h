@@ -18,6 +18,8 @@
 
 class Player;
 class Group;
+class RandomBotLevelGroupScript;
+class RandomBotLevelCommandScript;
 
 // Owns two ported sub-features: periodic redistribution of random bots across per-faction level
 // brackets, and resetting random bots that reach max level. Config lives in PlayerbotAIConfig;
@@ -40,6 +42,8 @@ public:
     void OnPlayerLogout(Player* player);
 
 private:
+    friend class RandomBotLevelGroupScript;
+    friend class RandomBotLevelCommandScript;
     RandomBotLevelMgr() = default;
     ~RandomBotLevelMgr() = default;
 
@@ -63,7 +67,7 @@ private:
     void ClampAndBalanceBrackets();
     void ApplyBracketWeights(std::vector<LevelBracketConfig>& ranges, std::vector<float> const& weights);
     int GetLevelRangeIndex(uint8 level, TeamId team);
-    void AdjustBotToRange(Player* bot, int targetRangeIndex, TeamId team);
+    bool AdjustBotToRange(Player* bot, int targetRangeIndex, TeamId team);
     void LoadSocialFriendList();
     int GetOrFlagPlayerBracket(Player* player);
     void RunLevelBracketsDistribution();
