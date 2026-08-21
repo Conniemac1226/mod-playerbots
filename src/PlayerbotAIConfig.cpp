@@ -1003,6 +1003,8 @@ void PlayerbotAIConfig::LoadRandomBotLevelConfig()
 
     resetBotLevelIgnoreGuildWithRealPlayers =
         sConfigMgr->GetOption<bool>("AiPlayerbot.ResetBotLevel.IgnoreGuildBotsWithRealPlayers", false);
+    resetBotLevelIgnoreArenaTeamBots =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.ResetBotLevel.IgnoreArenaTeamBots", true);
 
     ParseLevelMgrExcludeNames(sConfigMgr->GetOption<std::string>("AiPlayerbot.ResetBotLevel.ExcludeNames", ""),
         resetBotLevelExcludeNames);

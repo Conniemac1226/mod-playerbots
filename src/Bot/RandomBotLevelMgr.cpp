@@ -191,7 +191,7 @@ void RandomBotLevelMgr::LogStartupSummary() const
         LOG_INFO("playerbots",
             "[RandomBotLevelMgr] Level reset loaded. MaxLevel = {} ({}), ResetToLevel = {}, SkipFromLevel = {} ({}), "
             "SkipToLevel = {}, ResetChance = {}%, ScaledChance = {}, RestrictTimePlayed = {}, "
-            "IgnoreGuildBotsWithRealPlayers = {}, ExcludedNames = {}.",
+            "IgnoreGuildBotsWithRealPlayers = {}, IgnoreArenaTeamBots = {}, ExcludedNames = {}.",
             static_cast<int>(sPlayerbotAIConfig.resetBotLevelMaxLevel),
             sPlayerbotAIConfig.resetBotLevelMaxLevel > 0 ? "Enabled" : "Disabled",
             static_cast<int>(sPlayerbotAIConfig.resetBotLevelResetTo),
@@ -202,6 +202,7 @@ void RandomBotLevelMgr::LogStartupSummary() const
             sPlayerbotAIConfig.resetBotLevelScaledChance ? "Enabled" : "Disabled",
             sPlayerbotAIConfig.resetBotLevelRestrictTimePlayed ? "Enabled" : "Disabled",
             sPlayerbotAIConfig.resetBotLevelIgnoreGuildWithRealPlayers ? "Enabled" : "Disabled",
+            sPlayerbotAIConfig.resetBotLevelIgnoreArenaTeamBots ? "Enabled" : "Disabled",
             sPlayerbotAIConfig.resetBotLevelExcludeNames.empty()
                 ? "None"
                 : std::to_string(sPlayerbotAIConfig.resetBotLevelExcludeNames.size()) + " names");
@@ -1042,6 +1043,17 @@ uint8 RandomBotLevelMgr::ComputeResetChance(uint8 level) const
 // whichever is higher) via a full PlayerbotFactory randomize.
 void RandomBotLevelMgr::ResetBot(Player* player, uint8 currentLevel)
 {
+    // This is the final safety barrier for every reset caller (scheduled, login, and level-up).
+    // Re-check membership immediately before PlayerbotFactory changes the character so a bot that
+    // joined an arena team after being selected cannot have its level, gear, or spells randomized.
+    if (sPlayerbotAIConfig.resetBotLevelIgnoreArenaTeamBots && BotInArenaTeam(player))
+    {
+        LOG_DEBUG("playerbots",
+            "[RandomBotLevelMgr] ResetBot: Skipping arena-team bot '{}'; arena-team character preserved.",
+            player->GetName());
+        return;
+    }
+
     uint8 levelToResetTo = sPlayerbotAIConfig.resetBotLevelResetTo;
 
     uint8 dkMinLevel = static_cast<uint8>(sWorld->getIntConfig(CONFIG_START_HEROIC_PLAYER_LEVEL));
@@ -1065,6 +1077,16 @@ void RandomBotLevelMgr::ResetBot(Player* player, uint8 currentLevel)
 // level, whichever is higher) via a full PlayerbotFactory randomize.
 void RandomBotLevelMgr::SkipBotLevel(Player* player, uint8 currentLevel)
 {
+    // SkipBotLevel also changes the character through PlayerbotFactory, so it must preserve arena
+    // team members under the same reset protection setting.
+    if (sPlayerbotAIConfig.resetBotLevelIgnoreArenaTeamBots && BotInArenaTeam(player))
+    {
+        LOG_DEBUG("playerbots",
+            "[RandomBotLevelMgr] SkipBotLevel: Skipping arena-team bot '{}'; arena-team character preserved.",
+            player->GetName());
+        return;
+    }
+
     uint8 levelToSkipTo = sPlayerbotAIConfig.resetBotLevelSkipTo;
 
     uint8 dkMinLevel = static_cast<uint8>(sWorld->getIntConfig(CONFIG_START_HEROIC_PLAYER_LEVEL));

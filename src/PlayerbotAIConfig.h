@@ -518,6 +518,7 @@ public:
     uint32 resetBotLevelMinTimePlayed;
     uint32 resetBotLevelPlayedTimeCheckFrequency;
     bool resetBotLevelIgnoreGuildWithRealPlayers;
+    bool resetBotLevelIgnoreArenaTeamBots;
     std::vector<std::string> resetBotLevelExcludeNames;
 
 private:
