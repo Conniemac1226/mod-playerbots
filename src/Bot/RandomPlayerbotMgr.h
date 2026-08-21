@@ -7,11 +7,12 @@
 #ifndef PLAYERBOTS_RANDOMPLAYERBOTMGR_H
 #define PLAYERBOTS_RANDOMPLAYERBOTMGR_H
 
+#include "GameTime.h"
 #include "NewRpgInfo.h"
 #include "ObjectGuid.h"
-#include "PlayerbotMgr.h"
-#include "GameTime.h"
 #include "PlayerbotCommandServer.h"
+#include "PlayerbotMgr.h"
+#include <unordered_set>
 
 struct BattlegroundInfo
 {
@@ -177,7 +178,7 @@ protected:
     void OnBotLoginInternal(Player* const bot) override;
 
 private:
-    RandomPlayerbotMgr() : PlayerbotHolder(), processTicks(0)
+    RandomPlayerbotMgr() : PlayerbotHolder()
     {
         this->playersLevel = sPlayerbotAIConfig.randombotStartingLevel;
 
@@ -244,7 +245,6 @@ private:
     uint32 GetZoneLevel(uint16 mapId, float teleX, float teleY, float teleZ);
     typedef void (RandomPlayerbotMgr::*ConsoleCommandHandler)(Player*);
     std::vector<Player*> players;
-    uint32 processTicks;
 
     // std::map<uint32, std::vector<WorldLocation>> rpgLocsCache;
     std::map<uint32, std::map<uint32, std::vector<WorldLocation>>> rpgLocsCacheLevel;
@@ -254,7 +254,6 @@ private:
     bool arenaTeamBotsPreloaded = false;
     bool arenaTeamRepairComplete = false;
     time_t arenaTeamRepairNextAttempt = 0;
-    uint32 bgBotsCount;
     uint32 playersLevel;
 
     // Account lists
