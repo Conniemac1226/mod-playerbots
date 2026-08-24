@@ -18,8 +18,6 @@ public:
         creators["doomwalker nature resistance"] = &RaidOutlandWorldBossActionContext::doomwalker_nature_resistance;
         creators["doomwalker spread for chain lightning"] =
             &RaidOutlandWorldBossActionContext::doomwalker_spread_for_chain_lightning;
-        creators["doomwalker move away from earthquake"] =
-            &RaidOutlandWorldBossActionContext::doomwalker_move_away_from_earthquake;
         creators["doom lord kazzak shadow resistance"] =
             &RaidOutlandWorldBossActionContext::doom_lord_kazzak_shadow_resistance;
         creators["doom lord kazzak move away from mark of kazzak"] =
@@ -37,11 +35,6 @@ private:
     static Action* doomwalker_spread_for_chain_lightning(PlayerbotAI* botAI)
     {
         return new DoomwalkerChainLightningSpreadAction(botAI);
-    }
-
-    static Action* doomwalker_move_away_from_earthquake(PlayerbotAI* botAI)
-    {
-        return new DoomwalkerEarthquakeMoveAwayAction(botAI);
     }
 
     static Action* doom_lord_kazzak_shadow_resistance(PlayerbotAI* botAI)

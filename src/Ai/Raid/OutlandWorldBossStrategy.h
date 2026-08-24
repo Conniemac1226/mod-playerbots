@@ -11,7 +11,6 @@
 
 enum OutlandWorldBossSpells
 {
-    SPELL_DOOMWALKER_EARTHQUAKE = 32686,
     SPELL_DOOMWALKER_CHAIN_LIGHTNING = 33665,
     SPELL_DOOM_LORD_KAZZAK_MARK_OF_KAZZAK = 32960,
     SPELL_DOOM_LORD_KAZZAK_TWISTED_REFLECTION = 21063
@@ -22,17 +21,6 @@ class DoomwalkerChainLightningSpreadAction : public MovementAction
 public:
     DoomwalkerChainLightningSpreadAction(PlayerbotAI* botAI,
                                          std::string const name = "doomwalker spread for chain lightning")
-        : MovementAction(botAI, name) {}
-
-    bool Execute(Event event) override;
-    bool isUseful() override;
-};
-
-class DoomwalkerEarthquakeMoveAwayAction : public MovementAction
-{
-public:
-    DoomwalkerEarthquakeMoveAwayAction(PlayerbotAI* botAI,
-                                       std::string const name = "doomwalker move away from earthquake")
         : MovementAction(botAI, name) {}
 
     bool Execute(Event event) override;
@@ -70,12 +58,13 @@ public:
     bool IsActive() override;
 };
 
-class DoomwalkerEarthquakeTrigger : public Trigger
+class DoomwalkerMeleePositionMultiplier : public Multiplier
 {
 public:
-    DoomwalkerEarthquakeTrigger(PlayerbotAI* botAI) : Trigger(botAI, "doomwalker earthquake") {}
+    DoomwalkerMeleePositionMultiplier(PlayerbotAI* botAI) :
+        Multiplier(botAI, "doomwalker melee position") {}
 
-    bool IsActive() override;
+    float GetValue(Action* action) override;
 };
 
 class DoomLordKazzakMarkOfKazzakTrigger : public Trigger
@@ -121,6 +110,7 @@ public:
     std::string const getName() override { return "doomwalker"; }
 
     void InitTriggers(std::vector<TriggerNode*>& triggers) override;
+    void InitMultipliers(std::vector<Multiplier*>& multipliers) override;
 };
 
 class RaidDoomLordKazzakStrategy : public Strategy
