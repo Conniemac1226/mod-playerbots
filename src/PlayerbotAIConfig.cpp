@@ -842,6 +842,7 @@ void PlayerbotAIConfig::LoadRandomBotLevelConfig()
     levelBracketsIgnoreFriendListed = sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.IgnoreFriendListed", true);
     levelBracketsFlaggedProcessLimit =
         sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.FlaggedProcessLimit", 5);
+    levelBracketsLiteDebug = sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.LiteDebugMode", false);
 
     ParseLevelMgrExcludeNames(sConfigMgr->GetOption<std::string>("AiPlayerbot.LevelBrackets.ExcludeNames", ""),
         levelBracketsExcludeNames);

@@ -10,6 +10,7 @@
 
 #include "RandomBotLevelMgr.h"
 #include "Chat.h"
+#include "CharacterCache.h"
 #include "CommandScript.h"
 #include "DatabaseEnv.h"
 #include "Group.h"
@@ -58,14 +59,16 @@ static bool BotInFriendList(Player* bot, std::vector<uint32> const& socialFriend
         socialFriendsList.end();
 }
 
-// Checks if the given bot is a member of any arena team.
+// Checks if the given bot is a member of any arena team. Use CharacterCache as the authoritative
+// membership source: Player::GetArenaTeamId() reads live unit fields that can remain stale after
+// arena cleanup and caused non-members to be incorrectly protected from bracket redistribution.
 static bool BotInArenaTeam(Player* bot)
 {
     if (!bot)
         return false;
-    for (uint32 slot = 0; slot < MAX_ARENA_SLOT; ++slot)
+    for (uint8 slot = 0; slot < MAX_ARENA_SLOT; ++slot)
     {
-        if (bot->GetArenaTeamId(slot))
+        if (sCharacterCache->GetCharacterArenaTeamIdByGuid(bot->GetGUID(), slot))
             return true;
     }
     return false;
@@ -143,6 +146,22 @@ static bool IsBotSafeForOneTimeCleanup(Player* bot, bool allowRealPlayerGroup)
     return !bot->GetMap() || !bot->GetMap()->IsDungeon();
 }
 
+static std::string BuildLiteBracketSummary(std::vector<LevelBracketConfig> const& ranges,
+    std::vector<int> const& beforeCounts, std::vector<int> const& afterCounts, std::vector<int> const& desiredCounts)
+{
+    std::string summary;
+    for (size_t i = 0; i < ranges.size(); ++i)
+    {
+        if (!summary.empty())
+            summary += ", ";
+
+        summary += "R" + std::to_string(i + 1) + "(" + std::to_string(ranges[i].lower) + "-" +
+            std::to_string(ranges[i].upper) + ")=" + std::to_string(beforeCounts[i]) + "->" +
+            std::to_string(afterCounts[i]) + "/" + std::to_string(desiredCounts[i]);
+    }
+    return summary;
+}
+
 // =============================================================================
 // LEVEL BRACKETS FEATURE
 // =============================================================================
@@ -183,6 +202,10 @@ void RandomBotLevelMgr::LogStartupSummary() const
             LOG_DEBUG("playerbots", "[RandomBotLevelMgr] Horde Range {}: {}-{}, Desired Percentage: {}%", i + 1,
                 _hordeRanges[i].lower, _hordeRanges[i].upper, _hordeRanges[i].pct);
     }
+
+    if (sPlayerbotAIConfig.levelBracketsLiteDebug)
+        LOG_INFO("playerbots.levelbrackets",
+            "[RandomBotLevelMgr] Lite bracket debugging enabled; summaries are written to Playerbots.log only.");
 
     if (!sPlayerbotAIConfig.resetBotLevelEnabled)
         LOG_INFO("playerbots", "[RandomBotLevelMgr] Level reset sub-feature disabled via configuration.");
@@ -700,10 +723,12 @@ void RandomBotLevelMgr::RunLevelBracketsDistribution()
     }
 
     uint32 totalAllianceBots = 0;
+    uint32 allianceArenaTeamSkipped = 0;
     std::vector<int> allianceActualCounts(_numRanges, 0);
     std::vector<std::vector<Player*>> allianceBotsByRange(_numRanges);
 
     uint32 totalHordeBots = 0;
+    uint32 hordeArenaTeamSkipped = 0;
     std::vector<int> hordeActualCounts(_numRanges, 0);
     std::vector<std::vector<Player*>> hordeBotsByRange(_numRanges);
 
@@ -723,7 +748,13 @@ void RandomBotLevelMgr::RunLevelBracketsDistribution()
         if (sPlayerbotAIConfig.levelBracketsIgnoreFriendListed && BotInFriendList(player, _socialFriendsList))
             continue;
         if (sPlayerbotAIConfig.levelBracketsIgnoreArenaTeamBots && BotInArenaTeam(player))
+        {
+            if (player->GetTeamId() == TEAM_ALLIANCE)
+                ++allianceArenaTeamSkipped;
+            else if (player->GetTeamId() == TEAM_HORDE)
+                ++hordeArenaTeamSkipped;
             continue;
+        }
 
         if (player->GetTeamId() == TEAM_ALLIANCE)
         {
@@ -750,12 +781,56 @@ void RandomBotLevelMgr::RunLevelBracketsDistribution()
     LOG_DEBUG("playerbots", "[RandomBotLevelMgr] Total Alliance Bots: {}. Total Horde Bots: {}.",
         totalAllianceBots, totalHordeBots);
 
+    std::vector<int> allianceBeforeCounts = allianceActualCounts;
+    std::vector<int> hordeBeforeCounts = hordeActualCounts;
+    uint32 const pendingBefore = static_cast<uint32>(_pendingLevelResets.size());
+
     ProcessFactionDistribution(TEAM_ALLIANCE, totalAllianceBots, allianceActualCounts, allianceBotsByRange);
     ProcessFactionDistribution(TEAM_HORDE, totalHordeBots, hordeActualCounts, hordeBotsByRange);
 
     LOG_DEBUG("playerbots",
         "[RandomBotLevelMgr] Distribution adjustment complete. Alliance bots: {}, Horde bots: {}.", totalAllianceBots,
         totalHordeBots);
+
+    if (sPlayerbotAIConfig.levelBracketsLiteDebug)
+    {
+        auto calculateDesiredCounts = [this](TeamId team, uint32 totalBots) {
+            std::vector<int> desiredCounts(_numRanges, 0);
+            std::vector<LevelBracketConfig> const& ranges = GetFactionRanges(team);
+            uint32 totalWeight = 0;
+            for (LevelBracketConfig const& range : ranges)
+                totalWeight += range.pct;
+
+            uint64 cumulativeWeight = 0;
+            uint32 assigned = 0;
+            for (uint8 i = 0; i < _numRanges; ++i)
+            {
+                cumulativeWeight += ranges[i].pct;
+                uint32 const cumulativeTarget = totalWeight > 0
+                    ? static_cast<uint32>((cumulativeWeight * totalBots + totalWeight / 2) / totalWeight)
+                    : 0;
+                desiredCounts[i] = cumulativeTarget - assigned;
+                assigned = cumulativeTarget;
+            }
+            return desiredCounts;
+        };
+
+        std::vector<int> const allianceDesiredCounts = calculateDesiredCounts(TEAM_ALLIANCE, totalAllianceBots);
+        std::vector<int> const hordeDesiredCounts = calculateDesiredCounts(TEAM_HORDE, totalHordeBots);
+        uint32 const pendingAfter = static_cast<uint32>(_pendingLevelResets.size());
+        std::string const pendingDelta = pendingAfter >= pendingBefore
+            ? std::string("+") + std::to_string(pendingAfter - pendingBefore)
+            : std::string("-") + std::to_string(pendingBefore - pendingAfter);
+
+        LOG_INFO("playerbots.levelbrackets",
+            "[RandomBotLevelMgr] Distribution: Alliance managed={} arena-skipped={} [{}]; Horde managed={} "
+            "arena-skipped={} [{}]; pending={} ({}). Format is before->after/desired.",
+            totalAllianceBots, allianceArenaTeamSkipped,
+            BuildLiteBracketSummary(_allianceRanges, allianceBeforeCounts, allianceActualCounts, allianceDesiredCounts),
+            totalHordeBots, hordeArenaTeamSkipped,
+            BuildLiteBracketSummary(_hordeRanges, hordeBeforeCounts, hordeActualCounts, hordeDesiredCounts),
+            pendingAfter, pendingDelta);
+    }
 }
 
 // Processes the pending level reset queue, applying up to FlaggedProcessLimit resets per cycle
@@ -852,6 +927,11 @@ void RandomBotLevelMgr::ProcessPendingLevelResets()
         else
             ++it;
     }
+
+    if (sPlayerbotAIConfig.levelBracketsLiteDebug && processed > 0)
+        LOG_INFO("playerbots.levelbrackets",
+            "[RandomBotLevelMgr] Applied {} bracket redistribution changes; {} pending changes remain.", processed,
+            _pendingLevelResets.size());
 }
 
 bool RandomBotLevelMgr::NeedsOneTimeCleanup(Player* bot)

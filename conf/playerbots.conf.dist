@@ -876,6 +876,11 @@ AiPlayerbot.LevelBrackets.CheckFlaggedFrequency = 15
 # Default: 5
 AiPlayerbot.LevelBrackets.FlaggedProcessLimit = 5
 
+# Enable low-volume bracket redistribution summaries. Messages are routed by
+# Logger.playerbots.levelbrackets and do not require global Playerbots debug logging.
+# Default: 0 (disabled)
+AiPlayerbot.LevelBrackets.LiteDebugMode = 0
+
 # When enabled, bots in a guild led by a real (non-bot) player are excluded from bot bracket
 # calculations and will not be level changed or flagged. Backed by the shared PlayerbotGuildMgr
 # guild cache (validated at startup and refreshed hourly), which also covers offline players; a

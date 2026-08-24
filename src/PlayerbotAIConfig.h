@@ -495,6 +495,7 @@ public:
     uint32 levelBracketsCheckFrequency;
     uint32 levelBracketsFlaggedCheckFrequency;
     uint32 levelBracketsFlaggedProcessLimit;
+    bool levelBracketsLiteDebug;
     bool levelBracketsIgnoreGuildWithRealPlayers;
     bool levelBracketsIgnoreArenaTeamBots;
     bool levelBracketsIgnoreFriendListed;
