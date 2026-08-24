@@ -7,7 +7,9 @@
 #include "KaraActions.h"
 #include "KaraHelpers.h"
 #include "KaraChessHelpers.h"
+#include "Config.h"
 #include "Group.h"
+#include "Log.h"
 #include "Playerbots.h"
 #include "PlayerbotTextMgr.h"
 #include "RaidBossHelpers.h"
@@ -15,6 +17,7 @@
 #include "MotionMaster.h"
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <ctime>
 #include <limits>
 #include <unordered_map>
@@ -62,6 +65,7 @@ namespace
         time_t expiresAt = 0;
         uint32 moveSpell = 0;
         ObjectGuid triggerGuid;
+        ObjectGuid tacticalTargetGuid;
         std::string source;
     };
 
@@ -71,7 +75,8 @@ namespace
         uint32 instanceId = 0;
         time_t createdAt = 0;
         time_t expiresAt = 0;
-        bool controlAttempted = false;
+        time_t nextControlAttemptAt = 0;
+        uint8 controlAttempts = 0;
     };
 
     struct ChessAbilityNoOpBackoff
@@ -79,12 +84,29 @@ namespace
         time_t until = 0;
     };
 
+    struct ChessTargetFailureState
+    {
+        ObjectGuid targetGuid;
+        uint8 failedMoves = 0;
+        time_t blockedUntil = 0;
+    };
+
+    struct ChessDiagnosticState
+    {
+        std::string fingerprint;
+        uint32 lastLoggedMs = 0;
+    };
+
     std::unordered_map<ObjectGuid, ObjectGuid> chessLastFailedMoveTriggerByPiece;
     std::unordered_map<ObjectGuid, time_t> chessLastFailedMoveTimeByPiece;
+    std::unordered_map<ObjectGuid, std::unordered_map<ObjectGuid, time_t>> chessFailedMoveTriggerUntilByPiece;
     std::unordered_map<ObjectGuid, time_t> chessLastMoveCommandByPiece;
     std::unordered_map<ObjectGuid, time_t> chessLastAbilityCommandByPiece;
     std::unordered_map<ObjectGuid, uint32> chessLastAnyCommandMsByPiece;
     std::unordered_map<ObjectGuid, ObjectGuid> chessOffensiveTargetByPiece;
+    std::unordered_map<ObjectGuid, ObjectGuid> chessSupportTargetByPiece;
+    std::unordered_map<ObjectGuid, ChessTargetFailureState> chessTargetFailureByPiece;
+    std::unordered_map<ObjectGuid, ChessDiagnosticState> chessDiagnosticByPiece;
     std::unordered_map<ObjectGuid, ChessSquare> chessLastEnemyKingSquareByBot;
     std::unordered_map<uint32, time_t> chessEventStartByInstance;
     std::unordered_map<ObjectGuid, ChessSquare> chessLastSquareByPiece;
@@ -119,6 +141,9 @@ namespace
     std::unordered_map<ObjectGuid, time_t> chessPoisonCloudLastAppliedByTarget;
     std::unordered_map<ObjectGuid, ChessBoardState> chessBoardCacheByBot;
     constexpr uint32 ChessBoardCacheTtlMs = 250;
+    constexpr uint32 SpellChangeFacing = 30284;
+    constexpr float ChessAutomaticMeleeRange = 10.0f;
+    constexpr float ChessConeAngle = static_cast<float>(M_PI) / 3.0f;
 
     enum class ChessPhase : uint8
     {
@@ -152,11 +177,34 @@ namespace
     static bool IsKingEntry(uint32 e);
     static bool IsSummonedDaemonChessPiece(uint32 entry);
     static bool IsOrcWarlockChessPiece(uint32 entry);
-    static bool IsShortRangeChessAoePiece(uint32 entry);
     static void PurgeChessPieceCacheForGuid(Player* bot, ObjectGuid const& pieceGuid, std::string const& source);
 
     static bool IsInsideBoard(ChessBoardState const& b, int row, int col);
     static bool WorldToChessSquare(ChessBoardState const& s, float x, float y, int& row, int& col);
+    static Position ChessSquareToWorld(ChessBoardState const& s, int row, int col, float z);
+
+    static bool IsChessDiagnosticsEnabled()
+    {
+        return sConfigMgr->GetOption<bool>("AiPlayerbot.KarazhanChess.Diagnostics", false);
+    }
+
+    static void LogChessDecision(Player* bot, Creature* piece, std::string const& decision,
+        std::string const& details, bool force = false)
+    {
+        if (!IsChessDiagnosticsEnabled() || !bot || !piece)
+            return;
+
+        uint32 const nowMs = getMSTime();
+        std::string const fingerprint = decision + ":" + details;
+        ChessDiagnosticState& state = chessDiagnosticByPiece[piece->GetGUID()];
+        if (!force && state.fingerprint == fingerprint && (nowMs - state.lastLoggedMs) < 10000)
+            return;
+
+        state.fingerprint = fingerprint;
+        state.lastLoggedMs = nowMs;
+        LOG_INFO("playerbots.chess", "bot={} piece={} guid={} decision={} {}", bot->GetName(), piece->GetName(),
+            piece->GetGUID().ToString().c_str(), decision, details);
+    }
 
     static void MarkOpeningProgressConfirmed(uint32 instanceId, Player* bot, Creature* piece, ChessSquare const& from, ChessSquare const& to, std::string const& source)
     {
@@ -251,16 +299,26 @@ namespace
     {
         switch (spellId)
         {
-            case 37406: // Heroic Blow
-            case 37413: // Vicious Strike
             case 37427: // Geyser
             case 37428: // Hellfire
+            case 37474: // Sweep
+            case 37476: // Cleave
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    static bool IsConeOffensiveChessSpell(uint32 spellId)
+    {
+        switch (spellId)
+        {
+            case 37406: // Heroic Blow
+            case 37413: // Vicious Strike
             case 37453: // Smash
             case 37454: // Bite
             case 37459: // Holy Lance
             case 37461: // Shadow Spear
-            case 37474: // Sweep
-            case 37476: // Cleave
             case 37498: // Stomp
             case 37502: // Howl
                 return true;
@@ -269,16 +327,73 @@ namespace
         }
     }
 
-    static float GetCasterCenteredChessSpellRadius(uint32 spellId)
+    static bool IsTargetAreaOffensiveChessSpell(uint32 spellId)
+    {
+        return spellId == 37465 || spellId == 37469; // Rain of Fire / Poison Cloud
+    }
+
+    static char const* GetChessSpellShapeLabel(uint32 spellId)
+    {
+        if (IsConeOffensiveChessSpell(spellId))
+            return "cone";
+        if (IsCasterCenteredOffensiveChessSpell(spellId))
+            return "caster-area";
+        if (IsTargetAreaOffensiveChessSpell(spellId))
+            return "target-area";
+        return "direct";
+    }
+
+    static bool IsChessSelfUtilitySpell(uint32 spellId)
     {
         switch (spellId)
         {
-            case 37427: // Geyser
-            case 37428: // Hellfire
-                return 10.0f;
+            case 37414: // Shield Block
+            case 37416: // Weapon Deflection
+            case 37432: // Water Shield
+            case 37434: // Fire Shield
+            case 37471: // Heroism
+            case 37472: // Bloodlust
+                return true;
             default:
-                return 8.0f;
+                return false;
         }
+    }
+
+    static float GetChessSpellEffectRadius(Creature* piece, uint32 spellId)
+    {
+        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
+        if (!spellInfo)
+            return 0.0f;
+
+        float radius = 0.0f;
+        for (uint8 effect = 0; effect < MAX_SPELL_EFFECTS; ++effect)
+            radius = std::max(radius, spellInfo->Effects[effect].CalcRadius(piece));
+        return radius;
+    }
+
+    static float GetChessOffensiveSpellRange(Creature* piece, uint32 spellId)
+    {
+        if (!piece)
+            return 0.0f;
+
+        if (IsConeOffensiveChessSpell(spellId) || IsCasterCenteredOffensiveChessSpell(spellId))
+            return GetChessSpellEffectRadius(piece, spellId);
+
+        if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId))
+            return spellInfo->GetMaxRange(false, piece);
+
+        return 0.0f;
+    }
+
+    static float GetChessSpellMinRange(Creature* piece, uint32 spellId, bool positive = false)
+    {
+        if (!piece || IsConeOffensiveChessSpell(spellId) || IsCasterCenteredOffensiveChessSpell(spellId))
+            return 0.0f;
+
+        if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId))
+            return spellInfo->GetMinRange(positive);
+
+        return 0.0f;
     }
 
     static bool CompleteChessSpellCast(Creature* piece, uint32 spellId, SpellCastResult result)
@@ -304,7 +419,7 @@ namespace
         if (!piece || !spellId || piece->HasSpellCooldown(spellId))
             return false;
 
-        if (IsCasterCenteredOffensiveChessSpell(spellId))
+        if (IsCasterCenteredOffensiveChessSpell(spellId) || IsConeOffensiveChessSpell(spellId))
             return CastChessSpell(piece, piece, spellId);
 
         return target && CastChessSpell(piece, target, spellId);
@@ -789,6 +904,8 @@ namespace
     {
         return reason.rfind("no_active_board_target", 0) == 0 ||
                reason == "out_of_range" ||
+               reason == "target_temporarily_unreachable" ||
+               reason == "no_reachable_attack_square" ||
                reason == "no_enemy_candidate" ||
                reason == "no_valid_candidate";
     }
@@ -837,6 +954,7 @@ namespace
 
         bool sawFriendly = false;
         bool sawDamaged = false;
+        float bestScore = -std::numeric_limits<float>::max();
         for (auto const& boardEntry : board.pieceSquare)
         {
             Creature* candidate = ObjectAccessor::GetCreature(*piece, boardEntry.first);
@@ -852,29 +970,109 @@ namespace
             uint32 const missingHealth = candidate->GetMaxHealth() - candidate->GetHealth();
             float const hpPct = candidate->GetHealthPct();
             float const distance = piece->GetExactDist2d(candidate);
-            if (missingHealth <= 5000)
+            if (missingHealth < 3000 && hpPct > 90.0f)
                 continue;
 
             sawDamaged = true;
-            if (distance > 25.0f)
+            auto failureIt = chessTargetFailureByPiece.find(piece->GetGUID());
+            if (failureIt != chessTargetFailureByPiece.end() &&
+                failureIt->second.targetGuid == candidate->GetGUID() &&
+                std::time(nullptr) < failureIt->second.blockedUntil)
                 continue;
 
-            uint32 const selectedMissingHealth = selection.target ?
-                selection.target->GetMaxHealth() - selection.target->GetHealth() : 0;
-            if (!selection.target || missingHealth > selectedMissingHealth ||
-                (missingHealth == selectedMissingHealth && distance < selection.distance))
+            float score = static_cast<float>(missingHealth) + (100.0f - hpPct) * 500.0f - distance * 20.0f;
+            if (IsKingChessPieceEntry(candidate->GetEntry()))
+                score += 15000.0f;
+
+            auto persistent = chessSupportTargetByPiece.find(piece->GetGUID());
+            if (persistent != chessSupportTargetByPiece.end() && persistent->second == candidate->GetGUID())
+                score += 5000.0f;
+
+            if (!selection.target || score > bestScore ||
+                (score == bestScore && candidate->GetGUID() < selection.target->GetGUID()))
             {
                 selection.target = candidate;
                 selection.healthPct = hpPct;
                 selection.distance = distance;
                 selection.rejectReason = "none";
+                bestScore = score;
             }
         }
 
         if (!selection.target)
-            selection.rejectReason = sawDamaged ? "no_castable_support_target" : (sawFriendly ? "no_damaged_friendly" : "no_friendly_active_board_piece");
+        {
+            chessSupportTargetByPiece.erase(piece->GetGUID());
+            selection.rejectReason = sawDamaged ? "no_valid_support_target" :
+                (sawFriendly ? "no_damaged_friendly" : "no_friendly_active_board_piece");
+        }
+        else
+            chessSupportTargetByPiece[piece->GetGUID()] = selection.target->GetGUID();
 
         return selection;
+    }
+
+    static int GetChessPieceMoveDelta(uint32 entry)
+    {
+        if (entry == NPC_QUEEN_A || entry == NPC_QUEEN_H)
+            return 3;
+        if (entry == NPC_KNIGHT_A || entry == NPC_KNIGHT_H)
+            return 2;
+        return 1;
+    }
+
+    static bool HasReachableChessAttackSquare(Creature* piece, Creature* target, ChessBoardState const& board)
+    {
+        if (!piece || !target)
+            return false;
+
+        auto startIt = board.pieceSquare.find(piece->GetGUID());
+        if (startIt == board.pieceSquare.end())
+            return false;
+
+        std::vector<ChessSquare> pending{ startIt->second };
+        std::set<std::pair<int, int>> visited{ { startIt->second.row, startIt->second.col } };
+        int const maxDelta = GetChessPieceMoveDelta(piece->GetEntry());
+        std::vector<uint32> const offensiveSpells = GetLikelyOffensiveChessSpells(piece);
+        for (size_t index = 0; index < pending.size(); ++index)
+        {
+            ChessSquare const square = pending[index];
+            Position const position = ChessSquareToWorld(board, square.row, square.col, piece->GetPositionZ());
+            float const dx = position.GetPositionX() - target->GetPositionX();
+            float const dy = position.GetPositionY() - target->GetPositionY();
+            float const distance = std::sqrt(dx * dx + dy * dy);
+            if (distance <= ChessAutomaticMeleeRange)
+                return true;
+
+            for (uint32 spellId : offensiveSpells)
+            {
+                float const maxRange = GetChessOffensiveSpellRange(piece, spellId);
+                float const minRange = GetChessSpellMinRange(piece, spellId);
+                if (distance >= minRange && (maxRange <= 0.0f || distance <= maxRange))
+                    return true;
+            }
+
+            for (int rowDelta = -maxDelta; rowDelta <= maxDelta; ++rowDelta)
+            {
+                for (int colDelta = -maxDelta; colDelta <= maxDelta; ++colDelta)
+                {
+                    if (!rowDelta && !colDelta)
+                        continue;
+
+                    int const row = square.row + rowDelta;
+                    int const col = square.col + colDelta;
+                    std::pair<int, int> const destination{ row, col };
+                    if (!IsInsideBoard(board, row, col) || visited.find(destination) != visited.end())
+                        continue;
+                    if (board.occupied.find(destination) != board.occupied.end())
+                        continue;
+
+                    visited.insert(destination);
+                    pending.push_back(ChessSquare{ row, col });
+                }
+            }
+        }
+
+        return false;
     }
 
     static ChessOffensiveTargetSelection SelectNonKingChessTarget(PlayerbotAI* botAI, Player* bot, Creature* piece, ChessBoardState const& board, char const* source)
@@ -886,17 +1084,19 @@ namespace
             return selection;
         }
 
-        constexpr float maxTargetRange = 30.0f;
-        Creature* bestSupport = nullptr;
-        Creature* bestDamage = nullptr;
-        Creature* bestPawn = nullptr;
-        float bestSupportDistance = std::numeric_limits<float>::max();
-        float bestDamageDistance = std::numeric_limits<float>::max();
-        float bestPawnDistance = std::numeric_limits<float>::max();
+        (void)source;
+        auto pieceSquareIt = board.pieceSquare.find(piece->GetGUID());
+        if (pieceSquareIt == board.pieceSquare.end())
+        {
+            selection.rejectReason = "piece_missing_from_board";
+            return selection;
+        }
+
+        float bestScore = -std::numeric_limits<float>::max();
         bool sawEnemy = false;
-        bool sawInRange = false;
-        bool sawOutOfRange = false;
         bool sawInactive = false;
+        bool sawTemporarilyBlocked = false;
+        bool sawUnreachable = false;
         std::string lastInactiveReason = "none";
 
         for (Creature* candidate : GetNearbyChessPieces(botAI, bot, false))
@@ -923,76 +1123,51 @@ namespace
 
             sawEnemy = true;
             float const distance = piece->GetExactDist2d(candidate);
-            if (distance > maxTargetRange)
+            auto failureIt = chessTargetFailureByPiece.find(piece->GetGUID());
+            if (failureIt != chessTargetFailureByPiece.end() &&
+                failureIt->second.targetGuid == candidate->GetGUID() &&
+                std::time(nullptr) < failureIt->second.blockedUntil)
             {
-                sawOutOfRange = true;
+                sawTemporarilyBlocked = true;
                 continue;
             }
 
-            sawInRange = true;
-
-            if (IsHealerChessPieceEntry(candidate->GetEntry()))
+            if (!HasReachableChessAttackSquare(piece, candidate, board))
             {
-                if (!bestSupport || distance < bestSupportDistance)
-                {
-                    bestSupport = candidate;
-                    bestSupportDistance = distance;
-                }
+                sawUnreachable = true;
                 continue;
             }
 
-            if (IsDamageChessPieceEntry(candidate->GetEntry()))
-            {
-                if (!bestDamage || distance < bestDamageDistance)
-                {
-                    bestDamage = candidate;
-                    bestDamageDistance = distance;
-                }
-                continue;
-            }
+            int const gridDistance = std::max(
+                std::abs(targetSquare.row - pieceSquareIt->second.row),
+                std::abs(targetSquare.col - pieceSquareIt->second.col));
+            float score = IsHealerChessPieceEntry(candidate->GetEntry()) ? 30000.0f :
+                (IsPawnEntry(candidate->GetEntry()) ? 10000.0f : 20000.0f);
+            score += (100.0f - candidate->GetHealthPct()) * 30.0f;
+            score -= static_cast<float>(gridDistance) * 250.0f;
+            score -= distance * 5.0f;
 
-            if (IsPawnEntry(candidate->GetEntry()))
+            if (!selection.target || score > bestScore ||
+                (score == bestScore && candidate->GetGUID() < selection.target->GetGUID()))
             {
-                if (!bestPawn || distance < bestPawnDistance)
-                {
-                    bestPawn = candidate;
-                    bestPawnDistance = distance;
-                }
-                continue;
+                bestScore = score;
+                selection.target = candidate;
+                selection.category = IsHealerChessPieceEntry(candidate->GetEntry()) ? "support" :
+                    (IsPawnEntry(candidate->GetEntry()) ? "pawn" : "damage");
+                selection.distance = distance;
+                selection.rejectReason = "none";
             }
         }
 
-        if (bestSupport)
-        {
-            selection.target = bestSupport;
-            selection.category = "support";
-            selection.distance = bestSupportDistance;
-            selection.rejectReason = "none";
+        if (selection.target)
             return selection;
-        }
-
-        if (bestDamage)
-        {
-            selection.target = bestDamage;
-            selection.category = "damage";
-            selection.distance = bestDamageDistance;
-            selection.rejectReason = "none";
-            return selection;
-        }
-
-        if (bestPawn)
-        {
-            selection.target = bestPawn;
-            selection.category = "pawn";
-            selection.distance = bestPawnDistance;
-            selection.rejectReason = "none";
-            return selection;
-        }
 
         if (!sawEnemy)
             selection.rejectReason = "no_enemy_candidate";
-        else if (sawOutOfRange && !sawInRange)
-            selection.rejectReason = "out_of_range";
+        else if (sawTemporarilyBlocked)
+            selection.rejectReason = "target_temporarily_unreachable";
+        else if (sawUnreachable)
+            selection.rejectReason = "no_reachable_attack_square";
         else if (sawInactive)
             selection.rejectReason = "no_active_board_target:" + lastInactiveReason;
         else
@@ -1015,167 +1190,30 @@ namespace
         return entry == NPC_QUEEN_H;
     }
 
-    static bool IsShortRangeChessAoePiece(uint32 entry)
-    {
-        return entry == NPC_ROOK_A || entry == NPC_ROOK_H;
-    }
-
-    static bool IsRangedChessDamagePiece(uint32 entry)
-    {
-        return entry == NPC_QUEEN_A || entry == NPC_QUEEN_H;
-    }
-
-    static float GetReadyChessAttackRange(Creature* piece)
-    {
-        if (!piece)
-            return 0.0f;
-
-        float bestRange = 0.0f;
-        for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
-        {
-            uint32 const spellId = piece->m_spells[i];
-            if (!spellId || piece->HasSpellCooldown(spellId))
-                continue;
-
-            std::string rejectReason;
-            if (!IsKingAttackOffensiveChessSpell(spellId, rejectReason))
-                continue;
-
-            if (IsCasterCenteredOffensiveChessSpell(spellId))
-                bestRange = std::max(bestRange, GetCasterCenteredChessSpellRadius(spellId));
-            else if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId))
-                bestRange = std::max(bestRange, spellInfo->GetMaxRange(false));
-        }
-
-        return bestRange;
-    }
-
     static bool IsChessSpellTargetInRange(Creature* piece, Unit* target, uint32 spellId)
     {
         if (!piece || !target)
             return false;
 
-        if (IsCasterCenteredOffensiveChessSpell(spellId))
-            return piece->GetExactDist2d(target) <= GetCasterCenteredChessSpellRadius(spellId);
-
-        SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId);
         bool const positive = spellId == 37455 || spellId == 37456;
-        float const maxRange = spellInfo ? spellInfo->GetMaxRange(positive) : 0.0f;
-        return maxRange <= 0.0f || piece->GetExactDist2d(target) <= maxRange;
-    }
-
-    static ChessOffensiveTargetSelection SelectSummonedDaemonChessTarget(PlayerbotAI* botAI, Player* bot, Creature* piece, ChessBoardState const& board, char const* source)
-    {
-        ChessOffensiveTargetSelection selection;
-        if (!botAI || !bot || !piece)
+        float maxRange = 0.0f;
+        float minRange = 0.0f;
+        if (IsExplicitOffensiveChessSpell(spellId))
         {
-            selection.rejectReason = "invalid_context";
-            return selection;
+            maxRange = GetChessOffensiveSpellRange(piece, spellId);
+            minRange = GetChessSpellMinRange(piece, spellId, false);
+        }
+        else if (SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(spellId))
+        {
+            maxRange = spellInfo->GetMaxRange(positive, piece);
+            minRange = spellInfo->GetMinRange(positive);
         }
 
-        Creature* bestSupport = nullptr;
-        Creature* bestDamage = nullptr;
-        Creature* bestPawn = nullptr;
-        float bestSupportDistance = std::numeric_limits<float>::max();
-        float bestDamageDistance = std::numeric_limits<float>::max();
-        float bestPawnDistance = std::numeric_limits<float>::max();
-        bool sawEnemy = false;
-        bool sawInactive = false;
-        std::string lastInactiveReason = "none";
+        float const distance = piece->GetExactDist2d(target);
+        if (distance < minRange || (maxRange > 0.0f && distance > maxRange))
+            return false;
 
-        for (Creature* candidate : GetNearbyChessPieces(botAI, bot, false))
-        {
-            if (!candidate)
-                continue;
-
-            if (IsKingChessPieceEntry(candidate->GetEntry()))
-                continue;
-
-            ChessSquare targetSquare;
-            bool targetActiveBoardPiece = false;
-            std::string activeRejectReason;
-            if (!IsActiveBoardEnemyChessPiece(bot, board, candidate, false, targetSquare, targetActiveBoardPiece, activeRejectReason))
-            {
-                if (candidate && candidate->IsInWorld() && candidate->IsAlive() && IsChessPieceEntry(candidate->GetEntry()) && IsEnemyChessPieceForBot(bot, candidate))
-                {
-                    sawEnemy = true;
-                    sawInactive = true;
-                    lastInactiveReason = activeRejectReason;
-                }
-                continue;
-            }
-
-            sawEnemy = true;
-
-            float const distance = piece->GetExactDist2d(candidate);
-            if (IsHealerChessPieceEntry(candidate->GetEntry()))
-            {
-                if (!bestSupport || distance < bestSupportDistance)
-                {
-                    bestSupport = candidate;
-                    bestSupportDistance = distance;
-                }
-                continue;
-            }
-
-            if (IsDamageChessPieceEntry(candidate->GetEntry()))
-            {
-                if (!bestDamage || distance < bestDamageDistance)
-                {
-                    bestDamage = candidate;
-                    bestDamageDistance = distance;
-                }
-                continue;
-            }
-
-            if (IsPawnEntry(candidate->GetEntry()))
-            {
-                if (!bestPawn || distance < bestPawnDistance)
-                {
-                    bestPawn = candidate;
-                    bestPawnDistance = distance;
-                }
-                continue;
-            }
-        }
-
-        if (bestSupport)
-        {
-            selection.target = bestSupport;
-            selection.category = "support";
-            selection.distance = bestSupportDistance;
-            selection.rejectReason = "none";
-            return selection;
-        }
-
-        if (bestDamage)
-        {
-            selection.target = bestDamage;
-            selection.category = "damage";
-            selection.distance = bestDamageDistance;
-            selection.rejectReason = "none";
-            return selection;
-        }
-
-        if (bestPawn)
-        {
-            selection.target = bestPawn;
-            selection.category = "pawn";
-            selection.distance = bestPawnDistance;
-            selection.rejectReason = "none";
-            return selection;
-        }
-
-        if (sawInactive)
-            selection.rejectReason = "no_active_board_target:" + lastInactiveReason;
-        else
-            selection.rejectReason = sawEnemy ? "no_valid_candidate" : "no_enemy_candidate";
-
-        if (!selection.target && sawInactive)
-        {
-        }
-
-        return selection;
+        return !IsConeOffensiveChessSpell(spellId) || piece->HasInArc(ChessConeAngle, target);
     }
 
     static ChessOffensiveTargetSelection SelectPersistentChessTarget(
@@ -1197,7 +1235,7 @@ namespace
             std::string rejectReason;
             if (IsActiveBoardEnemyChessPiece(
                     bot, board, target, false, targetSquare, targetActiveBoardPiece, rejectReason) &&
-                piece->GetExactDist2d(target) <= 35.0f)
+                HasReachableChessAttackSquare(piece, target, board))
             {
                 selection.target = target;
                 selection.category = IsHealerChessPieceEntry(target->GetEntry()) ? "support" :
@@ -1207,14 +1245,28 @@ namespace
                 return selection;
             }
 
+            if (rejectReason == "none")
+                rejectReason = "no_reachable_attack_square";
+
+            LogChessDecision(bot, piece, "target-reacquire",
+                "source=" + std::string(source) + " old_target=" + targetIt->second.ToString() +
+                " reason=" + rejectReason, true);
             chessOffensiveTargetByPiece.erase(targetIt);
         }
 
-        selection = IsShortRangeChessAoePiece(piece->GetEntry())
-            ? SelectSummonedDaemonChessTarget(botAI, bot, piece, board, source)
-            : SelectNonKingChessTarget(botAI, bot, piece, board, source);
+        selection = SelectNonKingChessTarget(botAI, bot, piece, board, source);
         if (selection.target)
+        {
             chessOffensiveTargetByPiece[piece->GetGUID()] = selection.target->GetGUID();
+            auto pieceSquare = board.pieceSquare.find(piece->GetGUID());
+            auto targetSquare = board.pieceSquare.find(selection.target->GetGUID());
+            LogChessDecision(bot, piece, "target-acquired",
+                "source=" + std::string(source) + " target=" + selection.target->GetName() + " target_guid=" +
+                selection.target->GetGUID().ToString() + " category=" + selection.category + " piece_square=" +
+                (pieceSquare != board.pieceSquare.end() ? ChessSquareToString(pieceSquare->second) : "unknown") +
+                " target_square=" + (targetSquare != board.pieceSquare.end() ?
+                ChessSquareToString(targetSquare->second) : "unknown"), true);
+        }
 
         return selection;
     }
@@ -1226,10 +1278,14 @@ namespace
         chessLastMoveToSquareByPiece.erase(pieceGuid);
         chessLastFailedMoveTriggerByPiece.erase(pieceGuid);
         chessLastFailedMoveTimeByPiece.erase(pieceGuid);
+        chessFailedMoveTriggerUntilByPiece.erase(pieceGuid);
         chessLastMoveCommandByPiece.erase(pieceGuid);
         chessLastAbilityCommandByPiece.erase(pieceGuid);
         chessLastAnyCommandMsByPiece.erase(pieceGuid);
         chessOffensiveTargetByPiece.erase(pieceGuid);
+        chessSupportTargetByPiece.erase(pieceGuid);
+        chessTargetFailureByPiece.erase(pieceGuid);
+        chessDiagnosticByPiece.erase(pieceGuid);
         chessMovementCooldownUntilByPiece.erase(pieceGuid);
         chessOpeningMoveRetryUntilByPiece.erase(pieceGuid);
         chessReclaimSuppressedUntilByPiece.erase(pieceGuid);
@@ -1267,10 +1323,14 @@ namespace
         collectPieceGuid(chessPendingMoveByPiece);
         collectPieceGuid(chessLastFailedMoveTriggerByPiece);
         collectPieceGuid(chessLastFailedMoveTimeByPiece);
+        collectPieceGuid(chessFailedMoveTriggerUntilByPiece);
         collectPieceGuid(chessLastMoveCommandByPiece);
         collectPieceGuid(chessLastAbilityCommandByPiece);
         collectPieceGuid(chessLastAnyCommandMsByPiece);
         collectPieceGuid(chessOffensiveTargetByPiece);
+        collectPieceGuid(chessSupportTargetByPiece);
+        collectPieceGuid(chessTargetFailureByPiece);
+        collectPieceGuid(chessDiagnosticByPiece);
         collectPieceGuid(chessMovementCooldownUntilByPiece);
         collectPieceGuid(chessOpeningMoveRetryUntilByPiece);
         collectPieceGuid(chessReclaimSuppressedUntilByPiece);
@@ -1435,8 +1495,24 @@ namespace
         pending.instanceId = instanceId;
         pending.createdAt = now;
         pending.expiresAt = now + seconds;
-        pending.controlAttempted = false;
+        pending.nextControlAttemptAt = now;
+        pending.controlAttempts = 0;
         chessPendingClaimByBot[bot->GetGUID()] = pending;
+    }
+
+    static bool TryPendingChessClaimControl(Player* bot, Creature* piece, ChessPendingClaim& pending, time_t now)
+    {
+        if (!bot || !piece || pending.pieceGuid != piece->GetGUID() || now < pending.nextControlAttemptAt)
+            return false;
+
+        SpellCastResult const result = bot->CastSpell(piece, SPELL_CONTROL_PIECE, true);
+        if (pending.controlAttempts < std::numeric_limits<uint8>::max())
+            ++pending.controlAttempts;
+        pending.nextControlAttemptAt = now + (result == SPELL_CAST_OK ? 3 : 2);
+        LogChessDecision(bot, piece, "piece-control-attempt", "attempt=" +
+            std::to_string(pending.controlAttempts) + " result=" +
+            std::to_string(static_cast<uint32>(result)));
+        return result == SPELL_CAST_OK;
     }
 
     static void SuppressReclaimForPiece(ObjectGuid const& pieceGuid, time_t now, time_t seconds = 20)
@@ -1498,9 +1574,34 @@ namespace
         EXPIRED
     };
 
+    static void RegisterChessTargetFailure(Player* bot, Creature* piece, ObjectGuid const& targetGuid,
+        time_t now, std::string const& reason)
+    {
+        if (!piece || !targetGuid)
+            return;
+
+        ChessTargetFailureState& failure = chessTargetFailureByPiece[piece->GetGUID()];
+        if (failure.targetGuid != targetGuid)
+        {
+            failure.targetGuid = targetGuid;
+            failure.failedMoves = 0;
+        }
+        ++failure.failedMoves;
+        if (failure.failedMoves >= 2)
+        {
+            failure.blockedUntil = now + 15;
+            chessOffensiveTargetByPiece.erase(piece->GetGUID());
+            chessSupportTargetByPiece.erase(piece->GetGUID());
+        }
+        LogChessDecision(bot, piece, "target-progress-failed", "target_guid=" + targetGuid.ToString() +
+            " reason=" + reason + " failures=" + std::to_string(failure.failedMoves) + " target_blocked=" +
+            (failure.blockedUntil > now ? "1" : "0"), true);
+    }
+
     static void RecordPendingChessMove(
         Player* bot, Creature* piece, uint32 instanceId, ChessSquare const& from, ChessSquare const& to,
-        uint32 moveSpell, ObjectGuid const& triggerGuid, std::string const& source, time_t now, time_t expiresIn = 5)
+        uint32 moveSpell, ObjectGuid const& triggerGuid, std::string const& source, time_t now, time_t expiresIn = 5,
+        ObjectGuid const& tacticalTargetGuid = ObjectGuid::Empty)
     {
         if (!piece)
             return;
@@ -1513,10 +1614,63 @@ namespace
         pending.expiresAt = now + expiresIn;
         pending.moveSpell = moveSpell;
         pending.triggerGuid = triggerGuid;
+        pending.tacticalTargetGuid = tacticalTargetGuid;
         pending.source = source;
         chessPendingMoveByPiece[piece->GetGUID()] = pending;
         chessOpeningMoveRetryUntilByPiece[piece->GetGUID()] = pending.expiresAt;
+        chessLastMoveCommandByPiece[piece->GetGUID()] = now;
+        chessLastAnyCommandMsByPiece[piece->GetGUID()] = getMSTime();
 
+    }
+
+    static bool HasPendingChessMove(ObjectGuid const& pieceGuid, time_t now)
+    {
+        auto it = chessPendingMoveByPiece.find(pieceGuid);
+        return it != chessPendingMoveByPiece.end() && now < it->second.expiresAt;
+    }
+
+    static bool IsChessDestinationReserved(uint32 instanceId, ChessSquare const& square, time_t now,
+        ObjectGuid const& movingPieceGuid, ObjectGuid& reservedBy)
+    {
+        reservedBy = ObjectGuid::Empty;
+        for (auto const& entry : chessPendingMoveByPiece)
+        {
+            ChessPendingMove const& pending = entry.second;
+            if (entry.first == movingPieceGuid || pending.instanceId != instanceId || now >= pending.expiresAt)
+                continue;
+            if (pending.toSquare.row != square.row || pending.toSquare.col != square.col)
+                continue;
+
+            reservedBy = entry.first;
+            return true;
+        }
+
+        return false;
+    }
+
+    static void BackoffChessMoveTrigger(ObjectGuid const& pieceGuid, ObjectGuid const& triggerGuid,
+        time_t now, time_t seconds = 10)
+    {
+        if (pieceGuid && triggerGuid)
+            chessFailedMoveTriggerUntilByPiece[pieceGuid][triggerGuid] = now + seconds;
+    }
+
+    static bool IsChessMoveTriggerBackedOff(ObjectGuid const& pieceGuid, ObjectGuid const& triggerGuid, time_t now)
+    {
+        auto pieceIt = chessFailedMoveTriggerUntilByPiece.find(pieceGuid);
+        if (pieceIt == chessFailedMoveTriggerUntilByPiece.end())
+            return false;
+
+        auto triggerIt = pieceIt->second.find(triggerGuid);
+        if (triggerIt == pieceIt->second.end())
+            return false;
+        if (now < triggerIt->second)
+            return true;
+
+        pieceIt->second.erase(triggerIt);
+        if (pieceIt->second.empty())
+            chessFailedMoveTriggerUntilByPiece.erase(pieceIt);
+        return false;
     }
 
     static ChessPendingMoveResult TryResolvePendingChessMove(
@@ -1536,7 +1690,17 @@ namespace
             chessPendingMoveByPiece.erase(it);
             chessLastFailedMoveTriggerByPiece[piece->GetGUID()] = pending.triggerGuid;
             chessLastFailedMoveTimeByPiece[piece->GetGUID()] = now;
+            BackoffChessMoveTrigger(piece->GetGUID(), pending.triggerGuid, now);
             chessOpeningMoveRetryUntilByPiece[piece->GetGUID()] = now + 5;
+            auto squareIt = board.pieceSquare.find(piece->GetGUID());
+            std::string const actualSquare = squareIt != board.pieceSquare.end() ?
+                ChessSquareToString(squareIt->second) : "unknown";
+            LogChessDecision(bot, piece, "move-expired", "from=" + ChessSquareToString(pending.fromSquare) +
+                " requested=" + ChessSquareToString(pending.toSquare) + " actual=" + actualSquare +
+                " source=" + pending.source + " reason=destination_not_reached", true);
+            if (pending.tacticalTargetGuid)
+                RegisterChessTargetFailure(bot, piece, pending.tacticalTargetGuid, now,
+                    "move_expired_" + pending.source);
             return ChessPendingMoveResult::EXPIRED;
         }
 
@@ -1544,29 +1708,48 @@ namespace
         bool const squareMatch = sqIt != board.pieceSquare.end() &&
                                  sqIt->second.row == pending.toSquare.row &&
                                  sqIt->second.col == pending.toSquare.col;
-        bool const auraMatch = piece->HasAura(SPELL_MOVE_COOLDOWN);
-        bool const cooldownSignal = pending.moveSpell != 0 && piece->HasSpellCooldown(pending.moveSpell);
         Creature* expectedTrigger = nullptr;
         auto trigIt = board.squareToTrigger.find({ pending.toSquare.row, pending.toSquare.col });
         if (trigIt != board.squareToTrigger.end())
             expectedTrigger = trigIt->second;
         bool const triggerProximity = expectedTrigger && piece->GetExactDist2d(expectedTrigger) <= 3.5f;
 
-        if (!squareMatch && !auraMatch && !cooldownSignal && !triggerProximity)
-            return ChessPendingMoveResult::WAITING;
+        if (!squareMatch && !triggerProximity)
+        {
+            bool const pointMovementActive = piece->GetMotionMaster()->GetCurrentMovementGeneratorType() ==
+                POINT_MOTION_TYPE;
+            if (now <= pending.createdAt || pointMovementActive)
+                return ChessPendingMoveResult::WAITING;
 
-        confirmSource = squareMatch ? "square_match" :
-            (auraMatch ? "move_cooldown_aura" :
-            (cooldownSignal ? "cooldown_signal" : "trigger_proximity"));
+            chessPendingMoveByPiece.erase(it);
+            chessLastFailedMoveTriggerByPiece[piece->GetGUID()] = pending.triggerGuid;
+            chessLastFailedMoveTimeByPiece[piece->GetGUID()] = now;
+            BackoffChessMoveTrigger(piece->GetGUID(), pending.triggerGuid, now);
+            chessOpeningMoveRetryUntilByPiece[piece->GetGUID()] = now + 3;
+            LogChessDecision(bot, piece, "move-rejected", "from=" + ChessSquareToString(pending.fromSquare) +
+                " requested=" + ChessSquareToString(pending.toSquare) + " source=" + pending.source +
+                " reason=no_point_movement", true);
+            if (pending.tacticalTargetGuid)
+                RegisterChessTargetFailure(bot, piece, pending.tacticalTargetGuid, now,
+                    "move_rejected_" + pending.source);
+            return ChessPendingMoveResult::EXPIRED;
+        }
+
+        confirmSource = squareMatch ? "square_match" : "trigger_proximity";
         chessPendingMoveByPiece.erase(it);
         chessOpeningMoveRetryUntilByPiece.erase(piece->GetGUID());
         chessLastFailedMoveTriggerByPiece.erase(piece->GetGUID());
         chessLastFailedMoveTimeByPiece.erase(piece->GetGUID());
+        chessFailedMoveTriggerUntilByPiece.erase(piece->GetGUID());
         chessLastMoveCommandByPiece[piece->GetGUID()] = now;
         chessMovementCooldownUntilByPiece[piece->GetGUID()] = now + 5;
         chessLastMoveFromSquareByPiece[piece->GetGUID()] = pending.fromSquare;
         chessLastMoveToSquareByPiece[piece->GetGUID()] = pending.toSquare;
         chessLastSquareByPiece[piece->GetGUID()] = pending.toSquare;
+        chessTargetFailureByPiece.erase(piece->GetGUID());
+        LogChessDecision(bot, piece, "move-confirmed", "from=" + ChessSquareToString(pending.fromSquare) +
+            " to=" + ChessSquareToString(pending.toSquare) + " source=" + pending.source +
+            " confirmation=" + confirmSource, true);
         if (IsPawnEntry(piece->GetEntry()))
         {
             chessOpenedLanePawnsByInstance[pending.instanceId].insert(piece->GetGUID());
@@ -1667,24 +1850,6 @@ namespace
         }
     }
 
-    std::string GetChessPieceSpellList(Creature* piece)
-    {
-        if (!piece)
-            return "none";
-
-        std::string out;
-        for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
-        {
-            uint32 spellId = piece->m_spells[i];
-            if (!spellId)
-                continue;
-            if (!out.empty())
-                out += ",";
-            out += std::to_string(spellId);
-        }
-        return out.empty() ? "none" : out;
-    }
-
     uint32 GetChessMoveSpellForPiece(Creature* piece)
     {
         if (!piece)
@@ -1702,6 +1867,23 @@ namespace
 
     bool IsPawnEntry(uint32 e) { return e == NPC_PAWN_A || e == NPC_PAWN_H; }
     bool IsKingEntry(uint32 e) { return e == NPC_KING_A || e == NPC_KING_H; }
+
+    uint32 GetPreferredChessPieceEntry(PlayerbotAI* botAI, Player* bot, ChessSide side)
+    {
+        if (!botAI || !bot || side == ChessSide::UNKNOWN)
+            return 0;
+
+        bool const alliance = side == ChessSide::ALLIANCE;
+        if (botAI->IsMainTank(bot) || botAI->IsTank(bot))
+            return alliance ? NPC_KING_A : NPC_KING_H;
+        if (botAI->IsHeal(bot))
+            return alliance ? NPC_BISHOP_A : NPC_BISHOP_H;
+        if (botAI->IsRanged(bot))
+            return alliance ? NPC_QUEEN_A : NPC_QUEEN_H;
+        if (botAI->IsMelee(bot))
+            return alliance ? NPC_KNIGHT_A : NPC_KNIGHT_H;
+        return 0;
+    }
 
     std::string ChessPhaseToString(ChessPhase p)
     {
@@ -1845,12 +2027,7 @@ namespace
 
         ChessSquare sq = itSq->second;
         std::set<std::pair<int, int>> candidates;
-        uint32 e = piece->GetEntry();
-        int maxDelta = 1;
-        if (e == NPC_QUEEN_A || e == NPC_QUEEN_H)
-            maxDelta = 3;
-        else if (e == NPC_KNIGHT_A || e == NPC_KNIGHT_H)
-            maxDelta = 2;
+        int const maxDelta = GetChessPieceMoveDelta(piece->GetEntry());
 
         // Karazhan only limits the row/column delta. It does not use normal chess movement paths:
         // pawns, bishops, rooks, and kings move within a one-square box; knights within two; queens within three.
@@ -1879,6 +2056,245 @@ namespace
         }
 
         return legal;
+    }
+
+    struct ChessPositionEvaluation
+    {
+        float score = -std::numeric_limits<float>::max();
+        float distance = std::numeric_limits<float>::max();
+        float preferredDistance = 0.0f;
+        uint32 abilitiesInRange = 0;
+        uint32 readyAbilitiesInRange = 0;
+        uint32 additionalTargets = 0;
+        uint32 nearbyEnemies = 0;
+        bool intendedTargetAttackable = false;
+        bool healingPosition = false;
+    };
+
+    static uint32 GetChessHealSpell(Creature* piece, bool requireReady)
+    {
+        if (!piece)
+            return 0;
+
+        for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+        {
+            uint32 const spellId = piece->m_spells[i];
+            std::string rejectReason;
+            if (spellId && IsChessSupportSpell(spellId, rejectReason) &&
+                (!requireReady || !piece->HasSpellCooldown(spellId)))
+                return spellId;
+        }
+
+        return 0;
+    }
+
+    static float GetChessDistance2d(WorldObject const* from, WorldObject const* to)
+    {
+        return from && to ? from->GetExactDist2d(to) : std::numeric_limits<float>::max();
+    }
+
+    static bool CanChessSpellReachFrom(Creature* piece, WorldObject const* from, Unit* target, uint32 spellId)
+    {
+        if (!piece || !from || !target || !spellId)
+            return false;
+
+        float const distance = GetChessDistance2d(from, target);
+        float const maxRange = GetChessOffensiveSpellRange(piece, spellId);
+        float const minRange = GetChessSpellMinRange(piece, spellId);
+        return distance >= minRange && (maxRange <= 0.0f || distance <= maxRange);
+    }
+
+    static uint32 CountEnemiesNearPosition(
+        Player* bot, ChessBoardState const& board, WorldObject const* position, float radius, Creature const* ignored = nullptr)
+    {
+        if (!bot || !position)
+            return 0;
+
+        uint32 count = 0;
+        for (auto const& boardEntry : board.pieceSquare)
+        {
+            Creature* candidate = ObjectAccessor::GetCreature(*bot, boardEntry.first);
+            if (!candidate || candidate == ignored || !candidate->IsAlive() || !IsEnemyChessPieceForBot(bot, candidate))
+                continue;
+            if (position->GetExactDist2d(candidate) <= radius)
+                ++count;
+        }
+        return count;
+    }
+
+    static uint32 CountEnemiesInProspectiveCone(Player* bot, ChessBoardState const& board,
+        WorldObject const* position, Creature* intendedTarget, float radius)
+    {
+        if (!bot || !position || !intendedTarget)
+            return 0;
+
+        float const targetX = intendedTarget->GetPositionX() - position->GetPositionX();
+        float const targetY = intendedTarget->GetPositionY() - position->GetPositionY();
+        float const targetLength = std::sqrt(targetX * targetX + targetY * targetY);
+        if (targetLength < 0.01f)
+            return 0;
+
+        uint32 count = 0;
+        float const minimumCosine = std::cos(ChessConeAngle * 0.5f);
+        for (auto const& boardEntry : board.pieceSquare)
+        {
+            Creature* candidate = ObjectAccessor::GetCreature(*bot, boardEntry.first);
+            if (!candidate || candidate == intendedTarget || !candidate->IsAlive() ||
+                !IsEnemyChessPieceForBot(bot, candidate))
+                continue;
+
+            float const candidateX = candidate->GetPositionX() - position->GetPositionX();
+            float const candidateY = candidate->GetPositionY() - position->GetPositionY();
+            float const candidateLength = std::sqrt(candidateX * candidateX + candidateY * candidateY);
+            if (candidateLength > radius || candidateLength < 0.01f)
+                continue;
+
+            float const cosine = (targetX * candidateX + targetY * candidateY) /
+                (targetLength * candidateLength);
+            if (cosine >= minimumCosine)
+                ++count;
+        }
+
+        return count;
+    }
+
+    static float GetPreferredChessAttackDistance(Creature* piece)
+    {
+        float shortestRange = std::numeric_limits<float>::max();
+        for (uint32 spellId : GetLikelyOffensiveChessSpells(piece))
+        {
+            float const range = GetChessOffensiveSpellRange(piece, spellId);
+            if (range > 0.0f)
+                shortestRange = std::min(shortestRange, range);
+        }
+
+        if (shortestRange == std::numeric_limits<float>::max())
+            return ChessAutomaticMeleeRange - 2.0f;
+        return std::max(2.0f, shortestRange - 2.0f);
+    }
+
+    static ChessPositionEvaluation EvaluateChessPosition(Player* bot, Creature* piece, ChessBoardState const& board,
+        WorldObject const* position, Creature* tacticalTarget, bool healing, ChessSquare const& candidateSquare,
+        ChessSquare const& currentSquare)
+    {
+        ChessPositionEvaluation evaluation;
+        if (!bot || !piece || !position || !tacticalTarget)
+            return evaluation;
+
+        evaluation.distance = GetChessDistance2d(position, tacticalTarget);
+        evaluation.healingPosition = healing;
+        if (healing)
+        {
+            uint32 const healSpell = GetChessHealSpell(piece, false);
+            SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(healSpell);
+            float const maxRange = spellInfo ? spellInfo->GetMaxRange(true, piece) : 0.0f;
+            float const minRange = spellInfo ? spellInfo->GetMinRange(true) : 0.0f;
+            evaluation.preferredDistance = std::max(2.0f, maxRange - 3.0f);
+            evaluation.intendedTargetAttackable = healSpell && evaluation.distance >= minRange &&
+                (maxRange <= 0.0f || evaluation.distance <= maxRange);
+            evaluation.abilitiesInRange = evaluation.intendedTargetAttackable ? 1 : 0;
+            evaluation.readyAbilitiesInRange = evaluation.intendedTargetAttackable &&
+                !piece->HasSpellCooldown(healSpell) ? 1 : 0;
+        }
+        else
+        {
+            evaluation.preferredDistance = GetPreferredChessAttackDistance(piece);
+            for (uint32 spellId : GetLikelyOffensiveChessSpells(piece))
+            {
+                if (!CanChessSpellReachFrom(piece, position, tacticalTarget, spellId))
+                    continue;
+
+                ++evaluation.abilitiesInRange;
+                if (!piece->HasSpellCooldown(spellId))
+                    ++evaluation.readyAbilitiesInRange;
+
+                if (IsTargetAreaOffensiveChessSpell(spellId))
+                {
+                    float const radius = GetChessSpellEffectRadius(piece, spellId);
+                    evaluation.additionalTargets = std::max(evaluation.additionalTargets,
+                        CountEnemiesNearPosition(bot, board, tacticalTarget, radius, tacticalTarget));
+                }
+                else if (IsConeOffensiveChessSpell(spellId))
+                {
+                    float const radius = GetChessSpellEffectRadius(piece, spellId);
+                    evaluation.additionalTargets = std::max(evaluation.additionalTargets,
+                        CountEnemiesInProspectiveCone(bot, board, position, tacticalTarget, radius));
+                }
+                else if (IsCasterCenteredOffensiveChessSpell(spellId))
+                {
+                    float const radius = GetChessSpellEffectRadius(piece, spellId);
+                    evaluation.additionalTargets = std::max(evaluation.additionalTargets,
+                        CountEnemiesNearPosition(bot, board, position, radius, tacticalTarget));
+                }
+            }
+
+            evaluation.intendedTargetAttackable = evaluation.abilitiesInRange > 0;
+            if (!evaluation.intendedTargetAttackable && evaluation.distance <= ChessAutomaticMeleeRange)
+                evaluation.intendedTargetAttackable = true;
+        }
+
+        evaluation.nearbyEnemies = CountEnemiesNearPosition(bot, board, position, ChessAutomaticMeleeRange);
+        evaluation.score = evaluation.intendedTargetAttackable ? 100000.0f : 0.0f;
+        evaluation.score += static_cast<float>(evaluation.abilitiesInRange) * 5000.0f;
+        evaluation.score += static_cast<float>(evaluation.readyAbilitiesInRange) * 2500.0f;
+        evaluation.score += static_cast<float>(evaluation.additionalTargets) * 500.0f;
+        evaluation.score -= std::fabs(evaluation.distance - evaluation.preferredDistance) * 150.0f;
+        evaluation.score -= static_cast<float>(evaluation.nearbyEnemies) * (healing ? 450.0f : 100.0f);
+        evaluation.score -= static_cast<float>(std::max(
+            std::abs(candidateSquare.row - currentSquare.row),
+            std::abs(candidateSquare.col - currentSquare.col))) * 25.0f;
+
+        bool const onEdge = candidateSquare.row == board.minRow || candidateSquare.row == board.maxRow ||
+            candidateSquare.col == board.minCol || candidateSquare.col == board.maxCol;
+        if (onEdge)
+            evaluation.score -= 75.0f;
+
+        auto lastFrom = chessLastMoveFromSquareByPiece.find(piece->GetGUID());
+        auto lastTo = chessLastMoveToSquareByPiece.find(piece->GetGUID());
+        if (lastFrom != chessLastMoveFromSquareByPiece.end() && lastTo != chessLastMoveToSquareByPiece.end() &&
+            lastTo->second.row == currentSquare.row && lastTo->second.col == currentSquare.col &&
+            lastFrom->second.row == candidateSquare.row && lastFrom->second.col == candidateSquare.col)
+            evaluation.score -= 20000.0f;
+
+        return evaluation;
+    }
+
+    static Creature* GetChessFacingTrigger(
+        ChessBoardState const& board, ChessSquare const& from, ChessSquare const& target)
+    {
+        int const rowDelta = std::clamp(target.row - from.row, -3, 3);
+        int const colDelta = std::clamp(target.col - from.col, -3, 3);
+        if (!rowDelta && !colDelta)
+            return nullptr;
+
+        auto trigger = board.squareToTrigger.find({ from.row + rowDelta, from.col + colDelta });
+        return trigger != board.squareToTrigger.end() ? trigger->second : nullptr;
+    }
+
+    static bool TryFaceChessTarget(Player* bot, Creature* piece, ChessBoardState const& board,
+        ChessSquare const& currentSquare, Creature* target, time_t now, std::string const& reason)
+    {
+        if (!bot || !piece || !target || !IsChessMoveReady(piece, now, 5) || piece->HasSpellCooldown(SpellChangeFacing))
+            return false;
+
+        auto targetSquare = board.pieceSquare.find(target->GetGUID());
+        if (targetSquare == board.pieceSquare.end())
+            return false;
+
+        Creature* trigger = GetChessFacingTrigger(board, currentSquare, targetSquare->second);
+        if (!trigger || !CastChessSpell(piece, trigger, SpellChangeFacing))
+        {
+            LogChessDecision(bot, piece, "face-failed", "target=" + target->GetName() + " reason=" + reason);
+            return false;
+        }
+
+        StampChessPieceCommandGcd(piece);
+        chessLastMoveCommandByPiece[piece->GetGUID()] = now;
+        chessMovementCooldownUntilByPiece[piece->GetGUID()] = now + 5;
+        LogChessDecision(bot, piece, "face-command", "target=" + target->GetName() + " piece_square=" +
+            ChessSquareToString(currentSquare) + " target_square=" + ChessSquareToString(targetSquare->second) +
+            " reason=" + reason, true);
+        return true;
     }
 
     static ChessPhase GetChessPhase(PlayerbotAI* botAI, Player* bot, ChessBoardState const& b)
@@ -1919,6 +2335,25 @@ namespace
             return ChessPhase::CLAIM_HIGH_VALUE;
 
         return ChessPhase::COMBAT;
+    }
+
+    static bool HasAvailableNonPawnChessPiece(PlayerbotAI* botAI, Player* bot, bool openingProgressConfirmed)
+    {
+        if (!botAI || !bot || !openingProgressConfirmed)
+            return false;
+
+        bool const canClaimKing = botAI->IsMainTank(bot) || botAI->IsTank(bot);
+        for (Creature* candidate : GetNearbyChessPieces(botAI, bot, true))
+        {
+            if (!candidate || IsPawnEntry(candidate->GetEntry()) ||
+                (IsKingEntry(candidate->GetEntry()) && !canClaimKing) ||
+                IsPieceAssignedToOtherBot(bot, candidate))
+                continue;
+            if (IsClaimableChessPieceForBot(bot, candidate, openingProgressConfirmed))
+                return true;
+        }
+
+        return false;
     }
 }
 
@@ -1988,7 +2423,16 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         ChessPendingClaim* pending = GetPendingChessClaim(bot);
         if (pending && pending->expiresAt <= now)
         {
+            ObjectGuid const expiredPieceGuid = pending->pieceGuid;
             ClearPendingChessClaim(bot, "timeout");
+            if (Creature* assignedPiece = GetAssignedChessPiece(bot))
+            {
+                if (assignedPiece->GetGUID() == expiredPieceGuid)
+                {
+                    SuppressReclaimForPiece(expiredPieceGuid, now, 15);
+                    ClearAssignedChessPiece(bot);
+                }
+            }
             pending = nullptr;
         }
 
@@ -2018,12 +2462,7 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
                                   false, false, false, false, MovementPriority::MOVEMENT_FORCED, true, false);
                 }
 
-                if (!pending->controlAttempted)
-                {
-                    bot->CastSpell(pendingPiece, SPELL_CONTROL_PIECE, true);
-                    pending->controlAttempted = true;
-                    pending->expiresAt = now + 5;
-                }
+                TryPendingChessClaimControl(bot, pendingPiece, *pending, now);
 
                 return true;
             }
@@ -2061,7 +2500,7 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
             return false;
         }
         float dist = bot->GetExactDist2d(assigned);
-        if (openingProgressConfirmed && !IsPawnEntry(assigned->GetEntry()))
+        if (openingProgressConfirmed)
         {
             ChessPendingClaim* pending = GetPendingChessClaim(bot);
             if (!pending || pending->pieceGuid != assigned->GetGUID())
@@ -2072,15 +2511,13 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
             return MoveTo(KARAZHAN_MAP_ID, assigned->GetPositionX(), assigned->GetPositionY(), assigned->GetPositionZ(),
                           false, false, false, false, MovementPriority::MOVEMENT_FORCED, true, false);
         }
-        bot->CastSpell(assigned, SPELL_CONTROL_PIECE, true);
         if (ChessPendingClaim* pending = GetPendingChessClaim(bot))
         {
-            if (pending->pieceGuid == assigned->GetGUID() && !pending->controlAttempted)
-            {
-                pending->controlAttempted = true;
-                pending->expiresAt = now + 5;
-            }
+            if (pending->pieceGuid == assigned->GetGUID())
+                TryPendingChessClaimControl(bot, assigned, *pending, now);
         }
+        else
+            bot->CastSpell(assigned, SPELL_CONTROL_PIECE, true);
         return true;
     }
 
@@ -2090,8 +2527,11 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         return false;
     }
 
-    Creature* best = nullptr;
-    uint32 bestScore = 0;
+    Creature* bestPreferred = nullptr;
+    Creature* bestFallback = nullptr;
+    uint32 bestPreferredScore = 0;
+    uint32 bestFallbackScore = 0;
+    uint32 const preferredEntry = pawnOnlyMode ? 0 : GetPreferredChessPieceEntry(botAI, bot, botSide);
     bool hasClaimablePawn = false;
     for (Creature* p : nearby)
     {
@@ -2196,6 +2636,13 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         if (piece->GetHealthPct() < 50.0f)
             score -= 30;
 
+        if (openingProgressConfirmed && isPawn)
+        {
+            // If a bot must fall back to a pawn, advance an untouched lane before reclaiming one that already
+            // opened the back rank. This progressively creates more exits without delaying the four-pawn opener.
+            score += HasPawnMovedDuringOpening(instanceId, piece->GetGUID()) ? 0 : 180;
+        }
+
         if (phase == ChessPhase::OPENING)
         {
             if (IsPawnEntry(piece->GetEntry()))
@@ -2220,20 +2667,29 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
                 score += 350;
         }
 
-        if (!best || score > bestScore)
+        bool const preferred = preferredEntry && piece->GetEntry() == preferredEntry;
+        Creature*& bestForPass = preferred ? bestPreferred : bestFallback;
+        uint32& bestScoreForPass = preferred ? bestPreferredScore : bestFallbackScore;
+        if (!bestForPass || score > bestScoreForPass)
         {
-            best = piece;
-            bestScore = score;
+            bestForPass = piece;
+            bestScoreForPass = score;
         }
     }
+
+    Creature* best = bestPreferred ? bestPreferred : bestFallback;
 
     if (!best || !SetAssignedChessPiece(bot, best, 10))
     {
         return false;
     }
 
-    if (openingProgressConfirmed && !IsPawnEntry(best->GetEntry()))
+    if (openingProgressConfirmed)
         SetPendingChessClaim(bot, best, instanceId, now, 30);
+
+    LogChessDecision(bot, best, "piece-claim", "phase=" + ChessPhaseToString(phase) + " preferred_entry=" +
+        std::to_string(preferredEntry) + " selected_entry=" + std::to_string(best->GetEntry()) + " selection=" +
+        (bestPreferred ? "preferred" : "fallback"), true);
 
     float bestDist = bot->GetExactDist2d(best);
     if (bestDist > 8.0f)
@@ -2242,15 +2698,13 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
                       false, false, false, false, MovementPriority::MOVEMENT_FORCED, true, false);
     }
 
-    bot->CastSpell(best, SPELL_CONTROL_PIECE, true);
     if (ChessPendingClaim* pending = GetPendingChessClaim(bot))
     {
-        if (pending->pieceGuid == best->GetGUID() && !pending->controlAttempted)
-        {
-            pending->controlAttempted = true;
-            pending->expiresAt = now + 5;
-        }
+        if (pending->pieceGuid == best->GetGUID())
+            TryPendingChessClaimControl(bot, best, *pending, now);
     }
+    else
+        bot->CastSpell(best, SPELL_CONTROL_PIECE, true);
     return true;
 }
 
@@ -2337,7 +2791,6 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
     std::string legalDbg;
     std::vector<Creature*> triggers = GetLegalMoveTriggersForPiece(botAI, bot, piece, board, legalDbg);
     uint32 const moveSpell = GetChessMoveSpellForPiece(piece);
-    std::string const pieceSpellList = GetChessPieceSpellList(piece);
     std::vector<std::pair<float, Creature*>> legalMoves;
     ObjectGuid const pieceGuid = piece->GetGUID();
     auto moveIt = chessLastMoveCommandByPiece.find(pieceGuid);
@@ -2346,8 +2799,8 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
         return false;
     }
 
-    ObjectGuid const lastFailed = chessLastFailedMoveTriggerByPiece[pieceGuid];
-    bool const recentFailure = chessLastFailedMoveTimeByPiece.count(pieceGuid) && (nowTick - chessLastFailedMoveTimeByPiece[pieceGuid]) < 2;
+    bool sawReservedDestination = false;
+    bool sawFailedDestinationBackoff = false;
 
     for (Creature* trigger : triggers)
     {
@@ -2356,20 +2809,29 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
         if (distPiece > 30.0f)
             continue;
 
-        // Avoid immediate retry on the same blocked square for one short tick window.
-        if (recentFailure && trigger->GetGUID() == lastFailed)
+        // Give the event board time to settle and force an alternate square after a rejected move.
+        if (IsChessMoveTriggerBackedOff(pieceGuid, trigger->GetGUID(), nowTick))
+        {
+            sawFailedDestinationBackoff = true;
             continue;
+        }
+
+        int reservedRow = -1;
+        int reservedCol = -1;
+        ObjectGuid reservedBy;
+        if (WorldToChessSquare(board, trigger->GetPositionX(), trigger->GetPositionY(), reservedRow, reservedCol) &&
+            IsChessDestinationReserved(instanceId, ChessSquare{ reservedRow, reservedCol }, nowTick,
+                pieceGuid, reservedBy))
+        {
+            sawReservedDestination = true;
+            continue;
+        }
 
         legalMoves.push_back({ distKing, trigger });
     }
 
     if (legalMoves.empty())
     {
-        int forward = 0;
-        if (pieceSqIt != board.pieceSquare.end() && kingSqIt != board.pieceSquare.end())
-            forward = (kingSqIt->second.row > pieceSqIt->second.row) ? 1 : -1;
-        if (forward == 0)
-            forward = 1;
         bool const hasMoveSpell = moveSpell != 0;
 
         std::string curSq = "unknown";
@@ -2378,6 +2840,14 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
 
         std::string squareBounds = "rows=" + std::to_string(board.minRow) + ".." + std::to_string(board.maxRow) +
                                    " cols=" + std::to_string(board.minCol) + ".." + std::to_string(board.maxCol);
+        auto targetIt = chessOffensiveTargetByPiece.find(piece->GetGUID());
+        if (!sawReservedDestination && !sawFailedDestinationBackoff &&
+            targetIt != chessOffensiveTargetByPiece.end())
+            RegisterChessTargetFailure(bot, piece, targetIt->second, now, "no_legal_move_square");
+        std::string const reason = sawReservedDestination ? "destination_reserved" :
+            (sawFailedDestinationBackoff ? "failed_destination_backoff" : "no_legal_move_square");
+        LogChessDecision(bot, piece, "move-wait", "reason=" + reason + " current_square=" + curSq +
+            " board=" + squareBounds + " has_move_spell=" + (hasMoveSpell ? "1" : "0"));
         return false;
     }
 
@@ -2418,46 +2888,37 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
             pawnOpeningForward = kingSqIt->second.row > curSq.row ? 1 : -1;
             pawnOpeningPreferredCol += curSq.col <= 2 ? 1 : -1;
         }
-        int bestForward = 0;
+        int bestRow = std::numeric_limits<int>::max();
+        int bestCol = std::numeric_limits<int>::max();
         float bestMoveScore = -std::numeric_limits<float>::max();
+        ChessPositionEvaluation bestEvaluation;
         Creature* bestForwardTrigger = nullptr;
         Creature* moveTarget = nullptr;
         std::string moveTargetReason = "enemy_king";
-        float targetDistBefore = std::numeric_limits<float>::max();
-        float targetDistAfter = std::numeric_limits<float>::max();
-        float preferredTargetDistance = 0.0f;
+        ChessPositionEvaluation currentEvaluation;
+        bool tacticalHealing = false;
         bool const targetDrivenMovement = controlledNonPawn || !pawnOpening;
         if (targetDrivenMovement)
         {
-            bool const healerPositioning = IsHealerChessPieceEntry(piece->GetEntry());
-            bool const rangedDamagePositioning = IsRangedChessDamagePiece(piece->GetEntry());
             ChessOffensiveTargetSelection movementTarget;
-
-            if (healerPositioning)
+            if (IsHealerChessPieceEntry(piece->GetEntry()) && GetChessHealSpell(piece, true))
             {
-                // Bishops are support pieces. Keep them near the friendly king where their 25-yard heal can cover
-                // the formation instead of letting their short offensive lance pull them across the board.
-                if (SelectDamagedFriendlyActiveBoardTarget(bot, board, piece).target)
-                    return false;
-
-                moveTarget = GetFriendlyChessKing(botAI, bot);
-                if (!moveTarget)
-                    return false;
-
-                moveTargetReason = "friendly_king_support_anchor";
-                targetDistBefore = piece->GetExactDist2d(moveTarget);
-                preferredTargetDistance = 10.0f;
-                if (targetDistBefore >= 6.0f && targetDistBefore <= 16.0f)
-                    return false;
+                ChessSupportTargetSelection healingTarget = SelectDamagedFriendlyActiveBoardTarget(bot, board, piece);
+                if (healingTarget.target)
+                {
+                    moveTarget = healingTarget.target;
+                    moveTargetReason = "damaged_friendly";
+                    tacticalHealing = true;
+                }
             }
-            else
+
+            if (!moveTarget)
             {
                 movementTarget = SelectPersistentChessTarget(botAI, bot, piece, board, "movement");
                 if (movementTarget.target)
                 {
                     moveTarget = movementTarget.target;
                     moveTargetReason = "selected_nonking_" + movementTarget.category;
-                    targetDistBefore = movementTarget.distance;
                 }
                 else if (enemyKing)
                 {
@@ -2496,7 +2957,6 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
                         moveTarget = enemyKing;
                         moveTargetReason = movementDeadlockBreaker ?
                             "enemy_king_fallback_breaker" : "enemy_king_fallback";
-                        targetDistBefore = piece->GetExactDist2d(enemyKing);
                     }
                     else
                     {
@@ -2504,24 +2964,44 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
                     }
                 }
 
-                if (moveTarget && rangedDamagePositioning)
-                {
-                    // Queens have 20- and 25-yard attacks in the encounter script. Hold a stable firing band even
-                    // while both abilities are cooling down; only reposition when genuinely too close or too far.
-                    preferredTargetDistance = 19.0f;
-                    if (targetDistBefore >= 14.0f && targetDistBefore <= 24.0f)
-                        return false;
-                }
             }
 
-            if (moveTarget && !healerPositioning && !rangedDamagePositioning)
+            if (!moveTarget)
+                return false;
+
+            currentEvaluation = EvaluateChessPosition(
+                bot, piece, board, piece, moveTarget, tacticalHealing, curSq, curSq);
+            if (currentEvaluation.intendedTargetAttackable)
             {
-                float const readyAttackRange = GetReadyChessAttackRange(piece);
-                if (readyAttackRange > 0.0f &&
-                    IsChessAbilityReady(piece, now, GetChessAbilityWindowSec(controlledNonPawn)))
+                if (!tacticalHealing)
                 {
-                    if (piece->GetExactDist2d(moveTarget) <= readyAttackRange)
-                        return false;
+                    bool coneInRange = false;
+                    for (uint32 spellId : GetLikelyOffensiveChessSpells(piece))
+                    {
+                        if (IsConeOffensiveChessSpell(spellId) &&
+                            CanChessSpellReachFrom(piece, piece, moveTarget, spellId))
+                        {
+                            coneInRange = true;
+                            break;
+                        }
+                    }
+                    float const facingArc = coneInRange ? ChessConeAngle : static_cast<float>(M_PI);
+                    bool const needsFacing = coneInRange ||
+                        piece->GetExactDist2d(moveTarget) <= ChessAutomaticMeleeRange;
+                    if (needsFacing && !piece->HasInArc(facingArc, moveTarget))
+                        return TryFaceChessTarget(bot, piece, board, curSq, moveTarget, now, moveTargetReason);
+                }
+
+                bool const stableRange = tacticalHealing || currentEvaluation.preferredDistance <= 10.0f ||
+                    currentEvaluation.distance >= currentEvaluation.preferredDistance * 0.65f;
+                if (stableRange)
+                {
+                    LogChessDecision(bot, piece, "hold-position", "target=" + moveTarget->GetName() +
+                        " piece_square=" + ChessSquareToString(curSq) + " target_distance=" +
+                        std::to_string(currentEvaluation.distance) + " preferred_distance=" +
+                        std::to_string(currentEvaluation.preferredDistance) + " abilities_in_range=" +
+                        std::to_string(currentEvaluation.abilitiesInRange) + " reason=" + moveTargetReason);
+                    return false;
                 }
             }
         }
@@ -2559,19 +3039,16 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
 
             if (!inBounds)
                 continue;
-
-            // prevent direct reverse unless emergency
-            auto lastFromIt = chessLastMoveFromSquareByPiece.find(piece->GetGUID());
-            auto lastToIt = chessLastMoveToSquareByPiece.find(piece->GetGUID());
-            if (lastFromIt != chessLastMoveFromSquareByPiece.end() &&
-                lastToIt != chessLastMoveToSquareByPiece.end() &&
-                lastToIt->second.row == curSq.row && lastToIt->second.col == curSq.col &&
-                lastFromIt->second.row == row && lastFromIt->second.col == col)
+            if (occupied)
                 continue;
 
-            int dRow = row - curSq.row;
-            int absForward = std::abs(dRow);
-            float candidateScore = IsPawnEntry(piece->GetEntry()) ? static_cast<float>(absForward) * 15.0f : 0.0f;
+            ObjectGuid reservedBy;
+            if (IsChessDestinationReserved(instanceId, ChessSquare{ row, col }, nowTick,
+                pieceGuid, reservedBy))
+                continue;
+
+            float candidateScore = 0.0f;
+            ChessPositionEvaluation candidateEvaluation;
             if (pawnOpening)
             {
                 if (row != curSq.row + pawnOpeningForward)
@@ -2582,42 +3059,40 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
                 candidateScore += col == pawnOpeningPreferredCol ? 10000.0f :
                     (col == curSq.col ? 1000.0f : 0.0f);
             }
-            int edgePenalty = 0;
-            int cornerPenalty = 0;
-            int centerPenalty = 0;
-            bool const onEdge = row == board.minRow || row == board.maxRow || col == board.minCol || col == board.maxCol;
-            bool const onCorner = (row == board.minRow || row == board.maxRow) && (col == board.minCol || col == board.maxCol);
-            if (onEdge)
-                edgePenalty = 5;
-            if (onCorner)
-                cornerPenalty = 15;
-
-            int const centerRow = (board.minRow + board.maxRow) / 2;
-            int const centerCol = (board.minCol + board.maxCol) / 2;
-            centerPenalty = std::abs(row - centerRow) + std::abs(col - centerCol);
-
-            if (moveTarget)
+            else if (moveTarget)
             {
-                targetDistAfter = moveTarget->GetExactDist2d(mv.second);
-                if (preferredTargetDistance > 0.0f)
-                    candidateScore -= std::fabs(targetDistAfter - preferredTargetDistance) * 100.0f;
-                else
-                    candidateScore += (targetDistBefore - targetDistAfter) * 100.0f;
+                candidateEvaluation = EvaluateChessPosition(bot, piece, board, mv.second, moveTarget,
+                    tacticalHealing, ChessSquare{ row, col }, curSq);
+                candidateScore = candidateEvaluation.score;
             }
 
-            candidateScore -= static_cast<float>(edgePenalty + cornerPenalty + centerPenalty);
-
             if (!bestForwardTrigger || candidateScore > bestMoveScore ||
-                (candidateScore == bestMoveScore && absForward > bestForward))
+                (candidateScore == bestMoveScore && std::pair<int, int>{ row, col } <
+                    std::pair<int, int>{ bestRow, bestCol }))
             {
-                bestForward = absForward;
+                bestRow = row;
+                bestCol = col;
                 bestMoveScore = candidateScore;
                 bestForwardTrigger = mv.second;
+                bestEvaluation = candidateEvaluation;
             }
         }
 
         if (!bestForwardTrigger)
         {
+            if (moveTarget)
+                RegisterChessTargetFailure(bot, piece, moveTarget->GetGUID(), now, "no_scored_destination");
+            LogChessDecision(bot, piece, "move-failed", "reason=no_legal_candidate target=" +
+                (moveTarget ? moveTarget->GetName() : "none") + " current_square=" + ChessSquareToString(curSq));
+            return false;
+        }
+
+        if (!pawnOpening && currentEvaluation.intendedTargetAttackable &&
+            bestMoveScore <= currentEvaluation.score + 250.0f)
+        {
+            LogChessDecision(bot, piece, "hold-position", "target=" + moveTarget->GetName() +
+                " reason=no_materially_better_square current_score=" + std::to_string(currentEvaluation.score) +
+                " best_candidate_score=" + std::to_string(bestMoveScore));
             return false;
         }
 
@@ -2646,12 +3121,36 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
             return false;
         }
 
-        if (!CastChessSpell(piece, bestForwardTrigger, moveSpell))
+        SpellCastResult const moveResult = piece->CastSpell(bestForwardTrigger, moveSpell, true);
+        if (!CompleteChessSpellCast(piece, moveSpell, moveResult))
+        {
+            chessLastFailedMoveTriggerByPiece[pieceGuid] = bestForwardTrigger->GetGUID();
+            chessLastFailedMoveTimeByPiece[pieceGuid] = nowTick;
+            BackoffChessMoveTrigger(pieceGuid, bestForwardTrigger->GetGUID(), nowTick);
+            chessMovementCooldownUntilByPiece[pieceGuid] = nowTick + 1;
+            if (moveTarget)
+                RegisterChessTargetFailure(bot, piece, moveTarget->GetGUID(), nowTick, "move_cast_rejected");
+            LogChessDecision(bot, piece, "move-cast-failed", "spell=" + std::to_string(moveSpell) + " from=" +
+                ChessSquareToString(curSq) + " to=" + ChessSquareToString(ChessSquare{ toRow, toCol }) +
+                " target=" + (moveTarget ? moveTarget->GetName() : "none") + " cast_result=" +
+                std::to_string(static_cast<uint32>(moveResult)));
             return false;
+        }
 
         RecordPendingChessMove(
             bot, piece, instanceId, curSq, ChessSquare{ toRow, toCol }, moveSpell,
-            bestForwardTrigger->GetGUID(), "pawn-move", nowTick, 5);
+            bestForwardTrigger->GetGUID(), pawnOpening ? "opening-pawn" : "tactical", nowTick, 8,
+            moveTarget ? moveTarget->GetGUID() : ObjectGuid::Empty);
+        LogChessDecision(bot, piece, "move-command", "target=" +
+            (moveTarget ? moveTarget->GetName() : "enemy-king-opening") + " from=" + ChessSquareToString(curSq) +
+            " to=" + ChessSquareToString(ChessSquare{ toRow, toCol }) + " reason=" + moveTargetReason +
+            " score=" + std::to_string(bestMoveScore) + " target_distance=" +
+            std::to_string(bestEvaluation.distance) + " preferred_distance=" +
+            std::to_string(bestEvaluation.preferredDistance) + " abilities_in_range=" +
+            std::to_string(bestEvaluation.abilitiesInRange) + " ready_abilities_in_range=" +
+            std::to_string(bestEvaluation.readyAbilitiesInRange) + " additional_targets=" +
+            std::to_string(bestEvaluation.additionalTargets) + " nearby_enemies=" +
+            std::to_string(bestEvaluation.nearbyEnemies), true);
         return true;
     }
 
@@ -2726,6 +3225,16 @@ bool KarazhanChessMoveOutOfFireAction::Execute(Event /*event*/)
     Creature* safe = nullptr;
     for (Creature* trigger : triggers)
     {
+        int candidateRow = -1;
+        int candidateCol = -1;
+        ObjectGuid reservedBy;
+        if (!WorldToChessSquare(board, trigger->GetPositionX(), trigger->GetPositionY(), candidateRow, candidateCol) ||
+            IsChessDestinationReserved(instanceId, ChessSquare{ candidateRow, candidateCol }, now,
+                piece->GetGUID(), reservedBy))
+            continue;
+        if (IsChessMoveTriggerBackedOff(piece->GetGUID(), trigger->GetGUID(), now))
+            continue;
+
         bool bad = false;
         for (Creature* hz : hazards)
         {
@@ -2760,12 +3269,21 @@ bool KarazhanChessMoveOutOfFireAction::Execute(Event /*event*/)
         return false;
     }
 
-    if (!CastChessSpell(piece, safe, moveSpell))
+    SpellCastResult const moveResult = piece->CastSpell(safe, moveSpell, true);
+    if (!CompleteChessSpellCast(piece, moveSpell, moveResult))
+    {
+        chessLastFailedMoveTriggerByPiece[piece->GetGUID()] = safe->GetGUID();
+        chessLastFailedMoveTimeByPiece[piece->GetGUID()] = now;
+        BackoffChessMoveTrigger(piece->GetGUID(), safe->GetGUID(), now);
+        LogChessDecision(bot, piece, "move-cast-failed", "spell=" + std::to_string(moveSpell) +
+            " source=move-out-of-fire destination=" + ChessSquareToString(ChessSquare{ toRow, toCol }) +
+            " cast_result=" + std::to_string(static_cast<uint32>(moveResult)));
         return false;
+    }
 
     RecordPendingChessMove(
         bot, piece, instanceId, hasOldSq ? oldSq : ChessSquare{}, ChessSquare{ toRow, toCol }, moveSpell,
-        safe->GetGUID(), "move-out-of-fire", now, 5);
+        safe->GetGUID(), "move-out-of-fire", now, 8);
     return true;
 }
 
@@ -2796,6 +3314,8 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
     const bool needsMovement = canMove && enemyKing && piece->GetExactDist2d(enemyKing) > 22.0f;
     const time_t now = std::time(nullptr);
     const ObjectGuid pieceGuid = piece->GetGUID();
+    if (HasPendingChessMove(pieceGuid, now))
+        return false;
     const bool isPawn = piece->GetEntry() == NPC_PAWN_A || piece->GetEntry() == NPC_PAWN_H;
     const float kingDist = enemyKing ? piece->GetExactDist2d(enemyKing) : 999.0f;
     ChessBoardState board = BuildChessBoardState(botAI, bot);
@@ -2809,7 +3329,7 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
     ChessSupportTargetSelection healingTarget;
     if (IsHealerChessPieceEntry(piece->GetEntry()))
         healingTarget = SelectDamagedFriendlyActiveBoardTarget(bot, board, piece);
-    bool const healerNeedsTarget = healingTarget.target != nullptr;
+    bool const healerNeedsTarget = healingTarget.target != nullptr && GetChessHealSpell(piece, true) != 0;
     ChessPhase phase = GetChessPhase(botAI, bot, board);
     bool const openingPawnMoved = openingProgressConfirmed ||
         (instanceId && chessOpenedLanePawnsByInstance.count(instanceId) &&
@@ -2993,13 +3513,24 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 if (!IsChessSpellTargetInRange(piece, healingTarget.target, spellId))
                     continue;
 
+                uint32 const healthBefore = healingTarget.target->GetHealth();
                 if (CastChessSpell(piece, healingTarget.target, spellId))
                 {
+                    uint32 const healthAfter = healingTarget.target->GetHealth();
                     ClearChessSpellNoOpBackoff(pieceGuid, spellId);
                     StampChessPieceCommandGcd(piece);
                     chessLastAbilityCommandByPiece[pieceGuid] = now;
+                    LogChessDecision(bot, piece, "heal-cast", "spell=" + std::to_string(spellId) + "/" +
+                        GetChessSpellName(spellId) + " target=" + healingTarget.target->GetName() + " distance=" +
+                        std::to_string(piece->GetExactDist2d(healingTarget.target)) + " health_before=" +
+                        std::to_string(healthBefore) + " health_after=" + std::to_string(healthAfter) +
+                        " restored=" + std::to_string(static_cast<int64>(healthAfter) - healthBefore) +
+                        " restoration_verified=" + (healthAfter > healthBefore ? "1" : "0"), true);
                     return true;
                 }
+                LogChessDecision(bot, piece, "heal-cast-failed", "spell=" + std::to_string(spellId) +
+                    " target=" + healingTarget.target->GetName() + " distance=" +
+                    std::to_string(piece->GetExactDist2d(healingTarget.target)), true);
                 StampChessSpellNoOpBackoff(pieceGuid, spellId, now, 2);
                 continue;
             }
@@ -3068,8 +3599,16 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 chessLastAbilityCommandByPiece[pieceGuid] = now;
                 if (IsPoisonCloudChessSpell(spellId))
                     chessPoisonCloudLastAppliedByTarget[enemyKing->GetGUID()] = now;
+                LogChessDecision(bot, piece, "attack-cast", "spell=" + std::to_string(spellId) + "/" +
+                    GetChessSpellName(spellId) + " shape=" + GetChessSpellShapeLabel(spellId) + " target=" +
+                    enemyKing->GetName() + " distance=" + std::to_string(piece->GetExactDist2d(enemyKing)) +
+                    " effective_range=" + std::to_string(GetChessOffensiveSpellRange(piece, spellId)) +
+                    " target_kind=king", true);
                 return true;
             }
+            LogChessDecision(bot, piece, "attack-cast-failed", "spell=" + std::to_string(spellId) +
+                " target=" + enemyKing->GetName() + " distance=" +
+                std::to_string(piece->GetExactDist2d(enemyKing)), true);
             StampChessSpellNoOpBackoff(pieceGuid, spellId, now, 2);
             continue;
         }
@@ -3082,10 +3621,14 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
 
             if (IsCasterCenteredOffensiveChessSpell(spellId))
             {
-                float const aoeRadius = GetCasterCenteredChessSpellRadius(spellId);
-                uint32 nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(bot, board, piece, aoeRadius);
-                if (!nearbyEnemyCount)
+                float const aoeRadius = GetChessSpellEffectRadius(piece, spellId);
+                if (piece->GetExactDist2d(nonKingTarget.target) > aoeRadius)
                 {
+                    LogChessDecision(bot, piece, "attack-wait", "spell=" + std::to_string(spellId) + "/" +
+                        GetChessSpellName(spellId) + " target=" + nonKingTarget.target->GetName() +
+                        " reason=intended_target_outside_area distance=" +
+                        std::to_string(piece->GetExactDist2d(nonKingTarget.target)) + " effective_range=" +
+                        std::to_string(aoeRadius));
                     continue;
                 }
             }
@@ -3099,8 +3642,7 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
             if (IsChessHealSpellBlockedOnEnemy(spellId))
                 continue;
 
-            if (!IsCasterCenteredOffensiveChessSpell(spellId) &&
-                !IsChessSpellTargetInRange(piece, nonKingTarget.target, spellId))
+            if (!IsChessSpellTargetInRange(piece, nonKingTarget.target, spellId))
                 continue;
 
             time_t nonKingBackoffRemaining = 0;
@@ -3122,9 +3664,18 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 chessLastAbilityCommandByPiece[pieceGuid] = now;
                 if (IsPoisonCloudChessSpell(spellId))
                     chessPoisonCloudLastAppliedByTarget[nonKingTarget.target->GetGUID()] = now;
+                LogChessDecision(bot, piece, "attack-cast", "spell=" + std::to_string(spellId) + "/" +
+                    GetChessSpellName(spellId) + " shape=" + GetChessSpellShapeLabel(spellId) + " target=" +
+                    nonKingTarget.target->GetName() + " distance=" +
+                    std::to_string(piece->GetExactDist2d(nonKingTarget.target)) + " effective_range=" +
+                    std::to_string(GetChessOffensiveSpellRange(piece, spellId)) + " target_kind=" +
+                    nonKingTarget.category, true);
                 return true;
             }
 
+            LogChessDecision(bot, piece, "attack-cast-failed", "spell=" + std::to_string(spellId) +
+                " target=" + nonKingTarget.target->GetName() + " distance=" +
+                std::to_string(piece->GetExactDist2d(nonKingTarget.target)), true);
             StampChessSpellNoOpBackoff(pieceGuid, spellId, now, 2);
             continue;
         }
@@ -3136,7 +3687,8 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
 
             if (IsCasterCenteredOffensiveChessSpell(spellId))
             {
-                uint32 nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(bot, board, piece, GetCasterCenteredChessSpellRadius(spellId));
+                uint32 nearbyEnemyCount = CountNearbyActiveBoardEnemyChessPieces(
+                    bot, board, piece, GetChessSpellEffectRadius(piece, spellId));
                 if (!nearbyEnemyCount)
                 {
                     continue;
@@ -3185,6 +3737,27 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
         StampChessSpellNoOpBackoff(pieceGuid, spellId, now, 2);
     }
 
+    bool const utilityUseful = piece->GetHealthPct() < 85.0f ||
+        CountNearbyEnemyChessPieces(botAI, bot, piece, 10.0f) > 0;
+    if (utilityUseful)
+    {
+        for (uint8 i = 0; i < MAX_CREATURE_SPELLS; ++i)
+        {
+            uint32 const spellId = piece->m_spells[i];
+            if (!IsChessSelfUtilitySpell(spellId) || piece->HasSpellCooldown(spellId))
+                continue;
+
+            if (CastChessSpell(piece, piece, spellId))
+            {
+                StampChessPieceCommandGcd(piece);
+                chessLastAbilityCommandByPiece[pieceGuid] = now;
+                LogChessDecision(bot, piece, "utility-cast", "spell=" + std::to_string(spellId) + "/" +
+                    GetChessSpellName(spellId) + " health_pct=" + std::to_string(piece->GetHealthPct()), true);
+                return true;
+            }
+        }
+    }
+
     return false;
 }
 
@@ -3220,6 +3793,8 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
     if (!healingTarget.target)
         return false;
     const time_t now = std::time(nullptr);
+    if (HasPendingChessMove(piece->GetGUID(), now))
+        return false;
     uint32 const abilityWindowSec = GetChessAbilityWindowSec(controlledNonPawn);
 
     if (!IsChessAbilityReady(piece, now, abilityWindowSec))
@@ -3249,14 +3824,25 @@ bool KarazhanChessHealFriendlyAction::Execute(Event event)
             if (!IsChessSpellTargetInRange(piece, healingTarget.target, spellId))
                 continue;
 
+            uint32 const healthBefore = healingTarget.target->GetHealth();
             if (CastChessSpell(piece, healingTarget.target, spellId))
             {
+                uint32 const healthAfter = healingTarget.target->GetHealth();
                 ClearChessSpellNoOpBackoff(piece->GetGUID(), spellId);
                 StampChessPieceCommandGcd(piece);
                 chessLastAbilityCommandByPiece[piece->GetGUID()] = now;
+                LogChessDecision(bot, piece, "heal-cast", "spell=" + std::to_string(spellId) + "/" +
+                    GetChessSpellName(spellId) + " target=" + healingTarget.target->GetName() + " distance=" +
+                    std::to_string(piece->GetExactDist2d(healingTarget.target)) + " health_before=" +
+                    std::to_string(healthBefore) + " health_after=" + std::to_string(healthAfter) +
+                    " restored=" + std::to_string(static_cast<int64>(healthAfter) - healthBefore) +
+                    " restoration_verified=" + (healthAfter > healthBefore ? "1" : "0"), true);
                 return true;
             }
 
+            LogChessDecision(bot, piece, "heal-cast-failed", "spell=" + std::to_string(spellId) +
+                " target=" + healingTarget.target->GetName() + " distance=" +
+                std::to_string(piece->GetExactDist2d(healingTarget.target)), true);
             StampChessSpellNoOpBackoff(piece->GetGUID(), spellId, now, 2);
         }
     }
@@ -3295,6 +3881,8 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
         return false;
     }
     const time_t now = std::time(nullptr);
+    if (HasPendingChessMove(piece->GetGUID(), now))
+        return false;
     uint32 const abilityWindowSec = GetChessAbilityWindowSec(controlledNonPawn);
 
     if (!IsChessAbilityReady(piece, now, abilityWindowSec))
@@ -3389,9 +3977,17 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
                 ClearChessSpellNoOpBackoff(piece->GetGUID(), spellId);
                 StampChessPieceCommandGcd(piece);
                 chessLastAbilityCommandByPiece[piece->GetGUID()] = now;
+                LogChessDecision(bot, piece, "attack-cast", "spell=" + std::to_string(spellId) + "/" +
+                    GetChessSpellName(spellId) + " shape=" + GetChessSpellShapeLabel(spellId) + " target=" +
+                    enemyKing->GetName() + " distance=" + std::to_string(piece->GetExactDist2d(enemyKing)) +
+                    " effective_range=" + std::to_string(GetChessOffensiveSpellRange(piece, spellId)) +
+                    " target_kind=king", true);
                 return true;
             }
 
+            LogChessDecision(bot, piece, "attack-cast-failed", "spell=" + std::to_string(spellId) +
+                " target=" + enemyKing->GetName() + " distance=" +
+                std::to_string(piece->GetExactDist2d(enemyKing)), true);
             StampChessSpellNoOpBackoff(piece->GetGUID(), spellId, now, 2);
             continue;
         }
@@ -3450,6 +4046,15 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
     {
         if (piece->GetExactDist2d(trigger) > 30.0f)
             continue;
+        int candidateRow = -1;
+        int candidateCol = -1;
+        ObjectGuid reservedBy;
+        if (!WorldToChessSquare(board, trigger->GetPositionX(), trigger->GetPositionY(), candidateRow, candidateCol) ||
+            IsChessDestinationReserved(instanceId, ChessSquare{ candidateRow, candidateCol }, now,
+                piece->GetGUID(), reservedBy))
+            continue;
+        if (IsChessMoveTriggerBackedOff(piece->GetGUID(), trigger->GetGUID(), now))
+            continue;
         float d = trigger->GetExactDist2d(midX, midY);
         if (d < bestDist)
         {
@@ -3474,11 +4079,20 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
         return false;
     }
 
-    if (!CastChessSpell(piece, best, moveSpell))
+    SpellCastResult const moveResult = piece->CastSpell(best, moveSpell, true);
+    if (!CompleteChessSpellCast(piece, moveSpell, moveResult))
+    {
+        chessLastFailedMoveTriggerByPiece[piece->GetGUID()] = best->GetGUID();
+        chessLastFailedMoveTimeByPiece[piece->GetGUID()] = now;
+        BackoffChessMoveTrigger(piece->GetGUID(), best->GetGUID(), now);
+        LogChessDecision(bot, piece, "move-cast-failed", "spell=" + std::to_string(moveSpell) +
+            " source=block-path destination=" + ChessSquareToString(ChessSquare{ toRow, toCol }) +
+            " cast_result=" + std::to_string(static_cast<uint32>(moveResult)));
         return false;
+    }
 
     RecordPendingChessMove(
-        bot, piece, instanceId, oldSq, ChessSquare{ toRow, toCol }, moveSpell, best->GetGUID(), "block-path", now, 5);
+        bot, piece, instanceId, oldSq, ChessSquare{ toRow, toCol }, moveSpell, best->GetGUID(), "block-path", now, 8);
     return true;
 }
 
@@ -3510,6 +4124,7 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
             chessLastAbilityCommandByPiece.erase(pg);
             chessOffensiveTargetByPiece.erase(pg);
             chessMovementCooldownUntilByPiece.erase(pg);
+            chessFailedMoveTriggerUntilByPiece.erase(pg);
             chessAbilityNoOpBackoffByPiece.erase(pg);
         }
         ClearPendingChessClaim(bot, "event-inactive");
@@ -3564,7 +4179,9 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
         bool const notSelectable = assigned->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
         bool const assignedToOtherBot = IsPieceAssignedToOtherBot(bot, assigned);
 
-        bool const pawnRetireCandidate = openingProgressConfirmed && isPawn;
+        bool const pawnRetireCandidate = openingProgressConfirmed && isPawn &&
+            HasPawnMovedDuringOpening(bot->GetMap() ? bot->GetMap()->GetInstanceId() : 0, assigned->GetGUID()) &&
+            HasAvailableNonPawnChessPiece(botAI, bot, openingProgressConfirmed);
 
         if (pawnRetireCandidate)
         {
@@ -3586,6 +4203,7 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
             chessMovementCooldownUntilByPiece.erase(assigned->GetGUID());
             chessLastFailedMoveTriggerByPiece.erase(assigned->GetGUID());
             chessLastFailedMoveTimeByPiece.erase(assigned->GetGUID());
+            chessFailedMoveTriggerUntilByPiece.erase(assigned->GetGUID());
             chessOpeningMoveRetryUntilByPiece.erase(assigned->GetGUID());
             ClearPendingChessClaim(bot, "pawn-retired-for-upgrade");
             ClearAssignedChessPiece(bot);
@@ -3614,4 +4232,3 @@ bool KarazhanChessReleaseOrReassignAction::Execute(Event /*event*/)
 
     return false;
 }
-

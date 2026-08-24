@@ -465,6 +465,11 @@ AiPlayerbot.DropObsoleteQuests = 1
 # Auto add dungeon/raid strategies when entering the instance if implemented
 AiPlayerbot.ApplyInstanceStrategies = 1
 
+# Log rate-limited Karazhan Chess target, movement, facing, attack, healing, and anti-stuck decisions.
+# Messages use the playerbots.chess logger category.
+# Default: 0 (disabled)
+AiPlayerbot.KarazhanChess.Diagnostics = 0
+
 # Enable auto avoid aoe strategy
 # Default: 1 (enabled)
 AiPlayerbot.AutoAvoidAoe = 1
