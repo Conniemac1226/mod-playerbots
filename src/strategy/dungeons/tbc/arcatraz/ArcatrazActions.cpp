@@ -1,11 +1,13 @@
 #include "Playerbots.h"
 #include "ArcatrazActions.h"
 #include "ArcatrazStrategy.h"
-#include "RaidBossHelpers.h"
+#include "EncounterHelpers.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+using namespace EncounterHelpers;
 
 // Per-bot state management for Dalliah whirlwind avoidance (matches successful Drake pattern)
 static std::map<ObjectGuid, uint32> g_dalliah_lastMoveTime;
@@ -534,7 +536,7 @@ bool SkyrissIllusionAction::Execute(Event event)
 
     FocusPriorityTarget(botAI, illusion);
     MarkTargetWithSkull(bot, illusion);
-    SetRtiTarget(botAI, "skull", illusion);
+    SetRtiTarget(botAI, "skull");
     return Attack(illusion);
 }
 

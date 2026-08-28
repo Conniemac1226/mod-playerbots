@@ -12,7 +12,7 @@
 #include "Log.h"
 #include "Playerbots.h"
 #include "PlayerbotTextMgr.h"
-#include "RaidBossHelpers.h"
+#include "EncounterHelpers.h"
 #include "RtiTargetValue.h"
 #include "MotionMaster.h"
 #include <algorithm>

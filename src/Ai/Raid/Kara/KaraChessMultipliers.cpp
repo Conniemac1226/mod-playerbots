@@ -18,7 +18,7 @@
 #include "MovementActions.h"
 #include "Playerbots.h"
 #include "PriestActions.h"
-#include "RaidBossHelpers.h"
+#include "EncounterHelpers.h"
 #include "ReachTargetActions.h"
 #include "RogueActions.h"
 #include "ShamanActions.h"
@@ -58,4 +58,3 @@ float KarazhanChessDisableCombatActionsMultiplier::GetValue(Action* action)
 
     return 1.0f;
 }
-

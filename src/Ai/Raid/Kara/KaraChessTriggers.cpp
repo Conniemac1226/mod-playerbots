@@ -9,7 +9,7 @@
 #include "KaraChessHelpers.h"
 #include "KaraActions.h"
 #include "Playerbots.h"
-#include "RaidBossHelpers.h"
+#include "EncounterHelpers.h"
 
 using namespace KarazhanHelpers;
 
