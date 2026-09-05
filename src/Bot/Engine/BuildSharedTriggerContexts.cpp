@@ -25,6 +25,7 @@
 #include "TKTriggerContext.h"
 #include "TbcDungeonTriggerContext.h"
 #include "Ai/Dungeon/DungeonAutoPullTriggerContext.h"
+#include "Ai/Dungeon/UB/UBTriggerContext.h"
 #include "TriggerContext.h"
 #include "UldTriggerContext.h"
 #include "VoATriggerContext.h"
@@ -74,6 +75,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new TbcDungeonMechanarTriggerContext());
     triggerContexts.Add(new RaidOutlandWorldBossTriggerContext());
     triggerContexts.Add(new DungeonAutoPullTriggerContext());
+    triggerContexts.Add(new TbcDungeonUnderbogTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());

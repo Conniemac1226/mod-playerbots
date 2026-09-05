@@ -25,7 +25,6 @@
 #include "CoSStrategy.h"
 #include "FoSStrategy.h"
 #include "PoSStrategy.h"
-#include "TOCStrategy.h"
 #include "SethStrategy.h"
 #include "../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeStrategy.h"
 #include "../../strategy/dungeons/tbc/blackmorass/BlackMorassStrategy.h"
@@ -102,7 +101,6 @@ class DungeonStrategyContext : public NamedObjectContext<Strategy>
         static Strategy* tbc_arc(PlayerbotAI* botAI) { return new ArcatrazStrategy(botAI); }
         static Strategy* tbc_bot(PlayerbotAI* botAI) { return new BotanicaStrategy(botAI); }
         static Strategy* tbc_mech(PlayerbotAI* botAI) { return new TbcDungeonMechanarStrategy(botAI); }
-
         static Strategy* wotlk_uk(PlayerbotAI* botAI) { return new WotlkDungeonUKStrategy(botAI); }
         static Strategy* wotlk_nex(PlayerbotAI* botAI) { return new WotlkDungeonNexStrategy(botAI); }
         static Strategy* wotlk_an(PlayerbotAI* botAI) { return new WotlkDungeonANStrategy(botAI); }

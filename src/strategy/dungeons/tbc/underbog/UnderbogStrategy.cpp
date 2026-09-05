@@ -1,5 +1,6 @@
 #include "UnderbogStrategy.h"
 #include "Ai/Dungeon/DungeonAutoPull.h"
+#include "Ai/Dungeon/UB/UBMultipliers.h"
 #include "UnderbogTriggers.h"
 #include "UnderbogMultipliers.h"
 
@@ -15,6 +16,18 @@ void UnderbogStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "foul spores active",
         NextAction::array(0, new NextAction("avoid foul spores", ACTION_MOVE + 3), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "ub foul spores",
+        NextAction::array(0, new NextAction("ub retreat from foul spores", ACTION_EMERGENCY + 10), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "ub spore cloud danger",
+        NextAction::array(0, new NextAction("ub vacate spore cloud", ACTION_EMERGENCY + 2), nullptr)));
+
+    triggers.push_back(new TriggerNode(
+        "ub underbat lash",
+        NextAction::array(0, new NextAction("ub clear underbat back", ACTION_EMERGENCY + 1), nullptr)));
 
     // Ghazan
     triggers.push_back(new TriggerNode(
@@ -62,4 +75,7 @@ void UnderbogStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
     // CRITICAL: Block DpsAssist when adds present - prevents boss/add oscillation
     // RESEARCHED: Following HallsOfLightningStrategy.cpp:37-40 pattern
     multipliers.push_back(new BlackStalkerAddMultiplier(botAI));
+    multipliers.push_back(new HungarfenFoulSporesMultiplier(botAI));
+    multipliers.push_back(new HungarfenMushroomIgnoreMultiplier(botAI));
+    multipliers.push_back(new UnderbatFacingMultiplier(botAI));
 }
