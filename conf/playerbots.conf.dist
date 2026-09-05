@@ -1162,6 +1162,11 @@ AiPlayerbot.ResetBotLevel.PlayedTimeCheckFrequency = 864
 # Default: 0 (disabled)
 AiPlayerbot.ResetBotLevel.IgnoreGuildBotsWithRealPlayers = 0
 
+# When enabled, bots that are members of an arena team are excluded from level reset processing.
+# This preserves their arena-team character state when a reset would otherwise randomize them.
+# Default: 1 (enabled)
+AiPlayerbot.ResetBotLevel.IgnoreArenaTeamBots = 1
+
 # Comma-separated list of bot names to exclude from level reset processing. Names must match the
 # character name exactly (character names are stored capitalized, e.g. "Thrall").
 # Default: "" (empty)
