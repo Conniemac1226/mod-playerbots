@@ -273,7 +273,7 @@ bool IllidanDarkBarrageInterruptAction::Execute(Event event)
     if (bot->HasSpell(SPELL_KICK) || bot->HasSpell(SPELL_COUNTERSPELL) ||
         bot->HasSpell(SPELL_PUMMEL) || bot->HasSpell(SPELL_MIND_FREEZE))
     {
-        botAI->InterruptSpell();
+        botAI->GetBot()->InterruptNonMeleeSpells(true);
         return true;
     }
 

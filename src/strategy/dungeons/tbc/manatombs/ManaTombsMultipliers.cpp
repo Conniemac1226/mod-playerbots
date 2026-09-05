@@ -1,7 +1,8 @@
 #include "ManaTombsMultipliers.h"
 #include "ManaTombsActions.h"
-#include "Ai/Base/Actions/GenericActions.h"
+#include "Ai/Base/Actions/AttackAction.h"
 #include "Ai/Base/Actions/GenericSpellActions.h"
+#include "Ai/Base/Actions/PetsAction.h"
 #include "ChooseTargetActions.h"
 
 float PandemoniusDarkShellMultiplier::GetValue(Action* action)

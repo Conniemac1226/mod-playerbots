@@ -135,7 +135,7 @@ bool FreywinnTranquilityAction::Execute(Event event)
         // Try melee interrupt if in range
         if (bot->IsWithinMeleeRange(boss))
         {
-            botAI->InterruptSpell();
+            botAI->GetBot()->InterruptNonMeleeSpells(true);
             return true;
         }
         
@@ -432,7 +432,7 @@ bool WarpSplinterArcaneVolleyAction::Execute(Event event)
         // Try melee interrupt if in range
         if (bot->IsWithinMeleeRange(boss))
         {
-            botAI->InterruptSpell();
+            botAI->GetBot()->InterruptNonMeleeSpells(true);
             return true;
         }
         

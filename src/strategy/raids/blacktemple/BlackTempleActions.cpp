@@ -2200,7 +2200,7 @@ bool IllidariCouncilInterruptMalandeAction::Execute(Event event)
     if (malande->FindCurrentSpellBySpellId(SPELL_CIRCLE_OF_HEALING) ||
         malande->FindCurrentSpellBySpellId(SPELL_EMPOWERED_SMITE))
     {
-        botAI->InterruptSpell();
+        botAI->GetBot()->InterruptNonMeleeSpells(true);
         return true;
     }
 

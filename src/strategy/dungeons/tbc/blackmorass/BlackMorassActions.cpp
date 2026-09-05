@@ -486,7 +486,7 @@ bool TemporusReflectAction::Execute(Event event)
         // Stop casting harmful spells
         if (bot->IsNonMeleeSpellCast(false))
         {
-            botAI->InterruptSpell();
+            botAI->GetBot()->InterruptNonMeleeSpells(true);
             return true;
         }
     }

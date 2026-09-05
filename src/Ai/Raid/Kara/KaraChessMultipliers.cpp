@@ -12,7 +12,6 @@
 #include "ChooseTargetActions.h"
 #include "DruidActions.h"
 #include "FollowActions.h"
-#include "GenericActions.h"
 #include "HunterActions.h"
 #include "MageActions.h"
 #include "MovementActions.h"

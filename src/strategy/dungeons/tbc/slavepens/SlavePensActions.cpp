@@ -99,7 +99,7 @@ bool MennuLightningBoltInterruptAction::Execute(Event event)
         // Interrupt immediately to prevent damage
         if (bot->IsWithinMeleeRange(boss))
         {
-            botAI->InterruptSpell();
+            botAI->GetBot()->InterruptNonMeleeSpells(true);
             return true;
         }
         
@@ -484,7 +484,7 @@ bool QuagmirranPoisonBoltVolleyAction::Execute(Event event)
         // Melee interrupt if in range
         if (bot->IsWithinMeleeRange(boss))
         {
-            botAI->InterruptSpell();
+            botAI->GetBot()->InterruptNonMeleeSpells(true);
             return true;
         }
         

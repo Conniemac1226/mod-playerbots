@@ -152,7 +152,7 @@ bool MellicharStopAttackAction::Execute(Event event)
     Unit* currentTarget = AI_VALUE(Unit*, "current target");
     if (currentTarget && currentTarget->GetGUID() == warden->GetGUID())
     {
-        botAI->InterruptSpell();
+        botAI->GetBot()->InterruptNonMeleeSpells(true);
         bot->SetSelection(ObjectGuid::Empty);
 
         AiObjectContext* botContext = botAI->GetAiObjectContext();
@@ -374,7 +374,7 @@ bool DalliahHealInterruptAction::Execute(Event event)
         // Try melee interrupt if in range
         if (bot->IsWithinMeleeRange(boss))
         {
-            botAI->InterruptSpell();
+            botAI->GetBot()->InterruptNonMeleeSpells(true);
             return true;
         }
         

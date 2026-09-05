@@ -25,6 +25,7 @@
 #include "CoSStrategy.h"
 #include "FoSStrategy.h"
 #include "PoSStrategy.h"
+#include "TOCStrategy.h"
 #include "SethStrategy.h"
 #include "../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeStrategy.h"
 #include "../../strategy/dungeons/tbc/blackmorass/BlackMorassStrategy.h"

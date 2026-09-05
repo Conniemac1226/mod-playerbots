@@ -347,7 +347,7 @@ bool CapacitusReflectiveShieldAction::Execute(Event event)
         // Stop casting spells during magic shield
         if (bot->IsNonMeleeSpellCast(false))
         {
-            botAI->InterruptSpell();
+            botAI->GetBot()->InterruptNonMeleeSpells(true);
             return true;
         }
         // Melee can continue attacking
@@ -641,11 +641,11 @@ bool SepethreaRagingFlamesAction::Execute(Event event)
         {
             uint32 castTime = currentSpell->GetCastTime();
             if (urgent || castTime > 1500 || flameDistance < (heroic ? 18.0f : 15.0f))
-                botAI->InterruptSpell();
+                botAI->GetBot()->InterruptNonMeleeSpells(true);
         }
         else
         {
-            botAI->InterruptSpell();
+            botAI->GetBot()->InterruptNonMeleeSpells(true);
         }
     }
 
@@ -730,7 +730,7 @@ bool SepethreaDragonsBreathAction::Execute(Event event)
         boss->FindCurrentSpellBySpellId(MECH_SPELL_DRAGONS_BREATH))
     {
         if (bot->IsNonMeleeSpellCast(false))
-            botAI->InterruptSpell();
+            botAI->GetBot()->InterruptNonMeleeSpells(true);
 
         auto const moveForced = [this, bot](Position const& pos)
         {
@@ -893,7 +893,7 @@ bool SepethreaAvoidRagingFlamesAction::Execute(Event event)
         return false;
 
     if (bot->IsNonMeleeSpellCast(false))
-        botAI->InterruptSpell();
+        botAI->GetBot()->InterruptNonMeleeSpells(true);
 
     auto const moveForced = [this, bot](Position const& pos)
     {
@@ -991,7 +991,7 @@ bool SepethreaInfernoAvoidanceAction::Execute(Event event)
         return false;
 
     if (bot->IsNonMeleeSpellCast(false))
-        botAI->InterruptSpell();
+        botAI->GetBot()->InterruptNonMeleeSpells(true);
 
     auto const moveForced = [this, bot](Position const& pos)
     {
@@ -1064,7 +1064,7 @@ bool SepethreaFireTrailAvoidanceAction::Execute(Event event)
     // IMMEDIATE emergency response to standing near the fire trail
     if (bot->IsNonMeleeSpellCast(false))
     {
-        botAI->InterruptSpell();
+        botAI->GetBot()->InterruptNonMeleeSpells(true);
     }
     
     std::vector<Unit*> flames = GetActiveRagingFlames(botAI);
