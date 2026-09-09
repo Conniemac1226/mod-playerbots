@@ -9,6 +9,7 @@
 #include "KaraChessHelpers.h"
 #include "Config.h"
 #include "Group.h"
+#include "InstanceScript.h"
 #include "Log.h"
 #include "Playerbots.h"
 #include "PlayerbotTextMgr.h"
@@ -301,8 +302,6 @@ namespace
         {
             case 37427: // Geyser
             case 37428: // Hellfire
-            case 37474: // Sweep
-            case 37476: // Cleave
                 return true;
             default:
                 return false;
@@ -319,6 +318,8 @@ namespace
             case 37454: // Bite
             case 37459: // Holy Lance
             case 37461: // Shadow Spear
+            case 37474: // Sweep (King A)
+            case 37476: // Cleave (King H)
             case 37498: // Stomp
             case 37502: // Howl
                 return true;
@@ -1868,14 +1869,73 @@ namespace
     bool IsPawnEntry(uint32 e) { return e == NPC_PAWN_A || e == NPC_PAWN_H; }
     bool IsKingEntry(uint32 e) { return e == NPC_KING_A || e == NPC_KING_H; }
 
+    static bool IsRealPlayerMainTank(Player* bot)
+    {
+        if (!bot)
+            return false;
+
+        Group* group = bot->GetGroup();
+        if (group)
+        {
+            ObjectGuid const mtGuid = PlayerbotAI::GetMainTankGuid(group);
+            if (!mtGuid.IsEmpty())
+            {
+                if (Player* mtPlayer = ObjectAccessor::FindPlayer(mtGuid))
+                {
+                    if (mtPlayer->GetSession() && !mtPlayer->GetSession()->IsBot())
+                        return true;
+                }
+            }
+
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            {
+                Player* member = ref->GetSource();
+                if (member && member->GetSession() && !member->GetSession()->IsBot())
+                {
+                    if (PlayerbotAI::IsMainTank(member) || PlayerbotAI::IsTank(member))
+                        return true;
+                }
+            }
+        }
+        else
+        {
+            if (PlayerbotAI* ai = GET_PLAYERBOT_AI(bot))
+            {
+                if (Player* master = ai->GetMaster())
+                {
+                    if (master->GetSession() && !master->GetSession()->IsBot())
+                    {
+                        if (PlayerbotAI::IsMainTank(master) || PlayerbotAI::IsTank(master))
+                            return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    static bool CanBotClaimKing(PlayerbotAI* botAI, Player* bot)
+    {
+        if (!botAI || !bot)
+            return false;
+
+        if (IsRealPlayerMainTank(bot))
+            return false;
+
+        return botAI->IsMainTank(bot);
+    }
+
     uint32 GetPreferredChessPieceEntry(PlayerbotAI* botAI, Player* bot, ChessSide side)
     {
         if (!botAI || !bot || side == ChessSide::UNKNOWN)
             return 0;
 
         bool const alliance = side == ChessSide::ALLIANCE;
-        if (botAI->IsMainTank(bot) || botAI->IsTank(bot))
+        if (CanBotClaimKing(botAI, bot))
             return alliance ? NPC_KING_A : NPC_KING_H;
+        if (botAI->IsTank(bot))
+            return alliance ? NPC_ROOK_A : NPC_ROOK_H;
         if (botAI->IsHeal(bot))
             return alliance ? NPC_BISHOP_A : NPC_BISHOP_H;
         if (botAI->IsRanged(bot))
@@ -2187,9 +2247,9 @@ namespace
         {
             uint32 const healSpell = GetChessHealSpell(piece, false);
             SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(healSpell);
-            float const maxRange = spellInfo ? spellInfo->GetMaxRange(true, piece) : 0.0f;
+            float const maxRange = spellInfo ? spellInfo->GetMaxRange(true, piece) : 25.0f;
             float const minRange = spellInfo ? spellInfo->GetMinRange(true) : 0.0f;
-            evaluation.preferredDistance = std::max(2.0f, maxRange - 3.0f);
+            evaluation.preferredDistance = 18.0f;
             evaluation.intendedTargetAttackable = healSpell && evaluation.distance >= minRange &&
                 (maxRange <= 0.0f || evaluation.distance <= maxRange);
             evaluation.abilitiesInRange = evaluation.intendedTargetAttackable ? 1 : 0;
@@ -2239,10 +2299,27 @@ namespace
         evaluation.score += static_cast<float>(evaluation.readyAbilitiesInRange) * 2500.0f;
         evaluation.score += static_cast<float>(evaluation.additionalTargets) * 500.0f;
         evaluation.score -= std::fabs(evaluation.distance - evaluation.preferredDistance) * 150.0f;
-        evaluation.score -= static_cast<float>(evaluation.nearbyEnemies) * (healing ? 450.0f : 100.0f);
+        evaluation.score -= static_cast<float>(evaluation.nearbyEnemies) * (healing ? 800.0f : 100.0f);
         evaluation.score -= static_cast<float>(std::max(
             std::abs(candidateSquare.row - currentSquare.row),
             std::abs(candidateSquare.col - currentSquare.col))) * 25.0f;
+
+        if (PlayerbotAI* ai = GET_PLAYERBOT_AI(bot))
+        {
+            GuidVector const npcs = ai->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+            for (ObjectGuid const& npcGuid : npcs)
+            {
+                Creature* hazard = ai->GetCreature(npcGuid);
+                if (hazard && hazard->GetEntry() == NPC_CHESS_EVENT_MEDIVH_CHEAT_FIRES)
+                {
+                    if (position->GetExactDist2d(hazard) < 4.0f)
+                    {
+                        evaluation.score -= 200000.0f;
+                        break;
+                    }
+                }
+            }
+        }
 
         bool const onEdge = candidateSquare.row == board.minRow || candidateSquare.row == board.maxRow ||
             candidateSquare.col == board.minCol || candidateSquare.col == board.maxCol;
@@ -2342,7 +2419,7 @@ namespace
         if (!botAI || !bot || !openingProgressConfirmed)
             return false;
 
-        bool const canClaimKing = botAI->IsMainTank(bot) || botAI->IsTank(bot);
+        bool const canClaimKing = CanBotClaimKing(botAI, bot);
         for (Creature* candidate : GetNearbyChessPieces(botAI, bot, true))
         {
             if (!candidate || IsPawnEntry(candidate->GetEntry()) ||
@@ -2400,7 +2477,7 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
     CleanupStaleChessState(botAI, bot, "claim-piece");
     ChessBoardState board = BuildChessBoardState(botAI, bot);
     ChessPhase phase = GetChessPhase(botAI, bot, board);
-    const bool canClaimKing = botAI->IsMainTank(bot) || botAI->IsTank(bot);
+    bool const canClaimKing = CanBotClaimKing(botAI, bot);
 
     ChessSide botSide = GetChessSideForBot(bot);
     if (botSide == ChessSide::UNKNOWN)
@@ -2408,8 +2485,12 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         return false;
     }
 
+    InstanceMap* map = bot->GetMap() ? bot->GetMap()->ToInstanceMap() : nullptr;
+    InstanceScript* instance = map ? map->GetInstanceScript() : nullptr;
+    uint32 const chessPhase = instance ? instance->GetData(DATA_CHESS_GAME_PHASE) : 0;
+    bool const isWarmupPhase = chessPhase == CHESS_PHASE_PVE_WARMUP || chessPhase == CHESS_PHASE_PVP_WARMUP;
     bool const openingProgressConfirmed = HasConfirmedOpeningProgress(instanceId);
-    bool const pawnOnlyMode = !openingProgressConfirmed;
+    bool const pawnOnlyMode = !openingProgressConfirmed && !isWarmupPhase;
 
     Creature* charm = bot->GetCharm() ? bot->GetCharm()->ToCreature() : nullptr;
     if (charm && IsChessPieceEntry(charm->GetEntry()))
@@ -2518,6 +2599,9 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         }
         else
             bot->CastSpell(assigned, SPELL_CONTROL_PIECE, true);
+
+        if (instance && isWarmupPhase && IsKingEntry(assigned->GetEntry()))
+            instance->SetData(DATA_CHESS_GAME_PHASE, CHESS_PHASE_INPROGRESS_PVE);
         return true;
     }
 
@@ -2606,7 +2690,9 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         {
             case NPC_KING_A:
             case NPC_KING_H:
-                score += botAI->IsTank(bot) ? 260 : (botAI->IsHeal(bot) ? 120 : 40);
+                if (!canClaimKing)
+                    continue;
+                score += botAI->IsMainTank(bot) ? 260 : 40;
                 break;
             case NPC_BISHOP_A:
             case NPC_BISHOP_H:
@@ -2618,7 +2704,7 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
                 break;
             case NPC_ROOK_A:
             case NPC_ROOK_H:
-                score += (botAI->IsRanged(bot) || botAI->IsTank(bot)) ? 180 : 80;
+                score += (botAI->IsTank(bot) ? 260 : (botAI->IsRanged(bot) ? 180 : 80));
                 break;
             case NPC_KNIGHT_A:
             case NPC_KNIGHT_H:
@@ -2658,7 +2744,11 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
         else if (phase == ChessPhase::CLAIM_HIGH_VALUE)
         {
             if (IsKingEntry(piece->GetEntry()))
+            {
+                if (!canClaimKing)
+                    continue;
                 score += 1000;
+            }
             else if (IsHealerChessPieceEntry(piece->GetEntry()))
                 score += 700;
             else if (IsDamageChessPieceEntry(piece->GetEntry()))
@@ -2705,6 +2795,9 @@ bool KarazhanChessClaimPieceAction::Execute(Event /*event*/)
     }
     else
         bot->CastSpell(best, SPELL_CONTROL_PIECE, true);
+
+    if (instance && isWarmupPhase && IsKingEntry(best->GetEntry()))
+        instance->SetData(DATA_CHESS_GAME_PHASE, CHESS_PHASE_INPROGRESS_PVE);
     return true;
 }
 
@@ -2807,6 +2900,21 @@ bool KarazhanChessMovePieceAction::Execute(Event /*event*/)
         float distPiece = piece->GetExactDist2d(trigger);
         float distKing = trigger->GetExactDist2d(enemyKing);
         if (distPiece > 30.0f)
+            continue;
+
+        bool nearHazard = false;
+        GuidVector const nearestNpcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+        for (ObjectGuid const& npcGuid : nearestNpcs)
+        {
+            Creature* hazard = botAI->GetCreature(npcGuid);
+            if (hazard && hazard->GetEntry() == NPC_CHESS_EVENT_MEDIVH_CHEAT_FIRES &&
+                trigger->GetExactDist2d(hazard) < 3.8f)
+            {
+                nearHazard = true;
+                break;
+            }
+        }
+        if (nearHazard)
             continue;
 
         // Give the event board time to settle and force an alternate square after a rejected move.
@@ -3206,15 +3314,6 @@ bool KarazhanChessMoveOutOfFireAction::Execute(Event /*event*/)
         return false;
     }
 
-    if (phase == ChessPhase::OPENING && HasPawnMovedDuringOpening(instanceId, piece->GetGUID()))
-    {
-        return false;
-    }
-    auto retryIt = chessOpeningMoveRetryUntilByPiece.find(piece->GetGUID());
-    if (phase == ChessPhase::OPENING && retryIt != chessOpeningMoveRetryUntilByPiece.end() && now < retryIt->second)
-    {
-        return false;
-    }
     ChessSquare oldSq;
     bool const hasOldSq = board.pieceSquare.find(piece->GetGUID()) != board.pieceSquare.end();
     if (hasOldSq)
@@ -3589,7 +3688,11 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                     continue;
             }
             if (!IsChessSpellTargetInRange(piece, enemyKing, spellId))
+            {
+                if (IsConeOffensiveChessSpell(spellId) && IsChessMoveReady(piece, now, 5))
+                    TryFaceChessTarget(bot, piece, board, controlledSq, enemyKing, now, "ability-face-king");
                 continue;
+            }
             if (IsChessHealSpellBlockedOnEnemy(spellId))
                 continue;
             if (CastOffensiveChessSpell(piece, enemyKing, spellId))
@@ -3643,7 +3746,12 @@ bool KarazhanChessUseAbilityAction::Execute(Event /*event*/)
                 continue;
 
             if (!IsChessSpellTargetInRange(piece, nonKingTarget.target, spellId))
+            {
+                if (IsConeOffensiveChessSpell(spellId) && IsChessMoveReady(piece, now, 5))
+                    TryFaceChessTarget(
+                        bot, piece, board, controlledSq, nonKingTarget.target, now, "ability-face-target");
                 continue;
+            }
 
             time_t nonKingBackoffRemaining = 0;
             if (IsChessSpellNoOpBackoffActive(pieceGuid, spellId, now, nonKingBackoffRemaining))
@@ -3970,7 +4078,11 @@ bool KarazhanChessAttackEnemyKingAction::Execute(Event /*event*/)
                 continue;
 
             if (!IsChessSpellTargetInRange(piece, enemyKing, spellId))
+            {
+                if (IsConeOffensiveChessSpell(spellId) && IsChessMoveReady(piece, now, 5))
+                    TryFaceChessTarget(bot, piece, board, controlledSq, enemyKing, now, "attack-face-king");
                 continue;
+            }
 
             if (CastOffensiveChessSpell(piece, enemyKing, spellId))
             {
@@ -4046,6 +4158,22 @@ bool KarazhanChessBlockEnemyPathAction::Execute(Event /*event*/)
     {
         if (piece->GetExactDist2d(trigger) > 30.0f)
             continue;
+
+        bool nearHazard = false;
+        GuidVector const nearestNpcs = botAI->GetAiObjectContext()->GetValue<GuidVector>("nearest npcs")->Get();
+        for (ObjectGuid const& npcGuid : nearestNpcs)
+        {
+            Creature* hazard = botAI->GetCreature(npcGuid);
+            if (hazard && hazard->GetEntry() == NPC_CHESS_EVENT_MEDIVH_CHEAT_FIRES &&
+                trigger->GetExactDist2d(hazard) < 3.8f)
+            {
+                nearHazard = true;
+                break;
+            }
+        }
+        if (nearHazard)
+            continue;
+
         int candidateRow = -1;
         int candidateCol = -1;
         ObjectGuid reservedBy;

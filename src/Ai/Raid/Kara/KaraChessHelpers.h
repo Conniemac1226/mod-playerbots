@@ -45,8 +45,11 @@ namespace KarazhanHelpers
 
     constexpr uint32 KARAZHAN_MAP_ID = 532;
     constexpr uint32 DATA_CHESS_GAME_PHASE = 35;
+    constexpr uint32 CHESS_PHASE_PVE_WARMUP = 1;
     constexpr uint32 CHESS_PHASE_INPROGRESS_PVE = 2;
+    constexpr uint32 CHESS_PHASE_PVP_WARMUP = 5;
     constexpr uint32 CHESS_PHASE_INPROGRESS_PVP = 6;
+    constexpr uint32 CHESS_EVENT_TEAM_DATA = 33;
 
     enum class ChessSide : uint8
     {

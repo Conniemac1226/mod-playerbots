@@ -187,6 +187,18 @@ namespace KarazhanHelpers
         if (!bot)
             return ChessSide::UNKNOWN;
 
+        if (InstanceMap* map = bot->GetMap() ? bot->GetMap()->ToInstanceMap() : nullptr)
+        {
+            if (InstanceScript* instance = map->GetInstanceScript())
+            {
+                uint32 const teamData = instance->GetData(CHESS_EVENT_TEAM_DATA);
+                if (teamData == TEAM_ALLIANCE)
+                    return ChessSide::ALLIANCE;
+                if (teamData == TEAM_HORDE)
+                    return ChessSide::HORDE;
+            }
+        }
+
         Player* owner = bot;
         if (PlayerbotAI* ai = GET_PLAYERBOT_AI(bot))
         {
@@ -260,17 +272,19 @@ namespace KarazhanHelpers
         if (!IsFriendlyChessPieceForBot(bot, piece))
             return false;
 
-        if (!piece->IsInWorld())
+        if (!piece->IsInWorld() || !piece->IsAlive())
             return false;
 
-        if (!piece->IsAlive())
+        if (piece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
+            return false;
+
+        if (!IsOnActiveChessBoard(piece))
             return false;
 
         if (allowControlledState)
             return true;
 
-        return !piece->IsCharmed() &&
-               !piece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        return !piece->IsCharmed();
     }
 
     bool IsClaimableFriendlyPawnForOpening(Player* bot, Creature* piece)
@@ -287,6 +301,12 @@ namespace KarazhanHelpers
         // Chess pieces may already be charmed by script-side controllers but are still valid
         // targets for SPELL_CONTROL_PIECE takeover.
         if (!piece->IsInWorld() || !piece->IsAlive())
+            return false;
+
+        if (piece->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
+            return false;
+
+        if (!IsOnActiveChessBoard(piece))
             return false;
 
         if (!IsFriendlyChessPieceForBot(bot, piece))
@@ -326,7 +346,8 @@ namespace KarazhanHelpers
             return false;
 
         uint32 phase = instance->GetData(DATA_CHESS_GAME_PHASE);
-        return phase == CHESS_PHASE_INPROGRESS_PVE || phase == CHESS_PHASE_INPROGRESS_PVP;
+        return phase == CHESS_PHASE_PVE_WARMUP || phase == CHESS_PHASE_INPROGRESS_PVE ||
+               phase == CHESS_PHASE_PVP_WARMUP || phase == CHESS_PHASE_INPROGRESS_PVP;
     }
 
     void CountEnemyChessBoardState(PlayerbotAI* botAI, Player* bot, uint32& supportAlive, uint32& damageAlive, uint32& pawnAlive)
