@@ -27,6 +27,7 @@
 #include "TbcDungeonActionContext.h"
 #include "Ai/Dungeon/DungeonAutoPullActionContext.h"
 #include "Ai/Dungeon/UB/UBActionContext.h"
+#include "MgTActionContext.h"
 #include "UldActionContext.h"
 #include "VoAActionContext.h"
 #include "WorldPacketActionContext.h"
@@ -38,13 +39,11 @@
 #include "../../../strategy/dungeons/tbc/botanica/BotanicaActionContext.h"
 #include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeActionContext.h"
 #include "../../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsActionContext.h"
-#include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceActionContext.h"
 #include "../../../strategy/dungeons/tbc/manatombs/ManaTombsActionContext.h"
 #include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthActionContext.h"
 #include "../../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsActionContext.h"
 #include "../../../strategy/dungeons/tbc/slavepens/SlavePensActionContext.h"
 #include "../../../strategy/dungeons/tbc/steamvault/SteamvaultActionContext.h"
-#include "../../../strategy/dungeons/tbc/underbog/UnderbogActionContext.h"
 
 void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Action>& actionContexts)
 {
@@ -76,6 +75,7 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
     actionContexts.Add(new RaidOutlandWorldBossActionContext());
     actionContexts.Add(new DungeonAutoPullActionContext());
     actionContexts.Add(new TbcDungeonUnderbogActionContext());
+    actionContexts.Add(new TbcDungeonMagistersTerraceActionContext());
     actionContexts.Add(new WotlkDungeonUKActionContext());
     actionContexts.Add(new WotlkDungeonNexActionContext());
     actionContexts.Add(new WotlkDungeonANActionContext());
@@ -94,12 +94,10 @@ void AiObjectContext::BuildSharedActionContexts(SharedNamedObjectContextList<Act
 
     actionContexts.Add(new EscapeFromDurnholdeActionContext());
     actionContexts.Add(new BlackMorassActionContext());
-    actionContexts.Add(new MagistersTerraceActionContext());
     actionContexts.Add(new SteamvaultActionContext());
     actionContexts.Add(new HellfireRampartsActionContext());
     actionContexts.Add(new BloodFurnaceActionContext());
     actionContexts.Add(new SlavePensActionContext());
-    actionContexts.Add(new UnderbogActionContext());
     actionContexts.Add(new ManaTombsActionContext());
     actionContexts.Add(new ShatteredHallsActionContext());
     actionContexts.Add(new ShadowLabyrinthActionContext());

@@ -26,6 +26,7 @@
 #include "TbcDungeonTriggerContext.h"
 #include "Ai/Dungeon/DungeonAutoPullTriggerContext.h"
 #include "Ai/Dungeon/UB/UBTriggerContext.h"
+#include "MgTTriggerContext.h"
 #include "TriggerContext.h"
 #include "UldTriggerContext.h"
 #include "VoATriggerContext.h"
@@ -38,13 +39,11 @@
 #include "../../../strategy/dungeons/tbc/botanica/BotanicaTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/magistersterrace/MagistersTerraceTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/manatombs/ManaTombsTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/slavepens/SlavePensTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/steamvault/SteamvaultTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/underbog/UnderbogTriggerContext.h"
 
 void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
 {
@@ -76,6 +75,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidOutlandWorldBossTriggerContext());
     triggerContexts.Add(new DungeonAutoPullTriggerContext());
     triggerContexts.Add(new TbcDungeonUnderbogTriggerContext());
+    triggerContexts.Add(new TbcDungeonMagistersTerraceTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());
@@ -94,12 +94,10 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
 
     triggerContexts.Add(new EscapeFromDurnholdeTriggerContext());
     triggerContexts.Add(new BlackMorassTriggerContext());
-    triggerContexts.Add(new MagistersTerraceTriggerContext());
     triggerContexts.Add(new SteamvaultTriggerContext());
     triggerContexts.Add(new HellfireRampartsTriggerContext());
     triggerContexts.Add(new BloodFurnaceTriggerContext());
     triggerContexts.Add(new SlavePensTriggerContext());
-    triggerContexts.Add(new UnderbogTriggerContext());
     triggerContexts.Add(new ManaTombsTriggerContext());
     triggerContexts.Add(new ShatteredHallsTriggerContext());
     triggerContexts.Add(new ShadowLabyrinthTriggerContext());

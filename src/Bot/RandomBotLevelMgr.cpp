@@ -62,6 +62,11 @@ static bool BotInFriendList(Player* bot, std::vector<uint32> const& socialFriend
 // Checks if the given bot is a member of any arena team. Use CharacterCache as the authoritative
 // membership source: Player::GetArenaTeamId() reads live unit fields that can remain stale after
 // arena cleanup and caused non-members to be incorrectly protected from bracket redistribution.
+static bool IsDisabledBracket(std::vector<LevelBracketConfig> const& configured, uint8 index)
+{
+    return index < configured.size() && configured[index].pct == 0;
+}
+
 static bool BotInArenaTeam(Player* bot)
 {
     if (!bot)
@@ -497,6 +502,9 @@ int RandomBotLevelMgr::GetOrFlagPlayerBracket(Player* player)
         if (factionRanges[i].lower > factionRanges[i].upper)
             continue;
 
+        if (factionRanges[i].pct == 0)
+            continue;
+
         // Skip brackets that Death Knights cannot be assigned to.
         if (player->getClass() == CLASS_DEATH_KNIGHT && factionRanges[i].upper < dkMinLevel)
             continue;
@@ -686,8 +694,9 @@ void RandomBotLevelMgr::RunLevelBracketsDistribution()
                 int combinedReal = allianceRealCounts[i] + hordeRealCounts[i];
                 float weight = baseline + sPlayerbotAIConfig.levelBracketsRealPlayerWeight *
                     (totalCombinedReal > 0 ? (1.0f / float(totalCombinedReal)) : 1.0f) * std::log(1 + combinedReal);
-                allianceWeights[i] = weight;
-                hordeWeights[i] = weight;
+
+                allianceWeights[i] = IsDisabledBracket(sPlayerbotAIConfig.levelBracketsAlliance, i) ? 0.0f : weight;
+                hordeWeights[i] = IsDisabledBracket(sPlayerbotAIConfig.levelBracketsHorde, i) ? 0.0f : weight;
             }
         }
         else
@@ -695,14 +704,16 @@ void RandomBotLevelMgr::RunLevelBracketsDistribution()
             // Separate dynamic weighting for each faction.
             for (uint8 i = 0; i < _numRanges; ++i)
             {
-                if (_allianceRanges[i].lower > _allianceRanges[i].upper)
+                if (_allianceRanges[i].lower > _allianceRanges[i].upper ||
+                    IsDisabledBracket(sPlayerbotAIConfig.levelBracketsAlliance, i))
                     allianceWeights[i] = 0.0f;
                 else
                     allianceWeights[i] = baseline + sPlayerbotAIConfig.levelBracketsRealPlayerWeight *
                         (totalAllianceReal > 0 ? (1.0f / totalAllianceReal) : 1.0f) *
                         std::log(1 + allianceRealCounts[i]);
 
-                if (_hordeRanges[i].lower > _hordeRanges[i].upper)
+                if (_hordeRanges[i].lower > _hordeRanges[i].upper ||
+                    IsDisabledBracket(sPlayerbotAIConfig.levelBracketsHorde, i))
                     hordeWeights[i] = 0.0f;
                 else
                     hordeWeights[i] = baseline + sPlayerbotAIConfig.levelBracketsRealPlayerWeight *
@@ -1357,6 +1368,13 @@ void RandomBotLevelMgr::OnBotLevelChanged(Player* player, uint8 oldLevel)
         return;
 
     uint8 newLevel = player->GetLevel();
+
+    if (newLevel == 1)
+        return;
+
+    if (player->getClass() == CLASS_DEATH_KNIGHT &&
+        newLevel == static_cast<uint8>(sWorld->getIntConfig(CONFIG_START_HEROIC_PLAYER_LEVEL)))
+        return;
 
     // SkipFromLevel takes priority and is not affected by ScaledChance or RestrictTimePlayed.
     if (sPlayerbotAIConfig.resetBotLevelSkipFrom > 0 && newLevel == sPlayerbotAIConfig.resetBotLevelSkipFrom)
