@@ -52,17 +52,7 @@
 #include "TravelMgr.h"
 #include "Unit.h"
 #include "World.h"
-#include "Cell.h"
-#include "GridNotifiers.h"
-#include "CellImpl.h"
 #include "GridNotifiersImpl.h"
-#include "WorldSessionMgr.h"
-#include <algorithm>
-#include <boost/thread/thread.hpp>
-#include <cstdlib>
-#include <ctime>
-#include <iomanip>
-#include <random>
 #include <set>
 #include <utility>
 
@@ -2871,7 +2861,8 @@ void RandomPlayerbotMgr::HandleCommand(uint32 type, std::string const text, Play
             }
         }
 
-        GET_PLAYERBOT_AI(bot)->HandleCommand(type, text, fromPlayer);
+        if (PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot))
+            botAI->HandleCommand(type, text, fromPlayer);
     }
 }
 
