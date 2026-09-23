@@ -8,7 +8,7 @@
 #include "HoSStrategy.h"
 #include "HoSMultipliers.h"
 
-void WotlkDungeonHoSStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
+void WotlkDungeonHoSStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     DungeonAutoPull::AddDefaultPullTrigger(triggers);
 
@@ -31,7 +31,7 @@ void WotlkDungeonHoSStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
         { NextAction("avoid lightning ring", ACTION_RAID + 5) }));
 }
 
-void WotlkDungeonHoSStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
+void WotlkDungeonHoSStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new KrystallusMultiplier(botAI));
     multipliers.push_back(new SjonnirMultiplier(botAI));

@@ -51,3 +51,9 @@ local.properties
 .vscode
 .idea
 .aider*
+
+#
+# Agent tooling
+#
+.agents/plans/**
+.claude/settings.local.json

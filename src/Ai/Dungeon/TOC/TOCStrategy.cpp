@@ -7,7 +7,7 @@
 #include "Ai/Dungeon/DungeonAutoPull.h"
 #include "TOCStrategy.h"
 
-void WotlkDungeonToCStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
+void WotlkDungeonToCStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     DungeonAutoPull::AddDefaultPullTrigger(triggers);
 
@@ -24,6 +24,6 @@ void WotlkDungeonToCStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 
 }
 
-void WotlkDungeonToCStrategy::InitMultipliers(std::vector<Multiplier*> &/*multipliers*/)
+void WotlkDungeonToCStrategy::InitMultipliers(std::vector<Multiplier*>& /*multipliers*/)
 {
 }

@@ -8,7 +8,7 @@
 #include "HoLStrategy.h"
 #include "HoLMultipliers.h"
 
-void WotlkDungeonHoLStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
+void WotlkDungeonHoLStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     DungeonAutoPull::AddDefaultPullTrigger(triggers);
 
@@ -40,7 +40,7 @@ void WotlkDungeonHoLStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
         { NextAction("loken stack", ACTION_MOVE + 4) }));
 }
 
-void WotlkDungeonHoLStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
+void WotlkDungeonHoLStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new BjarngrimMultiplier(botAI));
     multipliers.push_back(new VolkhanMultiplier(botAI));

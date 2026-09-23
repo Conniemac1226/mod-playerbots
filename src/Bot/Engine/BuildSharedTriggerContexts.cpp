@@ -38,14 +38,14 @@
 #include "../../../strategy/dungeons/tbc/bloodfurnace/BloodFurnaceTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/botanica/BotanicaTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/escapefromdurnholde/EscapeFromDurnholdeTriggerContext.h"
-#include "../../../strategy/dungeons/tbc/hellfireramparts/HellfireRampartsTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/manatombs/ManaTombsTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/shadowlabyrinth/ShadowLabyrinthTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/shatteredhalls/ShatteredHallsTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/slavepens/SlavePensTriggerContext.h"
 #include "../../../strategy/dungeons/tbc/steamvault/SteamvaultTriggerContext.h"
 
-void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Trigger>& triggerContexts)
+void AiObjectContext::BuildSharedTriggerContexts(
+    SharedNamedObjectContextList<Trigger>& triggerContexts)
 {
     triggerContexts.Add(new TriggerContext());
     triggerContexts.Add(new ChatTriggerContext());
@@ -59,7 +59,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new RaidNaxxTriggerContext());
     triggerContexts.Add(new RaidSSCTriggerContext());
     triggerContexts.Add(new RaidTempestKeepTriggerContext());
-    triggerContexts.Add(new RaidHyjalSummitTriggerContext());
+    triggerContexts.Add(new RaidHyjalTriggerContext());
     triggerContexts.Add(new RaidBlackTempleTriggerContext());
     triggerContexts.Add(new RaidZulAmanTriggerContext());
     triggerContexts.Add(new RaidOsTriggerContext());
@@ -76,6 +76,7 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new DungeonAutoPullTriggerContext());
     triggerContexts.Add(new TbcDungeonUnderbogTriggerContext());
     triggerContexts.Add(new TbcDungeonMagistersTerraceTriggerContext());
+    triggerContexts.Add(new TbcDungeonHellfireRampartsTriggerContext());
     triggerContexts.Add(new WotlkDungeonUKTriggerContext());
     triggerContexts.Add(new WotlkDungeonNexTriggerContext());
     triggerContexts.Add(new WotlkDungeonANTriggerContext());
@@ -95,7 +96,6 @@ void AiObjectContext::BuildSharedTriggerContexts(SharedNamedObjectContextList<Tr
     triggerContexts.Add(new EscapeFromDurnholdeTriggerContext());
     triggerContexts.Add(new BlackMorassTriggerContext());
     triggerContexts.Add(new SteamvaultTriggerContext());
-    triggerContexts.Add(new HellfireRampartsTriggerContext());
     triggerContexts.Add(new BloodFurnaceTriggerContext());
     triggerContexts.Add(new SlavePensTriggerContext());
     triggerContexts.Add(new ManaTombsTriggerContext());

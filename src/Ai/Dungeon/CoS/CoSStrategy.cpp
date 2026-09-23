@@ -8,7 +8,7 @@
 #include "CoSStrategy.h"
 #include "CoSMultipliers.h"
 
-void WotlkDungeonCoSStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
+void WotlkDungeonCoSStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     DungeonAutoPull::AddDefaultPullTrigger(triggers);
 
@@ -29,7 +29,7 @@ void WotlkDungeonCoSStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // Infinite Corruptor (Heroic only)
 }
 
-void WotlkDungeonCoSStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
+void WotlkDungeonCoSStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new EpochMultiplier(botAI));
 }

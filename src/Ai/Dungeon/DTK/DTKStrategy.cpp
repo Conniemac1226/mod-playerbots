@@ -8,7 +8,7 @@
 #include "DTKStrategy.h"
 #include "DTKMultipliers.h"
 
-void WotlkDungeonDTKStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
+void WotlkDungeonDTKStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     DungeonAutoPull::AddDefaultPullTrigger(triggers);
 
@@ -42,7 +42,7 @@ void WotlkDungeonDTKStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
         { NextAction("slaying strike", ACTION_NORMAL + 2) }));
 }
 
-void WotlkDungeonDTKStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
+void WotlkDungeonDTKStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new NovosMultiplier(botAI));
     multipliers.push_back(new TharonjaMultiplier(botAI));

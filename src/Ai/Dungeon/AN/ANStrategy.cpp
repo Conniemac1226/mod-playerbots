@@ -8,7 +8,7 @@
 #include "ANStrategy.h"
 #include "ANMultipliers.h"
 
-void WotlkDungeonANStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
+void WotlkDungeonANStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     DungeonAutoPull::AddDefaultPullTrigger(triggers);
 
@@ -33,7 +33,7 @@ void WotlkDungeonANStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
         { NextAction("dodge pound", ACTION_MOVE + 5) }));
 }
 
-void WotlkDungeonANStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
+void WotlkDungeonANStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new KrikthirMultiplier(botAI));
 }

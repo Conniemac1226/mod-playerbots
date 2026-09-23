@@ -8,7 +8,7 @@
 #include "UKStrategy.h"
 #include "UKMultipliers.h"
 
-void WotlkDungeonUKStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
+void WotlkDungeonUKStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     DungeonAutoPull::AddDefaultPullTrigger(triggers);
 
@@ -39,7 +39,7 @@ void WotlkDungeonUKStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
 
 }
 
-void WotlkDungeonUKStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
+void WotlkDungeonUKStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new PrinceKelesethMultiplier(botAI));
     multipliers.push_back(new SkarvaldAndDalronnMultiplier(botAI));

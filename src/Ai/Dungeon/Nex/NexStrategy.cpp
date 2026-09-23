@@ -8,7 +8,7 @@
 #include "NexStrategy.h"
 #include "NexMultipliers.h"
 
-void WotlkDungeonNexStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
+void WotlkDungeonNexStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     DungeonAutoPull::AddDefaultPullTrigger(triggers);
 
@@ -52,7 +52,7 @@ void WotlkDungeonNexStrategy::InitTriggers(std::vector<TriggerNode*> &triggers)
     // TODO: Add frost resist aura for paladins?
 }
 
-void WotlkDungeonNexStrategy::InitMultipliers(std::vector<Multiplier*> &multipliers)
+void WotlkDungeonNexStrategy::InitMultipliers(std::vector<Multiplier*>& multipliers)
 {
     multipliers.push_back(new FactionCommanderMultiplier(botAI));
     multipliers.push_back(new TelestraMultiplier(botAI));
