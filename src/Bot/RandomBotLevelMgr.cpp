@@ -124,7 +124,7 @@ static bool IsBotSafeForLevelReset(Player* bot)
 
 static bool IsBotSafeForOneTimeCleanup(Player* bot, bool allowRealPlayerGroup)
 {
-    if (!bot || !bot->GetSession() || bot->GetSession()->isLogingOut() || bot->IsDuringRemoveFromWorld() ||
+    if (!bot || !bot->GetSession() || bot->GetSession()->IsLoggingOut() || bot->IsDuringRemoveFromWorld() ||
         !bot->IsInWorld() || !bot->IsAlive() || bot->IsInCombat() || bot->InBattleground() || bot->InArena() ||
         bot->inRandomLfgDungeon() || bot->InBattlegroundQueue() || bot->IsInFlight())
         return false;
