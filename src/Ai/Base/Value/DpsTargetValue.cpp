@@ -114,8 +114,8 @@ public:
     {
         float time = unit->GetHealth() / dps_;
         float dis = unit->GetDistance(botAI->GetBot());
-        float attackRange =
-            botAI->IsRanged(botAI->GetBot()) ? sPlayerbotAIConfig.spellDistance : sPlayerbotAIConfig.meleeDistance;
+        float attackRange = PlayerbotAI::IsRanged(botAI->GetBot()) ? sPlayerbotAIConfig.SpellDistance
+                                                                   : sPlayerbotAIConfig.MeleeDistance;
         attackRange += 5.0f;
         int level = dis < attackRange ? 10 : 0;
         if (time >= 5 && time <= 30)
@@ -190,8 +190,8 @@ public:
     int32_t GetIntervalLevel(Unit* unit)
     {
         float dis = unit->GetDistance(botAI->GetBot());
-        float attackRange =
-            botAI->IsRanged(botAI->GetBot()) ? sPlayerbotAIConfig.spellDistance : sPlayerbotAIConfig.meleeDistance;
+        float attackRange = PlayerbotAI::IsRanged(botAI->GetBot()) ? sPlayerbotAIConfig.SpellDistance
+                                                                   : sPlayerbotAIConfig.MeleeDistance;
         attackRange += 5.0f;
         int level = dis < attackRange ? 10 : 0;
         return level;
@@ -266,8 +266,8 @@ public:
     int32_t GetIntervalLevel(Unit* unit)
     {
         float dis = unit->GetDistance(botAI->GetBot());
-        float attackRange =
-            botAI->IsRanged(botAI->GetBot()) ? sPlayerbotAIConfig.spellDistance : sPlayerbotAIConfig.meleeDistance;
+        float attackRange = PlayerbotAI::IsRanged(botAI->GetBot()) ? sPlayerbotAIConfig.SpellDistance
+                                                                   : sPlayerbotAIConfig.MeleeDistance;
         attackRange += 5.0f;
         int level = dis < attackRange ? 10 : 0;
         return level;
@@ -288,7 +288,7 @@ Unit* DpsTargetValue::Calculate()
 
     if (botAI->GetNearGroupMemberCount() > 3)
     {
-        if (botAI->IsCaster(bot))
+        if (PlayerbotAI::IsCaster(bot))
         {
             // Caster find target strategy avoids casting spells on enemies
             // with too low health to ensure the effectiveness of casting
@@ -296,7 +296,7 @@ Unit* DpsTargetValue::Calculate()
             Unit* result = TargetValue::FindTarget(&strategy);
             return result;
         }
-        else if (botAI->IsCombo(bot))
+        else if (PlayerbotAI::IsCombo(bot))
         {
             ComboFindTargetSmartStrategy strategy(botAI, dps);
             Unit* result = TargetValue::FindTarget(&strategy);
