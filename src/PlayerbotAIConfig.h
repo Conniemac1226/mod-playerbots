@@ -311,6 +311,7 @@ public:
     uint32 LimitGearExpansion;
     uint32 RandomBotStartingLevel;
     bool EnablePeriodicOnlineOffline;
+    bool PreloadArenaTeamBots = true;
     float PeriodicOnlineOfflineRatio;
     bool GearScoreCheck;
     bool RandomBotPreQuests;
@@ -487,6 +488,11 @@ public:
     // Random bot level brackets (periodic redistribution across per-faction level ranges). See
     // RandomBotLevelMgr; percentages here are the as-configured values, not the runtime working copy.
     bool LevelBracketsEnabled;
+    bool LevelBracketsCleanupGearOnLevelChange = true;
+    uint32 LevelBracketsOneTimeCleanupGeneration = 0;
+    uint32 LevelBracketsOneTimeCleanupProcessLimit = 1;
+    bool LevelBracketsOneTimeCleanupRemoveRecoveryMail = true;
+    bool LevelBracketsLiteDebug = false;
     uint32 LevelBracketsCheckFrequency;
     uint32 LevelBracketsFlaggedCheckFrequency;
     uint32 LevelBracketsFlaggedProcessLimit;

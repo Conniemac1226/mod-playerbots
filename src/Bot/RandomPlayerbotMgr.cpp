@@ -476,7 +476,7 @@ void RandomPlayerbotMgr::UpdateAIInternal(uint32 /*elapsed*/, bool /*minimal*/)
 
 bool RandomPlayerbotMgr::ReplaceDisabledDeathKnightsInArenaTeams()
 {
-    if (!sPlayerbotAIConfig.disableDeathKnightLogin)
+    if (!sPlayerbotAIConfig.DisableDeathKnightLogin)
         return true;
 
     std::vector<ObjectGuid> replacementCandidates;
@@ -627,7 +627,7 @@ void RandomPlayerbotMgr::PreloadArenaTeamBots()
         return;
 
     arenaTeamBotsPreloaded = true;
-    if (!sPlayerbotAIConfig.preloadArenaTeamBots)
+    if (!sPlayerbotAIConfig.PreloadArenaTeamBots)
         return;
 
     std::unordered_set<ObjectGuid> arenaMemberGuids;
@@ -653,7 +653,7 @@ void RandomPlayerbotMgr::PreloadArenaTeamBots()
                 continue;
             }
 
-            if (sPlayerbotAIConfig.disableDeathKnightLogin && memberInfo->Class == CLASS_DEATH_KNIGHT)
+            if (sPlayerbotAIConfig.DisableDeathKnightLogin && memberInfo->Class == CLASS_DEATH_KNIGHT)
             {
                 skippedDeathKnight++;
                 continue;
@@ -684,10 +684,10 @@ void RandomPlayerbotMgr::PreloadArenaTeamBots()
             continue;
         }
 
-        uint32 addTime = sPlayerbotAIConfig.enablePeriodicOnlineOffline
-                             ? urand(sPlayerbotAIConfig.minRandomBotInWorldTime,
-                                     sPlayerbotAIConfig.maxRandomBotInWorldTime)
-                             : sPlayerbotAIConfig.permanentlyInWorldTime;
+        uint32 addTime = sPlayerbotAIConfig.EnablePeriodicOnlineOffline
+                             ? urand(sPlayerbotAIConfig.MinRandomBotInWorldTime,
+                                     sPlayerbotAIConfig.MaxRandomBotInWorldTime)
+                             : sPlayerbotAIConfig.PermanentlyInWorldTime;
 
         SetEventValue(lowGuid, "add", 1, addTime);
         SetEventValue(lowGuid, "logout", 0, 0);

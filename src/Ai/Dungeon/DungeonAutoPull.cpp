@@ -329,7 +329,7 @@ bool DungeonAutoPullAction::Execute(Event event)
     bool const attackStarted = Attack(target);
     if (usedRangedOpener || attackStarted)
     {
-        botAI->SetNextCheckDelay(sPlayerbotAIConfig.reactDelay);
+        botAI->SetNextCheckDelay(sPlayerbotAIConfig.ReactDelay);
         return true;
     }
 

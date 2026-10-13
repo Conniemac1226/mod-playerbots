@@ -700,6 +700,7 @@ bool PlayerbotAIConfig::Initialize()
     LimitGearExpansion = sConfigMgr->GetOption<int32>("Playerbots.LimitGearExpansion", 1);
     RandomBotStartingLevel = sConfigMgr->GetOption<int32>("Playerbots.RandombotStartingLevel", 1);
     EnablePeriodicOnlineOffline = sConfigMgr->GetOption<bool>("Playerbots.EnablePeriodicOnlineOffline", false);
+    PreloadArenaTeamBots = sConfigMgr->GetOption<bool>("AiPlayerbot.PreloadArenaTeamBots", true);
     EnableRandomBotTrading = sConfigMgr->GetOption<int32>("Playerbots.EnableRandomBotTrading", 1);
     PeriodicOnlineOfflineRatio = sConfigMgr->GetOption<float>("Playerbots.PeriodicOnlineOfflineRatio", 2.0);
     GearScoreCheck = sConfigMgr->GetOption<bool>("Playerbots.GearScoreCheck", false);
@@ -804,6 +805,15 @@ void PlayerbotAIConfig::LoadRandomBotLevelConfig()
 {
     // ---- Level brackets ----
     LevelBracketsEnabled = sConfigMgr->GetOption<bool>("Playerbots.LevelBrackets.Enabled", false);
+    LevelBracketsCleanupGearOnLevelChange =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.CleanupGearOnLevelChange", true);
+    LevelBracketsOneTimeCleanupGeneration =
+        sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.OneTimeCleanup.Generation", 0);
+    LevelBracketsOneTimeCleanupProcessLimit =
+        sConfigMgr->GetOption<uint32>("AiPlayerbot.LevelBrackets.OneTimeCleanup.ProcessLimit", 1);
+    LevelBracketsOneTimeCleanupRemoveRecoveryMail =
+        sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.OneTimeCleanup.RemoveRecoveryMail", true);
+    LevelBracketsLiteDebug = sConfigMgr->GetOption<bool>("AiPlayerbot.LevelBrackets.LiteDebugMode", false);
     LevelBracketsIgnoreGuildWithRealPlayers =
         sConfigMgr->GetOption<bool>("Playerbots.LevelBrackets.IgnoreGuildBotsWithRealPlayers", true);
     LevelBracketsIgnoreArenaTeamBots =

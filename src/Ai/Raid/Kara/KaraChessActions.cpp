@@ -1889,7 +1889,7 @@ namespace
             {
                 if (Player* mtPlayer = ObjectAccessor::FindPlayer(mtGuid))
                 {
-                    if (mtPlayer->GetSession() && !mtPlayer->GetSession()->IsBot())
+                    if (mtPlayer->GetSession() && !mtPlayer->GetSession()->IsHeadless())
                         return true;
                 }
             }
@@ -1897,7 +1897,7 @@ namespace
             for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
             {
                 Player* member = ref->GetSource();
-                if (member && member->GetSession() && !member->GetSession()->IsBot())
+                if (member && member->GetSession() && !member->GetSession()->IsHeadless())
                 {
                     if (PlayerbotAI::IsMainTank(member) || PlayerbotAI::IsTank(member))
                         return true;
@@ -1910,7 +1910,7 @@ namespace
             {
                 if (Player* master = ai->GetMaster())
                 {
-                    if (master->GetSession() && !master->GetSession()->IsBot())
+                    if (master->GetSession() && !master->GetSession()->IsHeadless())
                     {
                         if (PlayerbotAI::IsMainTank(master) || PlayerbotAI::IsTank(master))
                             return true;
